@@ -20,7 +20,7 @@ export class JobWorker {
       await this.github.postComment(
         job.repository,
         job.pullRequestNumber,
-        `Running \`${job.dataset}\`: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.`,
+        `Running \`${job.dataset}\` on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.`,
       );
       const result = await this.executor.execute(job);
       await this.github.postComment(
@@ -44,7 +44,11 @@ export class JobWorker {
 }
 
 function renderResult(job: Job, comparison: string): string {
-  return `Benchmark completed for \`${job.dataset}\`.\n\nBase: \`${job.baseSha}\`\nHead: \`${job.headSha}\`\n\n<details><summary>Comparison</summary>\n\n<pre>${htmlEscape(truncate(comparison))}</pre>\n</details>`;
+  return `Benchmark completed for \`${job.dataset}\` on ${capacity(job)}.\n\nBase: \`${job.baseSha}\`\nHead: \`${job.headSha}\`\n\n<details><summary>Comparison</summary>\n\n<pre>${htmlEscape(truncate(comparison))}</pre>\n</details>`;
+}
+
+function capacity(job: Job): string {
+  return `${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes`;
 }
 
 function truncate(value: string): string {

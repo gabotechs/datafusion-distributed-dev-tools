@@ -12,6 +12,8 @@ export interface NewJob {
   pullRequestUrl: string;
   requestedBy: string;
   dataset: string;
+  benchmarkInstanceType: string;
+  benchmarkNodeCount: number;
   baseSha: string;
   headSha: string;
 }
@@ -50,6 +52,7 @@ export class JobDatabase {
     this.#database.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.#database.exec(readFileSync(MIGRATION, "utf8"));
     this.ensureAttemptCountColumn();
+    this.ensureBenchmarkCapacityColumns();
     if (databasePath !== ":memory:") chmodSync(databasePath, 0o600);
   }
 
@@ -141,8 +144,9 @@ export class JobDatabase {
         .prepare(
           `INSERT OR IGNORE INTO jobs(
              comment_id, repository, pull_request_number, pull_request_url,
-             requested_by, dataset, base_sha, head_sha, status, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+             requested_by, dataset, benchmark_instance_type, benchmark_node_count,
+             base_sha, head_sha, status, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
         )
         .run(
           job.commentId,
@@ -151,6 +155,8 @@ export class JobDatabase {
           job.pullRequestUrl,
           job.requestedBy,
           job.dataset,
+          job.benchmarkInstanceType,
+          job.benchmarkNodeCount,
           job.baseSha,
           job.headSha,
           timestamp,
@@ -263,6 +269,22 @@ export class JobDatabase {
       );
     }
   }
+
+  private ensureBenchmarkCapacityColumns(): void {
+    const columns = this.#database.prepare("PRAGMA table_info(jobs)").all() as {
+      name: string;
+    }[];
+    if (!columns.some((column) => column.name === "benchmark_instance_type")) {
+      this.#database.exec(
+        "ALTER TABLE jobs ADD COLUMN benchmark_instance_type TEXT NOT NULL DEFAULT 'c5n.2xlarge'",
+      );
+    }
+    if (!columns.some((column) => column.name === "benchmark_node_count")) {
+      this.#database.exec(
+        "ALTER TABLE jobs ADD COLUMN benchmark_node_count INTEGER NOT NULL DEFAULT 12",
+      );
+    }
+  }
 }
 
 function jobFromRow(row: Record<string, unknown>): Job {
@@ -274,6 +296,8 @@ function jobFromRow(row: Record<string, unknown>): Job {
     pullRequestUrl: String(row.pull_request_url),
     requestedBy: String(row.requested_by),
     dataset: String(row.dataset),
+    benchmarkInstanceType: String(row.benchmark_instance_type),
+    benchmarkNodeCount: Number(row.benchmark_node_count),
     baseSha: String(row.base_sha),
     headSha: String(row.head_sha),
     status: String(row.status) as JobStatus,
