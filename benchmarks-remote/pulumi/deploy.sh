@@ -11,15 +11,18 @@ if ! AWS_PAGER='' aws --region "${AWS_REGION}" sts get-caller-identity >/dev/nul
   echo "AWS credentials are missing or expired; select AWS_PROFILE and run aws sso login" >&2
   exit 1
 fi
-if [[ -z ${KUBERNETES_API_ALLOWED_CIDRS:-} ]]; then
-  public_ip=$(curl --fail --silent --show-error https://checkip.amazonaws.com)
-  export KUBERNETES_API_ALLOWED_CIDRS="${public_ip}/32"
-fi
-
 if [[ -n ${PULUMI_BACKEND_URL:-} ]]; then
   "${pulumi_bin}" login "${PULUMI_BACKEND_URL}"
 fi
 "${pulumi_bin}" stack select "${stack}" --create --secrets-provider "${secrets_provider}"
+if [[ -z ${KUBERNETES_API_ALLOWED_CIDRS:-} ]]; then
+  public_ip=$(curl --fail --silent --show-error https://checkip.amazonaws.com)
+  configured_cidrs=$("${pulumi_bin}" config get kubernetesApiAllowedCidrs --json 2>/dev/null || echo '[]')
+  export KUBERNETES_API_ALLOWED_CIDRS
+  KUBERNETES_API_ALLOWED_CIDRS=$(jq -r \
+    --arg current "${public_ip}/32" \
+    '(. + [$current] | unique) | join(",")' <<<"${configured_cidrs}")
+fi
 "${pulumi_bin}" up --stack "${stack}" --yes
 if [[ ${stack} == benchmark ]]; then
   outputs_file=${PULUMI_OUTPUTS_FILE:-${script_dir}/.pulumi-outputs.json}
