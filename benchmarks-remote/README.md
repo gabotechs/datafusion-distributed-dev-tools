@@ -22,8 +22,15 @@ from that source checkout's `testdata/` directory:
     benchmarks-remote/
 ```
 
-Set `BENCHMARK_TESTDATA_ROOT` only when deliberately using a different source
-checkout or testdata directory.
+For a source worktree elsewhere, set `DATAFUSION_DISTRIBUTED_ROOT` to that
+checkout. `BENCHMARK_TESTDATA_ROOT` is a more specific override for a custom
+testdata directory. Relative source-checkout paths are resolved from the
+`datafusion-distributed-dev-tools` root:
+
+```bash
+DATAFUSION_DISTRIBUTED_ROOT=../datafusion-distributed-pr \
+  npm run sync-bucket -- --dataset tpch/sf1
+```
 
 The foundation, engine workloads, datasets, and benchmark runs have independent
 lifecycles. Benchmark commands never provision infrastructure, install engines,

@@ -10,10 +10,17 @@ export const DEV_TOOLS_ROOT = path.resolve(__dirname, "../..");
  *   <parent>/datafusion-distributed-dev-tools
  *   <parent>/datafusion-distributed
  */
-export const DATAFUSION_DISTRIBUTED_ROOT = path.resolve(
+export const DEFAULT_DATAFUSION_DISTRIBUTED_ROOT = path.resolve(
     DEV_TOOLS_ROOT,
     "../datafusion-distributed",
 );
+
+export function datafusionDistributedRoot(): string {
+    const configured = process.env.DATAFUSION_DISTRIBUTED_ROOT;
+    return configured
+        ? path.resolve(DEV_TOOLS_ROOT, configured)
+        : DEFAULT_DATAFUSION_DISTRIBUTED_ROOT;
+}
 
 export function datasetParts(dataset: string): [string, string] {
     const match = /^([a-zA-Z0-9._-]+)\/([a-zA-Z0-9._-]+)$/.exec(dataset);
@@ -28,7 +35,7 @@ export function testdataRoots(): string[] {
         return [path.resolve(process.env.BENCHMARK_TESTDATA_ROOT)];
     }
 
-    return [path.join(DATAFUSION_DISTRIBUTED_ROOT, "testdata")];
+    return [path.join(datafusionDistributedRoot(), "testdata")];
 }
 
 export function datasetPath(dataset: string): string {
