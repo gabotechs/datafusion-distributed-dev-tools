@@ -55,4 +55,4 @@ else
   env "BENCHMARK_BUCKET=s3://${dataset_bucket}" npm run "runner:${engine}-bench" -- "$@"
 fi
 
-echo "Benchmark run completed"
+echo "Benchmark run completed" >&2

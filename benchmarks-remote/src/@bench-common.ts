@@ -144,7 +144,7 @@ export async function runBenchmark(
 
     const benchmarkRun = new BenchmarkRun(dataset, engine)
 
-    console.log("Creating tables...");
+    console.error("Creating tables...");
     const s3Paths = await tablePathsForDataset(dataset)
     await runner.createTables(s3Paths);
 
@@ -156,7 +156,7 @@ export async function runBenchmark(
         const result = new BenchResult(dataset, engine, id)
 
         if (warmup) {
-            console.log(`Warming up query ${id}...`)
+            console.error(`Warming up query ${id}...`)
             try {
                 await runner.executeQuery(sql);
             } catch (e: any) {
@@ -189,7 +189,7 @@ export async function runBenchmark(
             }
 
             if (debug) {
-                console.log(response.plan)
+                console.error(response.plan)
             }
             result.iterations.push({
                 elapsed: response.elapsed,
@@ -201,17 +201,17 @@ export async function runBenchmark(
             })
 
             if (response.statsQErrorP50 !== undefined && response.statsQErrorP95 !== undefined) {
-                console.log(
+                console.error(
                     `Query ${id} iteration ${i} took ${Math.round(response.elapsed)} ms, stats q-error P50 ${response.statsQErrorP50.toFixed(2)}x, P95 ${response.statsQErrorP95.toFixed(2)}x and returned ${response.rowCount} rows`
                 );
             } else {
-                console.log(
+                console.error(
                     `Query ${id} iteration ${i} took ${Math.round(response.elapsed)} ms and returned ${response.rowCount} rows`
                 );
             }
         }
 
-        console.log(`Query ${id} p50 time: ${result.p50()} ms`);
+        console.error(`Query ${id} p50 time: ${result.p50()} ms`);
 
         benchmarkRun.results.push(result)
     }
