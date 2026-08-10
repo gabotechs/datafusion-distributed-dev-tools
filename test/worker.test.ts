@@ -13,6 +13,8 @@ const JOB: NewJob = {
     "https://github.com/datafusion-contrib/datafusion-distributed/pull/99",
   requestedBy: "maintainer",
   dataset: "tpch/sf1",
+  benchmarkInstanceType: "c7i.2xlarge",
+  benchmarkNodeCount: 12,
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
 };
@@ -33,7 +35,9 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.equal(await worker.runOnce(), true);
     assert.equal(await worker.runOnce(), false);
     assert.match(comments[0]!, /Running/);
+    assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
     assert.match(comments[1]!, /TOTAL: 1.20 faster/);
+    assert.match(comments[1]!, /12 `c7i\.2xlarge` nodes/);
   } finally {
     database.close();
   }

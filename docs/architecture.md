@@ -36,25 +36,30 @@ that existing namespace.
 
 The controller polls PR comments through the GitHub REST API using a manually
 provisioned `GH_TOKEN`. It deduplicates comment IDs, validates the commenter's
-repository permission, and accepts only `benchmarks run <suite>/<variant>`
-commands. Polling keeps the EC2 instance private with no inbound internet
-listener. GitHub authentication is not managed by Pulumi.
+repository permission, and accepts only
+`benchmarks run <suite>/<variant> --instance-type <type> --nodes <count>`
+commands. It validates the instance-type token and limits requests to 24 nodes.
+Polling keeps the EC2 instance private with no inbound internet listener. GitHub
+authentication is not managed by Pulumi.
 
 ## Job sequence
 
-1. Resolve and persist the PR base SHA and head SHA.
+1. Validate and persist the requested instance type and node count together with
+   the PR base SHA and head SHA.
 2. Create isolated worktrees for both immutable SHAs.
 3. Fetch the base revision's locked dependencies as the unprivileged build user,
    then compile offline in a network-disabled systemd sandbox using persistent
    Cargo caches.
-4. Let the controller upload and deploy the base artifact.
+4. Let the controller upload and deploy the base artifact in a Helm release
+   dedicated to the job.
 5. Run the requested dataset and retain its local results.
 6. Build, upload, and deploy the head artifact using the same process.
 7. Run the identical benchmark arguments against the head deployment.
 8. Render and post a comparison containing SHAs, configuration, per-query
    medians, total time, and failures.
-9. Remove the DataFusion deployment and job worktrees. Keep only bounded build
-   caches for later compilations.
+9. Remove the job's DataFusion release and worktrees. Keep only bounded build
+   caches for later compilations. On startup, remove stale job releases left by
+   an interrupted controller process before retrying persisted work.
 
 ## Security boundary
 

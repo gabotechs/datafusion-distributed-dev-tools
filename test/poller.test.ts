@@ -8,7 +8,7 @@ import { CommentPoller } from "../src/poller.js";
 function comment(id: number, login: string): IssueComment {
   return {
     id,
-    body: "benchmarks run tpch/sf1",
+    body: "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 12",
     issue_url: `https://api.github.com/repos/owner/repository/issues/${id}`,
     html_url: `https://github.com/owner/repository/issues/${id}`,
     created_at: `2026-08-10T00:00:0${id}.000Z`,

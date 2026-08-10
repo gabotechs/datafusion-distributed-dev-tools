@@ -11,6 +11,8 @@ const JOB: NewJob = {
     "https://github.com/datafusion-contrib/datafusion-distributed/pull/123",
   requestedBy: "maintainer",
   dataset: "tpch/sf1",
+  benchmarkInstanceType: "c7i.2xlarge",
+  benchmarkNodeCount: 12,
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
 };
@@ -23,6 +25,8 @@ test("deduplicates comments while preserving immutable refs", () => {
     assert.equal(database.isCommentSeen(JOB.commentId), true);
     const queued = database.nextPending();
     assert.equal(queued?.dataset, "tpch/sf1");
+    assert.equal(queued?.benchmarkInstanceType, "c7i.2xlarge");
+    assert.equal(queued?.benchmarkNodeCount, 12);
     assert.equal(queued?.baseSha, JOB.baseSha);
     assert.equal(queued?.headSha, JOB.headSha);
   } finally {

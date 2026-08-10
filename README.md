@@ -3,12 +3,13 @@
 This service listens for trusted pull-request comments in the form:
 
 ```text
-benchmarks run tpch/sf1
+benchmarks run tpch/sf1 --instance-type c5n.2xlarge --nodes 12
 ```
 
-For each request it benchmarks the pull request's immutable base SHA, deploys
-the pull request head SHA to a dedicated EKS benchmark cluster, repeats the same
-workload, and posts the comparison to the pull request.
+For each request it creates an isolated Kubernetes deployment with the requested
+capacity, benchmarks the pull request's immutable base SHA, deploys the pull
+request head SHA to the same deployment, repeats the same workload, posts the
+comparison, and removes the deployment. Node counts are limited to 24.
 
 ## Architecture
 
@@ -41,8 +42,6 @@ outputs:
 
 - `clusterName`
 - `datasetBucketName`
-- `benchmarkInstanceType`
-- `benchmarkNodeCount`
 - the ARN of the foundation's benchmark workload IAM role
 
 Configure the controller stack without storing credentials in the repository:
@@ -52,8 +51,6 @@ pulumi stack init controller
 pulumi config set aws:region us-east-1
 pulumi config set clusterName your-benchmark-cluster
 pulumi config set datasetBucketName your-dataset-bucket
-pulumi config set benchmarkInstanceType c5n.2xlarge
-pulumi config set benchmarkNodeCount 12
 pulumi config set benchmarkWorkloadRoleArn arn:aws:iam::YOUR_ACCOUNT:role/YOUR_BENCHMARK_WORKLOAD_ROLE
 pulumi config set githubRepository datafusion-contrib/datafusion-distributed
 pulumi config set sourceRepositoryUrl https://github.com/datafusion-contrib/datafusion-distributed.git

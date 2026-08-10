@@ -31,6 +31,8 @@ const JOB: Job = {
   pullRequestUrl: "https://example.invalid/pull/12",
   requestedBy: "maintainer",
   dataset: "tpch/sf1",
+  benchmarkInstanceType: "c7i.2xlarge",
+  benchmarkNodeCount: 12,
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
   status: "running",
@@ -55,8 +57,6 @@ function fixture(): { root: string; config: ExecutorConfig } {
       clusterName: "cluster",
       datasetBucketName: "bucket",
       artifactBucketName: "artifacts",
-      benchmarkInstanceType: "c5n.2xlarge",
-      benchmarkNodeCount: 12,
     }),
   );
   return {
@@ -109,8 +109,15 @@ test("executes base before head and always uses the trusted base harness", async
       events.push(`publish:${binary.at(-1)}`);
       return `s3://bucket/${binary.at(-1)}`;
     }
-    override async deploy(baseSource: string, artifact: string): Promise<void> {
-      events.push(`deploy:${path.basename(baseSource)}:${artifact.at(-1)}`);
+    override async deploy(
+      baseSource: string,
+      artifact: string,
+      _outputs: Parameters<BenchmarkExecutor["deploy"]>[2],
+      job: Job,
+    ): Promise<void> {
+      events.push(
+        `deploy:${path.basename(baseSource)}:${artifact.at(-1)}:${job.benchmarkInstanceType}:${job.benchmarkNodeCount}`,
+      );
     }
     override async runBenchmark(
       baseSource: string,
@@ -119,8 +126,11 @@ test("executes base before head and always uses the trusted base harness", async
       events.push(`run:${path.basename(baseSource)}:${dataset}`);
       return "comparison";
     }
-    override async cleanupDeployment(): Promise<void> {
-      events.push("cleanup-deployment");
+    override async cleanupDeployment(
+      _outputs: Parameters<BenchmarkExecutor["cleanupDeployment"]>[0],
+      jobId: number,
+    ) {
+      events.push(`cleanup-deployment:${jobId}`);
     }
   }
 
@@ -139,16 +149,72 @@ test("executes base before head and always uses the trusted base harness", async
     "prepare-dataset",
     "build:a",
     "publish:a",
-    "deploy:base:a",
+    "deploy:base:a:c7i.2xlarge:12",
     "run:base:tpch/sf1",
     "build:b",
     "publish:b",
-    "deploy:base:b",
+    "deploy:base:b:c7i.2xlarge:12",
     "run:base:tpch/sf1",
-    "cleanup-deployment",
+    "cleanup-deployment:7",
     "remove:head",
     "remove:base",
   ]);
+});
+
+test("uses request capacity in an isolated per-job Helm release", async () => {
+  const { config } = fixture();
+  const calls: Array<{ program: string; arguments_: readonly string[] }> = [];
+  const processes: ProcessRunner = {
+    async run(program, arguments_): Promise<RunResult> {
+      calls.push({ program, arguments_ });
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  };
+  const executor = new BenchmarkExecutor(config, processes);
+  const outputs = {
+    clusterName: "cluster",
+    datasetBucketName: "datasets",
+    artifactBucketName: "artifacts",
+  };
+
+  await executor.deploy("/trusted", "s3://artifacts/worker", outputs, JOB);
+  await executor.cleanupDeployment(outputs, JOB.id);
+
+  assert.equal(calls[0]?.program, "helm");
+  assert.equal(calls[0]?.arguments_[2], "datafusion-job-7");
+  assert.ok(calls[0]?.arguments_.includes("worker.replicas=12"));
+  assert.ok(calls[0]?.arguments_.includes("worker.instanceType=c7i.2xlarge"));
+  assert.deepEqual(calls[1]?.arguments_.slice(0, 3), [
+    "uninstall",
+    "datafusion-job-7",
+    "--namespace",
+  ]);
+});
+
+test("removes stale per-job releases when the controller starts", async () => {
+  const { config } = fixture();
+  const calls: Array<{ program: string; arguments_: readonly string[] }> = [];
+  const processes: ProcessRunner = {
+    async run(program, arguments_): Promise<RunResult> {
+      calls.push({ program, arguments_ });
+      return {
+        exitCode: 0,
+        stdout:
+          arguments_[0] === "list"
+            ? "datafusion-job-3\ndatafusion-job-19\n"
+            : "",
+        stderr: "",
+      };
+    },
+  };
+
+  await new BenchmarkExecutor(config, processes).cleanup();
+
+  assert.equal(calls[0]?.arguments_[0], "list");
+  assert.deepEqual(
+    calls.slice(1).map((call) => call.arguments_[1]),
+    ["datafusion-job-3", "datafusion-job-19"],
+  );
 });
 
 test("rejects dataset paths that could escape testdata", () => {
