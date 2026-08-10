@@ -1,0 +1,10 @@
+name: datafusion-pr-bot
+description:
+  Persistent controller for the DataFusion remote benchmark foundation
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+main: infra/index.ts
+config:
+  aws:region: us-east-1

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -48,6 +48,7 @@ function fixture(): { root: string; config: ExecutorConfig } {
     JSON.stringify({
       clusterName: "cluster",
       datasetBucketName: "bucket",
+      artifactBucketName: "artifacts",
       benchmarkInstanceType: "c5n.2xlarge",
       benchmarkNodeCount: 12,
     }),
@@ -90,6 +91,9 @@ test("executes base before head and always uses the trusted base harness", async
     override resetResults(): void {
       events.push("reset-results");
     }
+    override async prepareDatasetLayout(): Promise<void> {
+      events.push("prepare-dataset");
+    }
     override async build(sha: string): Promise<string> {
       events.push(`build:${sha[0]}`);
       return `/binary-${sha[0]}`;
@@ -122,6 +126,7 @@ test("executes base before head and always uses the trusted base harness", async
     "add:head:b",
     "install-harness",
     "reset-results",
+    "prepare-dataset",
     "build:a",
     "publish:a",
     "deploy:base:a",
@@ -173,6 +178,30 @@ test("rejects dataset paths that could escape testdata", () => {
   );
   assert.throws(() => safeDatasetPath("/testdata", "../secret"));
   assert.throws(() => safeDatasetPath("/testdata", "tpch/sf1/extra"));
+});
+
+test("discovers table directories without downloading dataset objects", async () => {
+  const { config } = fixture();
+  const calls: { program: string; arguments_: readonly string[] }[] = [];
+  const processes: ProcessRunner = {
+    async run(program, arguments_): Promise<RunResult> {
+      calls.push({ program, arguments_ });
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify(["tpch/sf1/customer/", "tpch/sf1/orders/"]),
+        stderr: "",
+      };
+    },
+  };
+  await new BenchmarkExecutor(config, processes).prepareDatasetLayout(
+    "tpch/sf1",
+    "datasets",
+  );
+  assert.ok(existsSync(path.join(config.testdataRoot, "tpch/sf1/customer")));
+  assert.ok(existsSync(path.join(config.testdataRoot, "tpch/sf1/orders")));
+  assert.equal(calls[0]?.program, "aws");
+  assert.ok(calls[0]?.arguments_.includes("list-objects-v2"));
+  assert.ok(!calls[0]?.arguments_.includes("s3"));
 });
 
 test("local process execution does not invoke a shell", async () => {

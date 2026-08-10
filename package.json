@@ -8,6 +8,9 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
+    "controller-deploy": "pulumi up",
+    "controller-destroy": "pulumi destroy",
+    "controller-outputs": "pulumi stack output --json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "start": "tsx src/main.ts",
@@ -17,6 +20,10 @@
     "@types/node": "26.2.0",
     "prettier": "3.9.6",
     "tsx": "4.23.12",
-    "typescript": "7.0.2"
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^7.41.0",
+    "@pulumi/pulumi": "^3.256.0"
   }
 }

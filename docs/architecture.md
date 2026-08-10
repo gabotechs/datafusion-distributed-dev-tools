@@ -15,11 +15,17 @@ A single persistent EC2 instance runs the controller. Its EBS volume contains:
 Jobs are serialized initially. This avoids Cargo target locking and guarantees
 that only one deployment owns the dedicated benchmark cluster.
 
-### Dedicated benchmark foundation
+### Human-managed benchmark foundation
 
-The bot uses a separate Pulumi stack and EKS cluster. It may share immutable
-dataset objects, but it has distinct Kubernetes tenancy, engine releases,
-artifact prefixes, IAM roles, and benchmark locking from interactive runs.
+The dedicated EKS cluster, namespaces, service accounts, node configuration, and
+dataset bucket are provisioned from `datafusion-distributed/benchmarks-remote`.
+The bot is configured with their existing identifiers. It does not create,
+modify, or destroy foundation resources.
+
+The controller has a stable public IP for the cluster API allowlist. A human
+registers its IAM role with namespace-scoped access to `benchmark-datafusion`.
+The controller then manages only the DataFusion release and benchmark jobs in
+that existing namespace.
 
 ### GitHub integration
 
@@ -51,12 +57,12 @@ Cargo build scripts and the resulting worker can execute arbitrary code.
 - Do not expose EC2 instance metadata, AWS credentials, GitHub credentials, the
   host filesystem, or a container-engine socket to build containers.
 - Keep GitHub and deployment credentials in the controller process only.
-- Give the controller a dedicated least-privilege AWS role scoped to the bot
-  cluster and artifact prefix.
+- Give the controller a dedicated least-privilege AWS role scoped to describing
+  the configured cluster and reading or writing only the bot artifact prefix.
 - Give benchmark pods only dataset-read permission.
-- Never execute scripts or Helm charts from the pull request. Use the bot's
-  pinned deployment and benchmark harness; consume only the built worker
-  artifact.
+- Never execute scripts or Helm charts from the pull request. Use the trusted
+  immutable base revision's deployment and benchmark harness; consume only the
+  worker artifact built from the pull request.
 - Restrict triggers to trusted repository roles and keep an auditable job
   record.
 
