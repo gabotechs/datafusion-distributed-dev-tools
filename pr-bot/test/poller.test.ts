@@ -130,6 +130,7 @@ test("creates one persisted status comment for an accepted benchmark", async () 
 
     assert.equal(posted.length, 1);
     assert.match(posted[0]!, /queued/);
+    assert.match(posted[0]!, /pull\/1#issuecomment-1/);
     assert.equal(database.getJobForComment(1)?.statusCommentId, 321);
   } finally {
     database.close();
