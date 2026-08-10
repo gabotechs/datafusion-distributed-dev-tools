@@ -14,6 +14,7 @@ import type { ProcessRunner } from "./process.js";
 interface FoundationOutputs {
   clusterName: string;
   datasetBucketName: string;
+  artifactBucketName: string;
   benchmarkInstanceType: string;
   benchmarkNodeCount: number;
 }
@@ -58,11 +59,12 @@ export class BenchmarkExecutor {
     try {
       await this.installHarness(baseSource);
       this.resetResults(job.dataset, baseSource);
+      await this.prepareDatasetLayout(job.dataset, outputs.datasetBucketName);
 
       const baseBinary = await this.build(job.baseSha, baseSource, undefined);
       const baseArtifact = await this.publish(
         baseBinary,
-        outputs.datasetBucketName,
+        outputs.artifactBucketName,
       );
       await this.deploy(baseSource, baseArtifact, outputs);
       await this.runBenchmark(baseSource, job.dataset);
@@ -70,7 +72,7 @@ export class BenchmarkExecutor {
       const headBinary = await this.build(job.headSha, headSource, job.baseSha);
       const headArtifact = await this.publish(
         headBinary,
-        outputs.datasetBucketName,
+        outputs.artifactBucketName,
       );
       await this.deploy(baseSource, headArtifact, outputs);
       const comparison = await this.runBenchmark(baseSource, job.dataset);
@@ -153,6 +155,46 @@ export class BenchmarkExecutor {
     );
     if (!existsSync(queries)) {
       throw new Error(`Trusted base does not contain queries for ${dataset}`);
+    }
+  }
+
+  async prepareDatasetLayout(dataset: string, bucket: string): Promise<void> {
+    const datasetDirectory = safeDatasetPath(this.config.testdataRoot, dataset);
+    mkdirSync(datasetDirectory, { recursive: true });
+    const prefix = `${dataset}/`;
+    const result = await this.processes.run(
+      "aws",
+      [
+        "--region",
+        this.config.region,
+        "s3api",
+        "list-objects-v2",
+        "--bucket",
+        bucket,
+        "--prefix",
+        prefix,
+        "--delimiter",
+        "/",
+        "--query",
+        "CommonPrefixes[].Prefix",
+        "--output",
+        "json",
+      ],
+      { quiet: true },
+    );
+    const prefixes = JSON.parse(result.stdout) as unknown;
+    if (!Array.isArray(prefixes) || prefixes.length === 0) {
+      throw new Error(`Dataset ${dataset} has no table prefixes in S3`);
+    }
+    for (const value of prefixes) {
+      if (typeof value !== "string" || !value.startsWith(prefix)) {
+        throw new Error(`Invalid S3 table prefix for ${dataset}`);
+      }
+      const table = value.slice(prefix.length).replace(/\/$/, "");
+      if (!/^[a-zA-Z0-9._-]+$/.test(table)) {
+        throw new Error(`Invalid S3 table name ${table}`);
+      }
+      mkdirSync(path.join(datasetDirectory, table), { recursive: true });
     }
   }
 
@@ -248,7 +290,7 @@ export class BenchmarkExecutor {
 
   async publish(binary: string, bucket: string): Promise<string> {
     const digest = await sha256(binary);
-    const key = `.benchmark-artifacts/datafusion/${digest}/worker`;
+    const key = `.benchmark-artifacts/pr-bot/workers/datafusion/${digest}/worker`;
     const artifact = `s3://${bucket}/${key}`;
     const exists = await this.processes.run(
       "aws",
@@ -344,6 +386,7 @@ function loadOutputs(file: string): FoundationOutputs {
   if (
     !value.clusterName ||
     !value.datasetBucketName ||
+    !value.artifactBucketName ||
     !value.benchmarkInstanceType ||
     !Number.isInteger(value.benchmarkNodeCount)
   ) {
