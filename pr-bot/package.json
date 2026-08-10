@@ -1,0 +1,32 @@
+{
+  "name": "@datafusion-distributed-dev-tools/pr-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "application:build": "tsc --project tsconfig.controller.json",
+    "controller-deploy": "npm run application:build && npm run pulumi:build && pulumi up",
+    "controller-destroy": "pulumi destroy",
+    "controller-outputs": "pulumi stack output --json",
+    "controller-ssh": "aws ssm start-session --target $(pulumi stack output controllerInstanceId)",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "start": "node dist/application/src/main.js",
+    "test": "npm run application:build && node --import tsx --test test/*.test.ts",
+    "pulumi:build": "tsc --project tsconfig.pulumi.json"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^7.41.0",
+    "@pulumi/pulumi": "^3.256.0"
+  }
+}

@@ -1,7 +1,8 @@
-/node_modules/
-/dist/
-/.cache/
-/.data/
+node_modules/
+dist/
+target/
+.cache/
+.data/
 /.env
 .idea/
 *.db
