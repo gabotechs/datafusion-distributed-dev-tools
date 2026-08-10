@@ -6,7 +6,7 @@ import test from "node:test";
 test("benchmark results remain local", () => {
     const runner = fs.readFileSync(path.resolve(__dirname, "../k8s/run-benchmark.sh"), "utf8");
     assert.doesNotMatch(runner, /resultsBucketName|RESULTS_BUCKET|_SUCCESS|head-object/);
-    assert.match(runner, /Benchmark run completed/);
+    assert.match(runner, /Benchmark run completed" >&2/);
 });
 
 test("benchmark runs do not create cluster state", () => {
