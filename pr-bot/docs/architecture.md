@@ -37,31 +37,35 @@ that existing namespace.
 The controller polls PR comments through the GitHub REST API using a manually
 provisioned `GH_TOKEN`. It deduplicates comment IDs, validates the commenter's
 repository permission, and accepts
-`benchmarks run <suite>/<variant> [--instance-type <type>] [--nodes <count>]`
+`benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>]`
 commands. Omitted capacity uses the upstream defaults of `c5n.2xlarge` and 12
-nodes. It validates the instance-type token and limits requests to 24 nodes.
-Polling keeps the EC2 instance private with no inbound internet listener. GitHub
-authentication is not managed by Pulumi.
+nodes. It validates every dataset and the instance-type token, rejects duplicate
+datasets, and limits requests to 24 nodes. Polling keeps the EC2 instance
+private with no inbound internet listener. GitHub authentication is not managed
+by Pulumi.
 
 ## Job sequence
 
-1. Validate and persist the requested instance type and node count together with
-   the PR base SHA and head SHA. Create one GitHub status comment and persist
-   its ID for all subsequent progress updates.
-2. Create isolated worktrees for both immutable SHAs.
-3. Fetch the base revision's locked dependencies as the unprivileged build user,
+1. Validate and persist the ordered dataset list, requested instance type, and
+   node count together with the PR base SHA and head SHA. Create one GitHub
+   status comment and persist its ID for all subsequent progress updates.
+2. Validate every requested dataset against S3. If any dataset is unavailable,
+   stop before creating worktrees, compiling, or performing Kubernetes
+   operations.
+3. Create isolated worktrees for both immutable SHAs.
+4. Fetch the base revision's locked dependencies as the unprivileged build user,
    then compile offline in a network-disabled systemd sandbox using persistent
    Cargo caches.
-4. Let the controller upload and deploy the base artifact with the trusted
+5. Let the controller upload and deploy the base artifact with the trusted
    harness bundled from this repository in a Helm release dedicated to the job.
-5. Run the requested dataset and retain its local results.
-6. Build, upload, and deploy the head artifact using the same process.
-7. Run the identical benchmark arguments against the head deployment.
-8. Render the comparison containing SHAs, configuration, per-query medians,
-   total time, and failures, then update the existing status comment in place.
-9. Remove the job's DataFusion release and worktrees. Keep only bounded build
-   caches for later compilations. On startup, remove stale job releases left by
-   an interrupted controller process before retrying persisted work.
+6. Run every requested dataset in order and retain its local results.
+7. Build, upload, and deploy the head artifact once using the same process.
+8. Run the same ordered dataset list against the head deployment.
+9. Combine the comparison-only stdout from every dataset and update the existing
+   status comment in place.
+10. Remove the job's DataFusion release and worktrees. Keep only bounded build
+    caches for later compilations. On startup, remove stale job releases left by
+    an interrupted controller process before retrying persisted work.
 
 ## Security boundary
 
