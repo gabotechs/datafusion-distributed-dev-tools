@@ -2,9 +2,9 @@ import path from "path";
 import fs from "fs/promises";
 import * as fsSync from "fs";
 import {BenchmarkRun, BenchResult} from "./@results";
-import {datasetParts, datasetPath, ROOT, testdataRoots} from "./@paths";
+import {datasetParts, datasetPath, DEV_TOOLS_ROOT, testdataRoots} from "./@paths";
 
-const PULUMI_OUTPUT_FILE = path.join(ROOT, "benchmarks-remote", "pulumi", ".pulumi-outputs.json")
+const PULUMI_OUTPUT_FILE = path.join(DEV_TOOLS_ROOT, "benchmarks-remote", "pulumi", ".pulumi-outputs.json")
 
 function normalizeBucketUri(bucket: string): string {
     const withoutProtocol = bucket.replace(/^s3:\/\//, "").replace(/\/+$/, "")
