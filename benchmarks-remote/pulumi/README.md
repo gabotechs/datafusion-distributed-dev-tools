@@ -52,14 +52,14 @@ select a different Pulumi secrets provider.
 
 Optional configuration:
 
-| Key                         | Default            | Purpose                               |
-| --------------------------- | ------------------ | ------------------------------------- |
-| `namePrefix`                | `datafusion-bench` | Prefix for physical AWS resources.    |
-| `benchmarkInstanceType`     | `c5n.2xlarge`      | Measured engine instance type.        |
-| `benchmarkNodeCount`        | `12`               | Default worker replica count.         |
-| `systemInstanceType`        | `m6i.large`        | Coordinator pod instance type.        |
-| `eksVersion`                | `1.36`             | Exact EKS Kubernetes minor release.   |
-| `kubernetesApiAllowedCidrs` | none               | Persistent trusted EKS API CIDRs.     |
+| Key                         | Default            | Purpose                             |
+| --------------------------- | ------------------ | ----------------------------------- |
+| `namePrefix`                | `datafusion-bench` | Prefix for physical AWS resources.  |
+| `benchmarkInstanceType`     | `c5n.2xlarge`      | Measured engine instance type.      |
+| `benchmarkNodeCount`        | `12`               | Default worker replica count.       |
+| `systemInstanceType`        | `m6i.large`        | Coordinator pod instance type.      |
+| `eksVersion`                | `1.36`             | Exact EKS Kubernetes minor release. |
+| `kubernetesApiAllowedCidrs` | none               | Persistent trusted EKS API CIDRs.   |
 
 `KUBERNETES_API_ALLOWED_CIDRS` can provide a comma-separated list. When it is
 unset, `npm run foundation-deploy` combines the current public IP with the
