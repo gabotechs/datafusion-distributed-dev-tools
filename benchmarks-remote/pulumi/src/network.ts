@@ -1,6 +1,6 @@
-import * as aws from '@pulumi/aws';
+import * as aws from "@pulumi/aws";
 
-import { FoundationConfig } from './config';
+import { type FoundationConfig } from "./config";
 
 export interface BenchmarkNetwork {
   vpc: aws.ec2.Vpc;
@@ -9,7 +9,7 @@ export interface BenchmarkNetwork {
 }
 
 export function createNetwork(config: FoundationConfig): BenchmarkNetwork {
-  const vpc = new aws.ec2.Vpc('benchmark-vpc', {
+  const vpc = new aws.ec2.Vpc("benchmark-vpc", {
     cidrBlock: config.vpcCidr,
     enableDnsHostnames: true,
     enableDnsSupport: true,
@@ -18,12 +18,15 @@ export function createNetwork(config: FoundationConfig): BenchmarkNetwork {
     },
   });
 
-  const internetGateway = new aws.ec2.InternetGateway('benchmark-internet-gateway', {
-    vpcId: vpc.id,
-    tags: {
-      Name: `${config.namePrefix}-igw`,
+  const internetGateway = new aws.ec2.InternetGateway(
+    "benchmark-internet-gateway",
+    {
+      vpcId: vpc.id,
+      tags: {
+        Name: `${config.namePrefix}-igw`,
+      },
     },
-  });
+  );
 
   const publicSubnets = config.availabilityZones.map(
     (availabilityZone, index) =>
@@ -34,7 +37,7 @@ export function createNetwork(config: FoundationConfig): BenchmarkNetwork {
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `${config.namePrefix}-public-${availabilityZone}`,
-          'kubernetes.io/role/elb': '1',
+          "kubernetes.io/role/elb": "1",
         },
       }),
   ) as [aws.ec2.Subnet, aws.ec2.Subnet];
@@ -47,16 +50,16 @@ export function createNetwork(config: FoundationConfig): BenchmarkNetwork {
         cidrBlock: config.subnetCidrs.private[index],
         tags: {
           Name: `${config.namePrefix}-private-${availabilityZone}`,
-          'kubernetes.io/role/internal-elb': '1',
+          "kubernetes.io/role/internal-elb": "1",
         },
       }),
   ) as [aws.ec2.Subnet, aws.ec2.Subnet];
 
-  const publicRouteTable = new aws.ec2.RouteTable('benchmark-public-routes', {
+  const publicRouteTable = new aws.ec2.RouteTable("benchmark-public-routes", {
     vpcId: vpc.id,
     routes: [
       {
-        cidrBlock: '0.0.0.0/0',
+        cidrBlock: "0.0.0.0/0",
         gatewayId: internetGateway.id,
       },
     ],
@@ -73,9 +76,9 @@ export function createNetwork(config: FoundationConfig): BenchmarkNetwork {
   });
 
   const natAddress = new aws.ec2.Eip(
-    'benchmark-nat-address',
+    "benchmark-nat-address",
     {
-      domain: 'vpc',
+      domain: "vpc",
       tags: {
         Name: `${config.namePrefix}-nat`,
       },
@@ -83,7 +86,7 @@ export function createNetwork(config: FoundationConfig): BenchmarkNetwork {
     { dependsOn: [internetGateway] },
   );
 
-  const natGateway = new aws.ec2.NatGateway('benchmark-nat-gateway', {
+  const natGateway = new aws.ec2.NatGateway("benchmark-nat-gateway", {
     allocationId: natAddress.id,
     subnetId: publicSubnets[0].id,
     tags: {
@@ -97,7 +100,7 @@ export function createNetwork(config: FoundationConfig): BenchmarkNetwork {
         vpcId: vpc.id,
         routes: [
           {
-            cidrBlock: '0.0.0.0/0',
+            cidrBlock: "0.0.0.0/0",
             natGatewayId: natGateway.id,
           },
         ],
@@ -108,16 +111,20 @@ export function createNetwork(config: FoundationConfig): BenchmarkNetwork {
   );
 
   privateSubnets.forEach((subnet, index) => {
+    const routeTable = privateRouteTables[index];
+    if (!routeTable) {
+      throw new Error(`Missing private route table for subnet ${index}`);
+    }
     new aws.ec2.RouteTableAssociation(`benchmark-private-route-${index}`, {
-      routeTableId: privateRouteTables[index].id,
+      routeTableId: routeTable.id,
       subnetId: subnet.id,
     });
   });
 
-  new aws.ec2.VpcEndpoint('benchmark-s3-endpoint', {
+  new aws.ec2.VpcEndpoint("benchmark-s3-endpoint", {
     vpcId: vpc.id,
     serviceName: `com.amazonaws.${config.region}.s3`,
-    vpcEndpointType: 'Gateway',
+    vpcEndpointType: "Gateway",
     routeTableIds: privateRouteTables.map((routeTable) => routeTable.id),
     tags: {
       Name: `${config.namePrefix}-s3`,

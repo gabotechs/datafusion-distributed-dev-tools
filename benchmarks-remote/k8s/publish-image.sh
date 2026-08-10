@@ -1,27 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${script_dir}/lib.sh"
+
 engine=${1:?usage: publish-image.sh ENGINE}
 if [[ ${engine} != spark ]]; then
   echo "No container image publisher is defined for ${engine}" >&2
   exit 2
 fi
-region=${AWS_REGION:-us-east-1}
-outputs_file=${PULUMI_OUTPUTS_FILE:-${root}/benchmarks-remote/pulumi/.pulumi-outputs.json}
-runtime_file=${K8S_RUNTIME_FILE:-${root}/benchmarks-remote/k8s/.runtime.json}
-if [[ ! -f ${outputs_file} ]]; then
-  echo "Missing ${outputs_file}; run npm run foundation-deploy first" >&2
-  exit 2
-fi
+init_environment
 results_bucket=$(jq -er '.resultsBucketName' "${outputs_file}")
 repository=$(jq -er --arg engine "${engine}" '.repositoryUrls[$engine]' "${outputs_file}")
 builder=$(jq -er '.imageBuilderProjectName' "${outputs_file}")
-source "${root}/benchmarks-remote/k8s/lib.sh"
 archive=
-runtime_tmp=
 cleanup() {
-  rm -f "${archive:-}" "${runtime_tmp:-}"
+  rm -f "${archive:-}"
 }
 trap cleanup EXIT INT TERM HUP
 
@@ -68,13 +62,6 @@ if ! aws_cli ecr describe-images \
   done
 fi
 
-current='{}'
-if [[ -f ${runtime_file} ]]; then
-  current=$(cat "${runtime_file}")
-fi
-runtime_tmp=$(mktemp "${runtime_file}.XXXXXX")
-jq --arg engine "${engine}" --arg image "${image}" \
-  '.images = (.images // {}) | .images[$engine] = $image' <<<"${current}" >"${runtime_tmp}"
-mv "${runtime_tmp}" "${runtime_file}"
-runtime_tmp=
+update_runtime_file '.images = (.images // {}) | .images[$engine] = $image' \
+  --arg engine "${engine}" --arg image "${image}"
 echo "Published ${image}"

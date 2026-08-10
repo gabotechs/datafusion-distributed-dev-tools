@@ -1,12 +1,12 @@
-import * as pulumi from '@pulumi/pulumi';
+import type * as pulumi from "@pulumi/pulumi";
 
-import { FoundationConfig } from './config';
-import { createEksCluster } from './eks';
-import { createIdentity } from './identity';
-import { createImageBuilder } from './image-builder';
-import { createNetwork } from './network';
-import { createRepositories } from './registry';
-import { createStorage } from './storage';
+import { type FoundationConfig } from "./config";
+import { createEksCluster } from "./eks";
+import { createIdentity } from "./identity";
+import { createImageBuilder } from "./image-builder";
+import { createNetwork } from "./network";
+import { createRepositories } from "./registry";
+import { createStorage } from "./storage";
 
 export interface FoundationOutputs {
   clusterName: pulumi.Output<string>;
@@ -34,7 +34,10 @@ export function createFoundation(config: FoundationConfig): FoundationOutputs {
     datasetBucketName: storage.datasetBucket.bucket,
     resultsBucketName: storage.resultsBucket.bucket,
     repositoryUrls: Object.fromEntries(
-      Object.entries(repositories).map(([name, repository]) => [name, repository.repositoryUrl]),
+      Object.entries(repositories).map(([name, repository]) => [
+        name,
+        repository.repositoryUrl,
+      ]),
     ),
     imageBuilderProjectName: imageBuilder.name,
     benchmarkInstanceType: config.benchmarkInstanceType,

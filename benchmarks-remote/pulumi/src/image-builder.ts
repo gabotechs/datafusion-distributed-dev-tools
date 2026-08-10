@@ -1,15 +1,15 @@
-import * as aws from '@pulumi/aws';
+import * as aws from "@pulumi/aws";
 
-import { FoundationConfig } from './config';
-import { BenchmarkStorage } from './storage';
+import { type FoundationConfig } from "./config";
+import { type BenchmarkStorage } from "./storage";
 
 const codeBuildAssumeRolePolicy = JSON.stringify({
-  Version: '2012-10-17',
+  Version: "2012-10-17",
   Statement: [
     {
-      Effect: 'Allow',
-      Principal: { Service: 'codebuild.amazonaws.com' },
-      Action: 'sts:AssumeRole',
+      Effect: "Allow",
+      Principal: { Service: "codebuild.amazonaws.com" },
+      Action: "sts:AssumeRole",
     },
   ],
 });
@@ -19,46 +19,50 @@ export function createImageBuilder(
   storage: BenchmarkStorage,
   sparkRepository: aws.ecr.Repository,
 ): aws.codebuild.Project {
-  const role = new aws.iam.Role('benchmark-image-builder-role', {
+  const role = new aws.iam.Role("benchmark-image-builder-role", {
     assumeRolePolicy: codeBuildAssumeRolePolicy,
     tags: { Name: `${config.namePrefix}-image-builder` },
   });
-  new aws.iam.RolePolicy('benchmark-image-builder-policy', {
+  new aws.iam.RolePolicy("benchmark-image-builder-policy", {
     role: role.id,
     policy: storage.resultsBucket.arn.apply((resultsArn) =>
       sparkRepository.arn.apply((repositoryArn) =>
         JSON.stringify({
-          Version: '2012-10-17',
+          Version: "2012-10-17",
           Statement: [
             {
-              Sid: 'ReadBuildContext',
-              Effect: 'Allow',
-              Action: ['s3:GetObject'],
+              Sid: "ReadBuildContext",
+              Effect: "Allow",
+              Action: ["s3:GetObject"],
               Resource: `${resultsArn}/runs/bootstrap/images/*`,
             },
             {
-              Sid: 'AuthenticateToEcr',
-              Effect: 'Allow',
-              Action: ['ecr:GetAuthorizationToken'],
-              Resource: '*',
+              Sid: "AuthenticateToEcr",
+              Effect: "Allow",
+              Action: ["ecr:GetAuthorizationToken"],
+              Resource: "*",
             },
             {
-              Sid: 'PublishSparkImage',
-              Effect: 'Allow',
+              Sid: "PublishSparkImage",
+              Effect: "Allow",
               Action: [
-                'ecr:BatchCheckLayerAvailability',
-                'ecr:CompleteLayerUpload',
-                'ecr:InitiateLayerUpload',
-                'ecr:PutImage',
-                'ecr:UploadLayerPart',
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:CompleteLayerUpload",
+                "ecr:InitiateLayerUpload",
+                "ecr:PutImage",
+                "ecr:UploadLayerPart",
               ],
               Resource: repositoryArn,
             },
             {
-              Sid: 'WriteBuildLogs',
-              Effect: 'Allow',
-              Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
-              Resource: '*',
+              Sid: "WriteBuildLogs",
+              Effect: "Allow",
+              Action: [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+              ],
+              Resource: "*",
             },
           ],
         }),
@@ -66,20 +70,20 @@ export function createImageBuilder(
     ),
   });
 
-  return new aws.codebuild.Project('benchmark-image-builder', {
+  return new aws.codebuild.Project("benchmark-image-builder", {
     name: `${config.namePrefix}-image-builder`,
     serviceRole: role.arn,
     buildTimeout: 60,
-    artifacts: { type: 'NO_ARTIFACTS' },
+    artifacts: { type: "NO_ARTIFACTS" },
     environment: {
-      computeType: 'BUILD_GENERAL1_SMALL',
-      image: 'aws/codebuild/standard:7.0',
-      type: 'LINUX_CONTAINER',
+      computeType: "BUILD_GENERAL1_SMALL",
+      image: "aws/codebuild/standard:7.0",
+      type: "LINUX_CONTAINER",
       privilegedMode: true,
-      imagePullCredentialsType: 'CODEBUILD',
+      imagePullCredentialsType: "CODEBUILD",
     },
     source: {
-      type: 'NO_SOURCE',
+      type: "NO_SOURCE",
       buildspec: `version: 0.2
 phases:
   pre_build:

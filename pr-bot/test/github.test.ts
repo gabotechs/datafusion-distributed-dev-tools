@@ -10,19 +10,19 @@ interface RecordedRequest {
 
 function recordingFetch(responses: Response[]) {
   const requests: RecordedRequest[] = [];
-  const fetch_: typeof fetch = async (input, init) => {
+  const fetchImpl: typeof fetch = async (input, init) => {
     requests.push({ input, init });
     const response = responses.shift();
     assert.ok(response, "unexpected GitHub API request");
     return response;
   };
-  return { fetch_, requests };
+  return { fetchImpl, requests };
 }
 
 test("lists every page of issue comments with token authentication", async () => {
   const next =
     "https://api.github.com/repos/owner/repository/issues/comments?per_page=100&page=2";
-  const { fetch_, requests } = recordingFetch([
+  const { fetchImpl, requests } = recordingFetch([
     Response.json([{ id: 1, body: "first" }], {
       headers: { link: `<${next}>; rel="next"` },
     }),
@@ -31,7 +31,7 @@ test("lists every page of issue comments with token authentication", async () =>
 
   const comments = await new GitHubClient(
     "secret-token",
-    fetch_,
+    fetchImpl,
   ).listIssueComments("owner/repository", "2026-08-10T00:00:00.000Z");
 
   assert.deepEqual(
@@ -47,14 +47,13 @@ test("lists every page of issue comments with token authentication", async () =>
 });
 
 test("posts comments as JSON without invoking a subprocess", async () => {
-  const { fetch_, requests } = recordingFetch([Response.json({ id: 7 })]);
+  const { fetchImpl, requests } = recordingFetch([Response.json({ id: 7 })]);
   const body = "result $(do-not-expand)";
 
-  const commentId = await new GitHubClient("secret-token", fetch_).postComment(
-    "owner/repository",
-    42,
-    body,
-  );
+  const commentId = await new GitHubClient(
+    "secret-token",
+    fetchImpl,
+  ).postComment("owner/repository", 42, body);
 
   assert.equal(commentId, 7);
   assert.equal(
@@ -66,10 +65,10 @@ test("posts comments as JSON without invoking a subprocess", async () => {
 });
 
 test("updates an existing comment as JSON", async () => {
-  const { fetch_, requests } = recordingFetch([Response.json({ id: 7 })]);
+  const { fetchImpl, requests } = recordingFetch([Response.json({ id: 7 })]);
   const body = "benchmark completed";
 
-  await new GitHubClient("secret-token", fetch_).updateComment(
+  await new GitHubClient("secret-token", fetchImpl).updateComment(
     "owner/repository",
     7,
     body,
@@ -84,12 +83,12 @@ test("updates an existing comment as JSON", async () => {
 });
 
 test("reports API failures without exposing the token", async () => {
-  const { fetch_ } = recordingFetch([
+  const { fetchImpl } = recordingFetch([
     new Response("bad credentials", { status: 401 }),
   ]);
 
   await assert.rejects(
-    new GitHubClient("do-not-log-this", fetch_).getPullRequest(
+    new GitHubClient("do-not-log-this", fetchImpl).getPullRequest(
       "owner/repository",
       42,
     ),

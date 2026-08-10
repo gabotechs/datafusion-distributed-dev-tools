@@ -1,7 +1,67 @@
 #!/usr/bin/env bash
 
 k8s_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-export KUBECONFIG=${KUBECONFIG:-${k8s_dir}/.kubeconfig}
+
+init_environment() {
+  root=$(cd "${k8s_dir}/../.." && pwd)
+  region=${AWS_REGION:-us-east-1}
+  outputs_file=${PULUMI_OUTPUTS_FILE:-${root}/benchmarks-remote/pulumi/.pulumi-outputs.json}
+  runtime_file=${K8S_RUNTIME_FILE:-${root}/benchmarks-remote/k8s/.runtime.json}
+  export KUBECONFIG=${KUBECONFIG:-${k8s_dir}/.kubeconfig}
+
+  if [[ ! -f ${outputs_file} ]]; then
+    echo "Missing ${outputs_file}; run npm run foundation-deploy first" >&2
+    return 2
+  fi
+  cluster_name=$(jq -er '.clusterName' "${outputs_file}")
+}
+
+validate_engine() {
+  local engine=$1
+  case ${engine} in
+    datafusion | trino | spark | ballista) ;;
+    *)
+      echo "Unknown benchmark engine '${engine}'" >&2
+      return 2
+      ;;
+  esac
+}
+
+benchmark_worker_selector() {
+  local engine=$1
+  validate_engine "${engine}" || return
+  case ${engine} in
+    datafusion) echo 'app.kubernetes.io/name=datafusion-worker' ;;
+    trino | spark) echo "app.kubernetes.io/name=${engine},app.kubernetes.io/component=worker" ;;
+    ballista) echo 'app.kubernetes.io/name=ballista,app.kubernetes.io/component=executor' ;;
+  esac
+}
+
+output_value() {
+  local expression=$1
+  local file=$2
+  if [[ -f ${file} ]]; then
+    jq -r "${expression} // empty" "${file}"
+  fi
+}
+
+update_runtime_file() {
+  local expression=${1:?usage: update_runtime_file JQ_EXPRESSION [JQ_ARGUMENTS...]}
+  shift
+  local current='{}'
+  if [[ -f ${runtime_file} ]]; then
+    current=$(<"${runtime_file}")
+  fi
+
+  (
+    local runtime_tmp
+    runtime_tmp=$(mktemp "${runtime_file}.XXXXXX")
+    trap 'rm -f "${runtime_tmp}"' EXIT INT TERM HUP
+    jq "$@" "${expression}" <<<"${current}" >"${runtime_tmp}"
+    mv "${runtime_tmp}" "${runtime_file}"
+    trap - EXIT INT TERM HUP
+  )
+}
 
 aws_cli() {
   AWS_PAGER='' aws --region "${region}" "$@"

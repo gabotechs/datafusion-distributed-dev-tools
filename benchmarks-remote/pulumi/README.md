@@ -111,7 +111,7 @@ can recreate everything from scratch.
 ## Local validation
 
 ```bash
-npm run format
+npm run format:check
 npm run build
 npm test
 ```

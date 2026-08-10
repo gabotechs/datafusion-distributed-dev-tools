@@ -1,8 +1,8 @@
-import * as aws from '@pulumi/aws';
+import * as aws from "@pulumi/aws";
 
-import { engineNames, FoundationConfig } from './config';
-import { BenchmarkIdentity } from './identity';
-import { BenchmarkNetwork } from './network';
+import { engineNames, type FoundationConfig } from "./config";
+import { type BenchmarkIdentity } from "./identity";
+import { type BenchmarkNetwork } from "./network";
 
 export interface EksCluster {
   cluster: aws.eks.Cluster;
@@ -13,21 +13,23 @@ export function createEksCluster(
   network: BenchmarkNetwork,
   identity: BenchmarkIdentity,
 ): EksCluster {
-  const clusterRole = aws.iam.getRoleOutput({ name: 'AmazonEKSAutoClusterRole' });
-  const nodeRole = aws.iam.getRoleOutput({ name: 'AmazonEKSAutoNodeRole' });
+  const clusterRole = aws.iam.getRoleOutput({
+    name: "AmazonEKSAutoClusterRole",
+  });
+  const nodeRole = aws.iam.getRoleOutput({ name: "AmazonEKSAutoNodeRole" });
 
-  const cluster = new aws.eks.Cluster('benchmark-eks-cluster', {
+  const cluster = new aws.eks.Cluster("benchmark-eks-cluster", {
     name: `${config.namePrefix}-eks`,
     roleArn: clusterRole.arn,
     version: config.eksVersion,
     bootstrapSelfManagedAddons: false,
     accessConfig: {
-      authenticationMode: 'API',
+      authenticationMode: "API",
       bootstrapClusterCreatorAdminPermissions: true,
     },
     computeConfig: {
       enabled: true,
-      nodePools: ['system', 'general-purpose'],
+      nodePools: ["system", "general-purpose"],
       nodeRoleArn: nodeRole.arn,
     },
     kubernetesNetworkConfig: {
@@ -37,9 +39,15 @@ export function createEksCluster(
       blockStorage: { enabled: true },
     },
     zonalShiftConfig: { enabled: true },
-    enabledClusterLogTypes: ['api', 'audit', 'authenticator', 'controllerManager', 'scheduler'],
-    upgradePolicy: { supportType: 'STANDARD' },
-    controlPlaneScalingConfig: { tier: 'standard' },
+    enabledClusterLogTypes: [
+      "api",
+      "audit",
+      "authenticator",
+      "controllerManager",
+      "scheduler",
+    ],
+    upgradePolicy: { supportType: "STANDARD" },
+    controlPlaneScalingConfig: { tier: "standard" },
     vpcConfig: {
       subnetIds: network.privateSubnets.map((subnet) => subnet.id),
       endpointPrivateAccess: true,
@@ -53,7 +61,7 @@ export function createEksCluster(
     new aws.eks.PodIdentityAssociation(`benchmark-${engine}-pod-identity`, {
       clusterName: cluster.name,
       namespace: `benchmark-${engine}`,
-      serviceAccount: 'benchmark-engine',
+      serviceAccount: "benchmark-engine",
       roleArn: identity.workloadRole.arn,
     });
   }

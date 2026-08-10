@@ -1,5 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { controllerToolVersions } from "./versions.js";
+
 export interface ControllerConfig {
   namePrefix: string;
   region: string;
@@ -71,9 +73,8 @@ export function loadControllerConfig(): ControllerConfig {
       "authorizedGithubLogins",
     ),
     sourceRepositoryUrl: config.require("sourceRepositoryUrl"),
-    nodeVersion: config.get("nodeVersion") ?? "24.18.1",
-    nodeSha256:
-      config.get("nodeSha256") ??
-      "d6c664df3f3f61458e8c277585571328522d705166723a7c7823a9253a4d15a0",
+    nodeVersion:
+      config.get("nodeVersion") ?? controllerToolVersions.node.version,
+    nodeSha256: config.get("nodeSha256") ?? controllerToolVersions.node.sha256,
   });
 }

@@ -1,24 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${script_dir}/lib.sh"
+
 engine=${1:?usage: npm run command -- ENGINE COMMAND...}
 shift
 if [[ $# -eq 0 ]]; then
   echo "pass a command to run" >&2
   exit 2
 fi
-region=${AWS_REGION:-us-east-1}
-outputs_file=${PULUMI_OUTPUTS_FILE:-${root}/benchmarks-remote/pulumi/.pulumi-outputs.json}
-cluster_name=$(jq -er '.clusterName' "${outputs_file}")
-source "${root}/benchmarks-remote/k8s/lib.sh"
-
-case ${engine} in
-  datafusion) selector='app.kubernetes.io/name=datafusion-worker' ;;
-  trino | spark) selector="app.kubernetes.io/name=${engine},app.kubernetes.io/component=worker" ;;
-  ballista) selector='app.kubernetes.io/name=ballista,app.kubernetes.io/component=executor' ;;
-  *) echo "Unknown engine '${engine}'" >&2; exit 2 ;;
-esac
+selector=$(benchmark_worker_selector "${engine}")
+init_environment
 
 ensure_kubeconfig
 pod=$(kubectl_cli get pods \

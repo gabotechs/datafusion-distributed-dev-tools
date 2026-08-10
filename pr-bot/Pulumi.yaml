@@ -1,6 +1,5 @@
 name: datafusion-pr-bot
-description:
-  Persistent controller for the DataFusion remote benchmark foundation
+description: Persistent controller for the DataFusion remote benchmark foundation
 runtime:
   name: nodejs
   options:

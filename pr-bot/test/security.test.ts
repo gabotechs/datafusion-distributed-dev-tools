@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { controllerSetupFiles } from "../infra/setup.js";
 
 function controllerScript(name: string): string {
   return readFileSync(
@@ -8,6 +12,26 @@ function controllerScript(name: string): string {
     "utf8",
   );
 }
+
+function controllerSetupScript(name: string): URL {
+  return new URL(`../controller/setup/${name}`, import.meta.url);
+}
+
+test("keeps controller setup fragments valid and version-independent", () => {
+  const setup = controllerSetupFiles
+    .map((name) => {
+      const script = controllerSetupScript(name);
+      execFileSync("bash", ["-n", fileURLToPath(script)]);
+      return readFileSync(script, "utf8");
+    })
+    .join("\n");
+
+  assert.match(setup, /kubectl_version=\{\{KUBECTL_VERSION\}\}/);
+  assert.match(setup, /helm_version=\{\{HELM_VERSION\}\}/);
+  assert.match(setup, /rustup_version=\{\{RUSTUP_VERSION\}\}/);
+  assert.match(setup, /zig_version=\{\{ZIG_VERSION\}\}/);
+  assert.doesNotMatch(setup, /kubectl_version=1\.|helm_version=4\./);
+});
 
 test("validates every cache path passed to privileged build wrappers", () => {
   for (const name of ["prepare-cache", "cargo-fetch", "cargo-build"]) {

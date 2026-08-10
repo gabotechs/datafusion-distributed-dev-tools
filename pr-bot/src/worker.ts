@@ -5,6 +5,12 @@ import type {
   ProgressReporter,
 } from "./executor.js";
 import type { GitHubApi } from "./github.js";
+import {
+  renderFailure,
+  renderProgress,
+  renderResult,
+  renderRunning,
+} from "./render.js";
 
 export interface JobExecutor {
   execute(
@@ -29,19 +35,20 @@ export class JobWorker {
     if (job.statusCommentId === null) {
       throw new Error(`Benchmark job ${job.id} has no GitHub status comment`);
     }
+    const statusCommentId = job.statusCommentId;
 
     try {
       await this.github.updateComment(
         job.repository,
-        job.statusCommentId,
-        `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.`,
+        statusCommentId,
+        renderRunning(job),
       );
       const result = await this.executor.execute(job, async (progress) => {
-        await this.updateProgress(job, progress);
+        await this.updateProgress(job, statusCommentId, progress);
       });
       await this.github.updateComment(
         job.repository,
-        job.statusCommentId,
+        statusCommentId,
         renderResult(job, result.comparison, result.timings),
       );
       this.database.updateStatus(job.id, "completed");
@@ -51,18 +58,22 @@ export class JobWorker {
       this.database.updateStatus(job.id, "failed", message);
       await this.github.updateComment(
         job.repository,
-        job.statusCommentId,
-        `${requestLink(job)}\n\nBenchmark job ${job.id} failed for ${formatDatasets(job.datasets)} while comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`. Full details are available in the controller journal.`,
+        statusCommentId,
+        renderFailure(job),
       );
     }
     return true;
   }
 
-  async updateProgress(job: Job, progress: ExecutionProgress): Promise<void> {
+  async updateProgress(
+    job: Job,
+    statusCommentId: number,
+    progress: ExecutionProgress,
+  ): Promise<void> {
     try {
       await this.github.updateComment(
         job.repository,
-        job.statusCommentId!,
+        statusCommentId,
         renderProgress(job, progress),
       );
     } catch (error) {
@@ -72,135 +83,4 @@ export class JobWorker {
       );
     }
   }
-}
-
-function renderProgress(job: Job, progress: ExecutionProgress): string {
-  return `${requestLink(job)}
-
-Running ${formatDatasets(job.datasets)} on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.
-
-**Progress ${progress.step}/${progress.totalSteps}:** ${progress.message}.`;
-}
-
-function renderResult(
-  job: Job,
-  comparison: string,
-  timings: ExecutionTimings,
-): string {
-  const baseBenchmarkMs = sumBenchmarks(timings.baseBenchmarks);
-  const headBenchmarkMs = sumBenchmarks(timings.headBenchmarks);
-  const benchmarkRows = job.datasets
-    .map((dataset, index) => {
-      const base = timings.baseBenchmarks[index];
-      const head = timings.headBenchmarks[index];
-      return `| Benchmark \`${dataset}\` | ${formatDuration(base?.durationMs ?? 0)} | ${formatDuration(head?.durationMs ?? 0)} |`;
-    })
-    .join("\n");
-  const queueMs = Math.max(
-    0,
-    Date.parse(job.updatedAt) - Date.parse(job.createdAt),
-  );
-
-  return `${requestLink(job)}
-
-<details>
-<summary>Run metadata</summary>
-
-| Phase | Base | PR head |
-| --- | ---: | ---: |
-| Compilation | ${formatDuration(timings.baseCompileMs)} | ${formatDuration(timings.headCompileMs)} |
-| Kubernetes provisioning | ${formatDuration(timings.baseDeployMs)} | ${formatDuration(timings.headDeployMs)} |
-| All benchmarks | ${formatDuration(baseBenchmarkMs)} | ${formatDuration(headBenchmarkMs)} |
-${benchmarkRows}
-
-Queue: ${formatDuration(queueMs)} · Dataset validation: ${formatDuration(timings.validationMs)} · Total: ${formatDuration(timings.totalMs)}
-
-Base: \`${shortSha(job.baseSha)}\` · PR head: \`${shortSha(job.headSha)}\` · Capacity: ${capacity(job)}
-
-</details>
-
-${renderComparison(comparison)}`;
-}
-
-function renderComparison(comparison: string): string {
-  const blocks = comparison
-    .trim()
-    .split(/(?=^=== Comparing )/m)
-    .map((block) => block.trim())
-    .filter(Boolean);
-
-  if (blocks.length === 0) return "";
-  const detailLimit = Math.floor(49_000 / blocks.length);
-  return blocks
-    .map((block) => renderComparisonBlock(block, detailLimit))
-    .join("\n\n");
-}
-
-function renderComparisonBlock(block: string, detailLimit: number): string {
-  const lines = block.split("\n");
-  const totalIndex = lines.findLastIndex((line) =>
-    line.trimStart().startsWith("TOTAL:"),
-  );
-  if (!lines[0]?.startsWith("=== Comparing ") || totalIndex <= 0) {
-    return `<pre>${htmlEscape(truncate(block, detailLimit))}</pre>`;
-  }
-
-  const summary = `${lines[0]}\n${lines[totalIndex]!.trimStart()}`;
-  const details = lines
-    .filter((_line, index) => index !== 0 && index !== totalIndex)
-    .join("\n");
-  return `<pre>${htmlEscape(summary)}</pre>
-
-<details>
-<summary>Show full query output</summary>
-
-<pre>${htmlEscape(truncate(details, detailLimit))}</pre>
-
-</details>`;
-}
-
-function requestLink(job: Job): string {
-  return `Requested by [this comment](${job.pullRequestUrl}#issuecomment-${job.commentId}).`;
-}
-
-function sumBenchmarks(benchmarks: ExecutionTimings["baseBenchmarks"]): number {
-  return benchmarks.reduce(
-    (total, benchmark) => total + benchmark.durationMs,
-    0,
-  );
-}
-
-function formatDuration(durationMs: number): string {
-  const seconds = Math.max(0, Math.round(durationMs / 1_000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m ${remainingSeconds}s`;
-}
-
-function capacity(job: Job): string {
-  return `${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes`;
-}
-
-function formatDatasets(datasets: readonly string[]): string {
-  return datasets.map((dataset) => `\`${dataset}\``).join(", ");
-}
-
-function truncate(value: string, maxLength = 50_000): string {
-  return value.length <= maxLength
-    ? value
-    : `... earlier output truncated\n${value.slice(-(maxLength - 100))}`;
-}
-
-function htmlEscape(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function shortSha(sha: string): string {
-  return sha.slice(0, 12);
 }

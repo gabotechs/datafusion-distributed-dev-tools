@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import { JobDatabase, QueueLimitError, type NewJob } from "../src/database.js";
@@ -16,6 +20,58 @@ const JOB: NewJob = {
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
 };
+
+function unversionedDatabase(): string {
+  const root = mkdtempSync(path.join(tmpdir(), "job-database-migration-"));
+  const databasePath = path.join(root, "jobs.db");
+  const database = new DatabaseSync(databasePath);
+  database.exec(`
+    CREATE TABLE seen_comments (
+      comment_id INTEGER PRIMARY KEY,
+      seen_at TEXT NOT NULL
+    );
+    CREATE TABLE jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      comment_id INTEGER NOT NULL UNIQUE,
+      repository TEXT NOT NULL,
+      pull_request_number INTEGER NOT NULL,
+      pull_request_url TEXT NOT NULL,
+      requested_by TEXT NOT NULL,
+      dataset TEXT NOT NULL,
+      base_sha TEXT NOT NULL,
+      head_sha TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (comment_id) REFERENCES seen_comments(comment_id)
+    );
+  `);
+  database
+    .prepare("INSERT INTO seen_comments(comment_id, seen_at) VALUES (?, ?)")
+    .run(JOB.commentId, "2026-08-10T00:00:00.000Z");
+  database
+    .prepare(
+      `INSERT INTO jobs(
+         comment_id, repository, pull_request_number, pull_request_url,
+         requested_by, dataset, base_sha, head_sha, status, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+    )
+    .run(
+      JOB.commentId,
+      JOB.repository,
+      JOB.pullRequestNumber,
+      JOB.pullRequestUrl,
+      JOB.requestedBy,
+      JOB.datasets[0]!,
+      JOB.baseSha,
+      JOB.headSha,
+      "2026-08-10T00:00:00.000Z",
+      "2026-08-10T00:00:00.000Z",
+    );
+  database.close();
+  return databasePath;
+}
 
 test("deduplicates comments while preserving immutable refs", () => {
   const database = new JobDatabase(":memory:");
@@ -102,6 +158,89 @@ test("caps active jobs per requester", () => {
       QueueLimitError,
     );
     assert.equal(database.isCommentSeen(200), false);
+  } finally {
+    database.close();
+  }
+});
+
+test("migrates an unversioned database away from the legacy dataset column", () => {
+  const databasePath = unversionedDatabase();
+  const database = new JobDatabase(databasePath);
+  try {
+    assert.deepEqual(database.getJobForComment(JOB.commentId)?.datasets, [
+      JOB.datasets[0],
+    ]);
+    assert.equal(
+      database.getJobForComment(JOB.commentId)?.benchmarkInstanceType,
+      "c5n.2xlarge",
+    );
+    assert.equal(
+      database.getJobForComment(JOB.commentId)?.benchmarkNodeCount,
+      12,
+    );
+  } finally {
+    database.close();
+  }
+
+  const migrated = new DatabaseSync(databasePath);
+  try {
+    const columns = migrated.prepare("PRAGMA table_info(jobs)").all() as {
+      name: string;
+      notnull: number;
+    }[];
+    assert.equal(
+      columns.some(({ name }) => name === "dataset"),
+      false,
+    );
+    assert.equal(
+      columns.find(({ name }) => name === "datasets_json")?.notnull,
+      1,
+    );
+    assert.deepEqual(
+      (
+        migrated
+          .prepare("SELECT version FROM schema_version ORDER BY version")
+          .all() as { version: number }[]
+      ).map(({ version }) => version),
+      [1, 2],
+    );
+    assert.throws(() =>
+      migrated
+        .prepare("UPDATE jobs SET datasets_json = ? WHERE comment_id = ?")
+        .run("not-json", JOB.commentId),
+    );
+  } finally {
+    migrated.close();
+  }
+});
+
+test("does not reapply completed database migrations", () => {
+  const databasePath = unversionedDatabase();
+  new JobDatabase(databasePath).close();
+  new JobDatabase(databasePath).close();
+
+  const database = new DatabaseSync(databasePath);
+  try {
+    assert.equal(
+      Number(
+        (
+          database.prepare("SELECT COUNT(*) AS count FROM jobs").get() as {
+            count: number;
+          }
+        ).count,
+      ),
+      1,
+    );
+    assert.equal(
+      Number(
+        (
+          database
+            .prepare("SELECT COUNT(*) AS count FROM schema_version")
+            .get() as { count: number }
+        ).count,
+      ),
+      2,
+    );
   } finally {
     database.close();
   }

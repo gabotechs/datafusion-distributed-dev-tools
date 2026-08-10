@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
@@ -38,9 +38,17 @@ export class QueueLimitError extends Error {}
 const MAX_QUEUE_DEPTH = 20;
 const MAX_QUEUED_PER_USER = 3;
 
-const MIGRATION = fileURLToPath(
-  new URL("../migrations/001_initial.sql", import.meta.url),
+const MIGRATIONS_DIRECTORY = fileURLToPath(
+  new URL("../migrations/", import.meta.url),
 );
+
+interface Migration {
+  version: number;
+  name: string;
+  sql: string;
+}
+
+const MIGRATIONS = loadMigrations();
 
 export class JobDatabase {
   readonly #database: DatabaseSync;
@@ -51,11 +59,7 @@ export class JobDatabase {
     }
     this.#database = new DatabaseSync(databasePath);
     this.#database.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
-    this.#database.exec(readFileSync(MIGRATION, "utf8"));
-    this.ensureAttemptCountColumn();
-    this.ensureBenchmarkCapacityColumns();
-    this.ensureStatusCommentIdColumn();
-    this.ensureDatasetsJsonColumn();
+    this.applyMigrations();
     if (databasePath !== ":memory:") chmodSync(databasePath, 0o600);
   }
 
@@ -124,8 +128,12 @@ export class JobDatabase {
   }
 
   enqueue(job: NewJob, now = new Date()): number | null {
-    const primaryDataset = job.datasets[0];
-    if (!primaryDataset) {
+    if (
+      job.datasets.length === 0 ||
+      job.datasets.some(
+        (dataset) => typeof dataset !== "string" || dataset.length === 0,
+      )
+    ) {
       throw new Error("A benchmark job must contain at least one dataset");
     }
     const timestamp = now.toISOString();
@@ -151,10 +159,10 @@ export class JobDatabase {
         .prepare(
           `INSERT OR IGNORE INTO jobs(
              comment_id, repository, pull_request_number, pull_request_url,
-             requested_by, dataset, datasets_json,
+             requested_by, datasets_json,
              benchmark_instance_type, benchmark_node_count,
              base_sha, head_sha, status, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
         )
         .run(
           job.commentId,
@@ -162,7 +170,6 @@ export class JobDatabase {
           job.pullRequestNumber,
           job.pullRequestUrl,
           job.requestedBy,
-          primaryDataset,
           JSON.stringify(job.datasets),
           job.benchmarkInstanceType,
           job.benchmarkNodeCount,
@@ -285,51 +292,133 @@ export class JobDatabase {
       .run(repository, scannedThrough);
   }
 
-  private ensureAttemptCountColumn(): void {
-    const columns = this.#database.prepare("PRAGMA table_info(jobs)").all() as {
-      name: string;
-    }[];
-    if (!columns.some((column) => column.name === "attempt_count")) {
-      this.#database.exec(
-        "ALTER TABLE jobs ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0",
-      );
+  private applyMigrations(): void {
+    this.#database.exec(`CREATE TABLE IF NOT EXISTS schema_version (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      applied_at TEXT NOT NULL
+    ) STRICT`);
+
+    const applied = this.#database
+      .prepare("SELECT version, name FROM schema_version ORDER BY version")
+      .all() as { version: number; name: string }[];
+    if (applied.length === 0 && this.tableExists("jobs")) {
+      this.baselineUnversionedDatabase();
+      applied.push({
+        version: MIGRATIONS[0]!.version,
+        name: MIGRATIONS[0]!.name,
+      });
+    }
+    validateMigrationHistory(applied);
+
+    const appliedVersions = new Set(applied.map(({ version }) => version));
+    for (const migration of MIGRATIONS) {
+      if (appliedVersions.has(migration.version)) continue;
+      this.#database.exec("BEGIN IMMEDIATE");
+      try {
+        this.#database.exec(migration.sql);
+        this.#database
+          .prepare(
+            "INSERT INTO schema_version(version, name, applied_at) VALUES (?, ?, ?)",
+          )
+          .run(migration.version, migration.name, new Date().toISOString());
+        this.#database.exec("COMMIT");
+      } catch (error) {
+        this.#database.exec("ROLLBACK");
+        throw error;
+      }
     }
   }
 
-  private ensureBenchmarkCapacityColumns(): void {
-    const columns = this.#database.prepare("PRAGMA table_info(jobs)").all() as {
-      name: string;
-    }[];
-    if (!columns.some((column) => column.name === "benchmark_instance_type")) {
-      this.#database.exec(
-        "ALTER TABLE jobs ADD COLUMN benchmark_instance_type TEXT NOT NULL DEFAULT 'c5n.2xlarge'",
+  private baselineUnversionedDatabase(): void {
+    const initialMigration = MIGRATIONS[0]!;
+    const requiredLegacyColumns = [
+      "id",
+      "comment_id",
+      "repository",
+      "pull_request_number",
+      "pull_request_url",
+      "requested_by",
+      "dataset",
+      "base_sha",
+      "head_sha",
+      "status",
+      "error",
+      "created_at",
+      "updated_at",
+    ];
+    const columns = new Set(
+      (
+        this.#database.prepare("PRAGMA table_info(jobs)").all() as {
+          name: string;
+        }[]
+      ).map(({ name }) => name),
+    );
+    const missing = requiredLegacyColumns.filter(
+      (column) => !columns.has(column),
+    );
+    if (missing.length > 0) {
+      throw new Error(
+        `Cannot migrate unversioned jobs table; missing columns: ${missing.join(", ")}`,
       );
     }
-    if (!columns.some((column) => column.name === "benchmark_node_count")) {
+
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      this.#database.exec(initialMigration.sql);
+      const compatibilityColumns = [
+        {
+          name: "attempt_count",
+          definition: "INTEGER NOT NULL DEFAULT 0",
+        },
+        {
+          name: "benchmark_instance_type",
+          definition: "TEXT NOT NULL DEFAULT 'c5n.2xlarge'",
+        },
+        {
+          name: "benchmark_node_count",
+          definition: "INTEGER NOT NULL DEFAULT 12",
+        },
+        { name: "status_comment_id", definition: "INTEGER" },
+        { name: "datasets_json", definition: "TEXT" },
+      ] as const;
+      for (const column of compatibilityColumns) {
+        if (!columns.has(column.name)) {
+          this.#database.exec(
+            `ALTER TABLE jobs ADD COLUMN ${column.name} ${column.definition}`,
+          );
+        }
+      }
       this.#database.exec(
-        "ALTER TABLE jobs ADD COLUMN benchmark_node_count INTEGER NOT NULL DEFAULT 12",
+        "UPDATE jobs SET datasets_json = json_array(dataset) WHERE datasets_json IS NULL",
       );
+      this.#database.exec(
+        "UPDATE jobs SET datasets_json = json_array(dataset) WHERE NOT json_valid(datasets_json)",
+      );
+      this.#database
+        .prepare(
+          "INSERT INTO schema_version(version, name, applied_at) VALUES (?, ?, ?)",
+        )
+        .run(
+          initialMigration.version,
+          initialMigration.name,
+          new Date().toISOString(),
+        );
+      this.#database.exec("COMMIT");
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
     }
   }
 
-  private ensureStatusCommentIdColumn(): void {
-    const columns = this.#database.prepare("PRAGMA table_info(jobs)").all() as {
-      name: string;
-    }[];
-    if (!columns.some((column) => column.name === "status_comment_id")) {
-      this.#database.exec(
-        "ALTER TABLE jobs ADD COLUMN status_comment_id INTEGER",
-      );
-    }
-  }
-
-  private ensureDatasetsJsonColumn(): void {
-    const columns = this.#database.prepare("PRAGMA table_info(jobs)").all() as {
-      name: string;
-    }[];
-    if (!columns.some((column) => column.name === "datasets_json")) {
-      this.#database.exec("ALTER TABLE jobs ADD COLUMN datasets_json TEXT");
-    }
+  private tableExists(table: string): boolean {
+    return Boolean(
+      this.#database
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
+        .get(table),
+    );
   }
 }
 
@@ -343,7 +432,7 @@ function jobFromRow(row: Record<string, unknown>): Job {
     pullRequestNumber: Number(row.pull_request_number),
     pullRequestUrl: String(row.pull_request_url),
     requestedBy: String(row.requested_by),
-    datasets: parseDatasets(row.datasets_json, row.dataset),
+    datasets: parseDatasets(row.datasets_json),
     benchmarkInstanceType: String(row.benchmark_instance_type),
     benchmarkNodeCount: Number(row.benchmark_node_count),
     baseSha: String(row.base_sha),
@@ -356,7 +445,7 @@ function jobFromRow(row: Record<string, unknown>): Job {
   };
 }
 
-function parseDatasets(value: unknown, legacyDataset: unknown): string[] {
+function parseDatasets(value: unknown): string[] {
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value) as unknown;
@@ -368,8 +457,49 @@ function parseDatasets(value: unknown, legacyDataset: unknown): string[] {
         return parsed;
       }
     } catch {
-      // Fall back to the legacy single-dataset column.
+      // Report the same invariant violation for malformed JSON and shape errors.
     }
   }
-  return [String(legacyDataset)];
+  throw new Error("Job row contains invalid datasets_json");
+}
+
+function loadMigrations(): Migration[] {
+  const migrations = readdirSync(MIGRATIONS_DIRECTORY)
+    .map((name): Migration | null => {
+      const match = /^(\d{3})_[a-z0-9_]+\.sql$/.exec(name);
+      if (!match) return null;
+      return {
+        version: Number(match[1]),
+        name,
+        sql: readFileSync(path.join(MIGRATIONS_DIRECTORY, name), "utf8"),
+      };
+    })
+    .filter((migration): migration is Migration => migration !== null)
+    .sort((left, right) => left.version - right.version);
+  if (
+    migrations.length === 0 ||
+    migrations.some((migration, index) => migration.version !== index + 1)
+  ) {
+    throw new Error(
+      "Database migrations must use consecutive versions from 001",
+    );
+  }
+  return migrations;
+}
+
+function validateMigrationHistory(
+  applied: readonly { version: number; name: string }[],
+): void {
+  for (const [index, migration] of applied.entries()) {
+    const expected = MIGRATIONS[index];
+    if (
+      !expected ||
+      migration.version !== expected.version ||
+      migration.name !== expected.name
+    ) {
+      throw new Error(
+        `Database has unknown migration ${migration.version} (${migration.name})`,
+      );
+    }
+  }
 }
