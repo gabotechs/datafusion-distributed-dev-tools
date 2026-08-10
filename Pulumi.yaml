@@ -4,7 +4,7 @@ description:
 runtime:
   name: nodejs
   options:
-    typescript: true
-main: infra/index.ts
+    typescript: false
+main: dist/infra/index.js
 config:
   aws:region: us-east-1
