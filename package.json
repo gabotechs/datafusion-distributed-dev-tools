@@ -8,13 +8,14 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "controller-deploy": "pulumi up",
+    "controller-deploy": "npm run pulumi:build && pulumi up",
     "controller-destroy": "pulumi destroy",
     "controller-outputs": "pulumi stack output --json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "start": "tsx src/main.ts",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "pulumi:build": "tsc --project tsconfig.pulumi.json"
   },
   "devDependencies": {
     "@types/node": "26.2.0",
