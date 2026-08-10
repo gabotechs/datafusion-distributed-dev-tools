@@ -19,6 +19,18 @@ from `benchmarks-remote/` and gives the controller narrowly scoped access to
 use it. Both components live in this repository so the trusted benchmark
 harness can evolve independently of DataFusion Distributed source revisions.
 
+## Checkout layout
+
+Keep this repository beside a DataFusion Distributed source checkout. The
+remote benchmark commands read datasets and queries from the source checkout's
+`testdata/` directory.
+
+```text
+<parent>/
+  datafusion-distributed/
+  datafusion-distributed-dev-tools/
+```
+
 ## Development
 
 Install each component's dependencies:
