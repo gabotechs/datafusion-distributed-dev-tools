@@ -26,3 +26,9 @@ test("all benchmark clients use the same local port", () => {
     assert.match(runner, /"9000:9000"/);
     assert.doesNotMatch(runner, /case \$\{engine\}|_URL=/);
 });
+
+test("publishes the DataFusion worker from its crate target directory", () => {
+    const publisher = fs.readFileSync(path.resolve(__dirname, "../k8s/publish-datafusion.sh"), "utf8");
+    assert.match(publisher, /benchmarks-remote\/engines\/datafusion\/target\/x86_64-unknown-linux-gnu\/release\/worker/);
+    assert.doesNotMatch(publisher, /\$\{root\}\/target\/x86_64-unknown-linux-gnu\/release\/worker/);
+});
