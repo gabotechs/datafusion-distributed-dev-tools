@@ -39,4 +39,4 @@ exec systemd-run --quiet --wait --pipe --collect \
   --setenv=AWS_EC2_METADATA_DISABLED=true \
   /var/lib/datafusion-pr-build/.cargo/bin/cargo fetch \
   --locked \
-  --manifest-path "${source_root}/benchmarks-remote/engines/datafusion/Cargo.toml"
+  --manifest-path "${source_root}/benchmarks/Cargo.toml"

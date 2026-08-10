@@ -177,6 +177,7 @@ BUILD_CACHE_ROOT=/var/cache/datafusion-pr-build
 BUILD_CACHE_MAX_GIB=400
 KUBECONFIG=/var/lib/datafusion-pr-bot/kubeconfig
 FOUNDATION_OUTPUTS_FILE=/var/lib/datafusion-pr-bot/foundation-outputs.json
+BENCHMARK_HARNESS_ROOT=/opt/datafusion-pr-bot/current/benchmarks-remote
 BENCHMARK_TESTDATA_ROOT=/var/lib/datafusion-pr-bot/testdata
 ENVIRONMENT
 chown benchmark-bot:benchmark-bot /var/lib/datafusion-pr-bot/controller.env

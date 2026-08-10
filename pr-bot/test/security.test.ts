@@ -34,6 +34,8 @@ test("hides controller state and cannot silently lose offline isolation", () => 
   const build = controllerScript("cargo-build");
   assert.match(build, /PrivateNetwork=yes/);
   assert.match(build, /--offline/);
+  assert.match(build, /benchmarks\/Cargo\.toml/);
+  assert.doesNotMatch(build, /benchmarks-remote/);
 });
 
 test("cache preparation performs filesystem changes as the build user", () => {

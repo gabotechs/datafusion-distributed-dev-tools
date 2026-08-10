@@ -8,8 +8,7 @@
   untrusted.
 - Never expose GitHub or AWS credentials to a PR build process.
 - Use immutable base and head SHAs persisted when the comment is accepted.
-- Serialize jobs until the benchmark harness explicitly supports independent
-  clusters per concurrent run.
+- Keep every job's Helm resources isolated from interactive benchmark releases.
 - Keep the bot's EKS cluster and artifact prefixes separate from interactive
   remote benchmarks.
 - Treat the EKS foundation as human-managed external infrastructure. Bot IaC may

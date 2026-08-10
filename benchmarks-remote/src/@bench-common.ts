@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs/promises";
 import * as fsSync from "fs";
 import {BenchmarkRun, BenchResult} from "./@results";
-import {datasetParts, datasetPath, ROOT} from "./@paths";
+import {datasetParts, datasetPath, ROOT, testdataRoots} from "./@paths";
 
 const PULUMI_OUTPUT_FILE = path.join(ROOT, "benchmarks-remote", "pulumi", ".pulumi-outputs.json")
 
@@ -114,7 +114,7 @@ async function isDirWithAllParquetFiles(dir: string): Promise<boolean> {
 
 async function queriesForDataset(dataset: string): Promise<{ id: string, sql: string }[]> {
     const [suite] = datasetParts(dataset)
-    const queriesPath = path.join(ROOT, "testdata", suite, "queries")
+    const queriesPath = path.join(testdataRoots()[0], suite, "queries")
 
     const queries = []
     for (const fileName of await fs.readdir(queriesPath)) {

@@ -1,3 +1,4 @@
+name: datafusion
 worker:
   replicas: 12
   instanceType: c5n.2xlarge

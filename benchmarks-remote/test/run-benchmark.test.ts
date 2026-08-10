@@ -9,6 +9,13 @@ test("benchmark results remain local", () => {
     assert.match(runner, /Benchmark run completed/);
 });
 
+test("benchmark runs do not create cluster state", () => {
+    const runner = fs.readFileSync(path.resolve(__dirname, "../k8s/run-benchmark.sh"), "utf8");
+    const library = fs.readFileSync(path.resolve(__dirname, "../k8s/lib.sh"), "utf8");
+    assert.doesNotMatch(runner, /benchmark_lock|heartbeat|configmap/);
+    assert.doesNotMatch(library, /benchmark_lock|heartbeat|configmap/);
+});
+
 test("all benchmark clients use the same local port", () => {
     for (const client of ["datafusion-bench.ts", "trino-bench.ts", "spark-bench.ts", "ballista-bench.ts"]) {
         const source = fs.readFileSync(path.resolve(__dirname, "../src", client), "utf8");

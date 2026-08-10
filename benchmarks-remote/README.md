@@ -102,8 +102,7 @@ are idempotent and can likewise be rerun after interruption.
 ## Running benchmarks
 
 An engine and the requested dataset must already be deployed. Benchmark commands
-only acquire the run lock, open a local Kubernetes port-forward, execute the
-local client, and release the lock:
+only open a local Kubernetes port-forward and execute the local client:
 
 ```bash
 npm run datafusion-bench -- --dataset tpch/sf1 --iterations 1
@@ -118,17 +117,12 @@ pod. `npm run compare` compares locally stored result sets.
 ### Interrupting a run
 
 Benchmark runs can be stopped with `Ctrl-C` or by terminating the local
-command. The runner stops its port-forward and lock heartbeat and removes the
-cluster lock before exiting. Results from the previous completed run remain
-available when a benchmark is interrupted before it writes new results.
+command. The runner stops its port-forward before exiting. Results from the
+previous completed run remain available when a benchmark is interrupted before
+it writes new results.
 
 Benchmark results remain under the dataset's local `.results-remote/` directory
 and are not uploaded to S3.
-
-The cluster lock expires after five minutes without a heartbeat. This makes a
-new run recover automatically even when the previous process could not run its
-cleanup handler, such as after a terminal or machine failure. An active lock is
-never replaced, and lock release is conditional on run ownership.
 
 ## Kubectl access
 

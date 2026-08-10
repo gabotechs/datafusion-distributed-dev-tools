@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "application:build": "tsc --project tsconfig.controller.json",
+    "application:build": "tsc --project tsconfig.controller.json && npm --prefix ../benchmarks-remote run application:build",
     "controller-deploy": "npm run application:build && npm run pulumi:build && pulumi up",
     "controller-destroy": "pulumi destroy",
     "controller-outputs": "pulumi stack output --json",
