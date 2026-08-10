@@ -22,13 +22,16 @@ const JOB: NewJob = {
 test("reports a completed comparison and consumes the job", async () => {
   const database = new JobDatabase(":memory:");
   const comments: string[] = [];
+  const commentIds: number[] = [];
   const github = {
-    postComment: async (_repo: string, _pr: number, body: string) => {
+    updateComment: async (_repo: string, commentId: number, body: string) => {
+      commentIds.push(commentId);
       comments.push(body);
     },
   } as GitHubApi;
   try {
-    database.enqueue(JOB);
+    const jobId = database.enqueue(JOB)!;
+    database.setStatusCommentId(jobId, 77);
     const worker = new JobWorker(database, github, {
       execute: async () => ({ comparison: "TOTAL: 1.20 faster" }),
     });
@@ -38,6 +41,7 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
     assert.match(comments[1]!, /TOTAL: 1.20 faster/);
     assert.match(comments[1]!, /12 `c7i\.2xlarge` nodes/);
+    assert.deepEqual(commentIds, [77, 77]);
   } finally {
     database.close();
   }
@@ -47,12 +51,13 @@ test("does not publish command output when a job fails", async () => {
   const database = new JobDatabase(":memory:");
   const comments: string[] = [];
   const github = {
-    postComment: async (_repo: string, _pr: number, body: string) => {
+    updateComment: async (_repo: string, _commentId: number, body: string) => {
       comments.push(body);
     },
   } as GitHubApi;
   try {
-    database.enqueue(JOB);
+    const jobId = database.enqueue(JOB)!;
+    database.setStatusCommentId(jobId, 77);
     const worker = new JobWorker(database, github, {
       execute: async () => {
         throw new Error("arn:aws:iam::123456789012:role/private");
@@ -70,12 +75,13 @@ test("HTML-escapes benchmark comparison output", async () => {
   const database = new JobDatabase(":memory:");
   const comments: string[] = [];
   const github = {
-    postComment: async (_repo: string, _pr: number, body: string) => {
+    updateComment: async (_repo: string, _commentId: number, body: string) => {
       comments.push(body);
     },
   } as GitHubApi;
   try {
-    database.enqueue(JOB);
+    const jobId = database.enqueue(JOB)!;
+    database.setStatusCommentId(jobId, 77);
     const worker = new JobWorker(database, github, {
       execute: async () => ({ comparison: "</pre><script>alert(1)</script>" }),
     });

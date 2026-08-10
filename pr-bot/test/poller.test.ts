@@ -31,7 +31,8 @@ test("a failing comment does not prevent later comments from being queued", asyn
         head: { sha: "b".repeat(40), ref: "feature" },
       };
     },
-    postComment: async () => {},
+    postComment: async () => 99,
+    updateComment: async () => {},
   } as unknown as GitHubApi;
   try {
     await new CommentPoller(
@@ -97,6 +98,39 @@ test("ignores benchmark commands from users outside the allowlist", async () => 
     await poller.process(comment(1, "stranger"));
     assert.equal(database.isCommentSeen(1), true);
     assert.equal(database.nextPending(), null);
+  } finally {
+    database.close();
+  }
+});
+
+test("creates one persisted status comment for an accepted benchmark", async () => {
+  const database = new JobDatabase(":memory:");
+  const posted: string[] = [];
+  const github = {
+    getPullRequest: async () => ({
+      number: 1,
+      html_url: "https://github.com/owner/repository/pull/1",
+      base: { sha: "a".repeat(40), ref: "main" },
+      head: { sha: "b".repeat(40), ref: "feature" },
+    }),
+    postComment: async (_repository: string, _pr: number, body: string) => {
+      posted.push(body);
+      return 321;
+    },
+  } as unknown as GitHubApi;
+  try {
+    const poller = new CommentPoller(
+      "owner/repository",
+      new Set(["maintainer"]),
+      database,
+      github,
+    );
+    await poller.process(comment(1, "maintainer"));
+    await poller.process(comment(1, "maintainer"));
+
+    assert.equal(posted.length, 1);
+    assert.match(posted[0]!, /queued/);
+    assert.equal(database.getJobForComment(1)?.statusCommentId, 321);
   } finally {
     database.close();
   }
