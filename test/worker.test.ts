@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { JobDatabase, type NewJob } from "../src/database.js";
-import type { GitHubClient } from "../src/github.js";
+import type { GitHubApi } from "../src/github.js";
 import { JobWorker } from "../src/worker.js";
 
 const JOB: NewJob = {
@@ -24,7 +24,7 @@ test("reports a completed comparison and consumes the job", async () => {
     postComment: async (_repo: string, _pr: number, body: string) => {
       comments.push(body);
     },
-  } as GitHubClient;
+  } as GitHubApi;
   try {
     database.enqueue(JOB);
     const worker = new JobWorker(database, github, {
