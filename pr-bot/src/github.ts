@@ -18,7 +18,6 @@ export interface PullRequest {
 export interface GitHubApi {
   listIssueComments(repository: string, since: string): Promise<IssueComment[]>;
   getPullRequest(repository: string, number: number): Promise<PullRequest>;
-  hasWritePermission(repository: string, login: string): Promise<boolean>;
   postComment(
     repository: string,
     pullRequestNumber: number,
@@ -70,20 +69,6 @@ export class GitHubClient implements GitHubApi {
       `${API}/repos/${repositoryPath(repository)}/pulls/${number}`,
     );
     return (await response.json()) as PullRequest;
-  }
-
-  async hasWritePermission(
-    repository: string,
-    login: string,
-  ): Promise<boolean> {
-    const response = await this.request(
-      `${API}/repos/${repositoryPath(repository)}/collaborators/${encodeURIComponent(login)}/permission`,
-      {},
-      [404],
-    );
-    if (response.status === 404) return false;
-    const result = (await response.json()) as { permission: string };
-    return ["admin", "maintain", "write"].includes(result.permission);
   }
 
   async postComment(
