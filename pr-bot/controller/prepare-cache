@@ -25,3 +25,5 @@ copy_seed "${seed_target}" "${target}"
 copy_seed "${seed_cargo_home}" "${cargo_home}"
 runuser --user benchmark-build --group benchmark-cache -- \
   mkdir --parents "${target}" "${cargo_home}"
+runuser --user benchmark-build --group benchmark-cache -- \
+  touch "${target}" "${cargo_home}"
