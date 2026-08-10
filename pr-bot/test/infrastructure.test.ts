@@ -203,6 +203,7 @@ test("installs protected controller state and verified native toolchains", () =>
     /rustup_temporary=\$\(mktemp -d\)\nchmod 0755 \$\{rustup_temporary\}/,
   );
   assert.match(userData, /rustup-init -y --profile minimal/);
+  assert.match(userData, /--default-toolchain 1\.94\.0/);
   assert.match(userData, /kubectl_version=1\.36\.1/);
   assert.match(userData, /helm_version=4\.2\.3/);
   assert.match(userData, /install .*\/usr\/local\/bin\/kubectl/);

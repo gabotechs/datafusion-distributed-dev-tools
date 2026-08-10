@@ -32,6 +32,7 @@ test("hides controller state and cannot silently lose offline isolation", () => 
       script,
       /PATH=\/var\/lib\/datafusion-pr-build\/\.cargo\/bin:\/usr\/local\/bin:\/usr\/bin/,
     );
+    assert.match(script, /RUSTUP_TOOLCHAIN=1\.94\.0/);
   }
   const build = controllerScript("cargo-build");
   const fetch = controllerScript("cargo-fetch");
