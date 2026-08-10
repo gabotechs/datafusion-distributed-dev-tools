@@ -155,7 +155,7 @@ export class CommentPoller {
     const commentId = await this.github.postComment(
       job.repository,
       job.pullRequestNumber,
-      `Benchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes, comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`.`,
+      `Requested by [this comment](${job.pullRequestUrl}#issuecomment-${job.commentId}).\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes, comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`.`,
     );
     this.database.setStatusCommentId(job.id, commentId);
   }

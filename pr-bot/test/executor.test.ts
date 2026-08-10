@@ -145,6 +145,15 @@ test("executes base before head with the bundled trusted harness", async () => {
     result.comparison,
     datasets.map((dataset) => `comparison:${dataset}`).join("\n\n"),
   );
+  assert.deepEqual(
+    result.timings.baseBenchmarks.map(({ dataset }) => dataset),
+    datasets,
+  );
+  assert.deepEqual(
+    result.timings.headBenchmarks.map(({ dataset }) => dataset),
+    datasets,
+  );
+  assert.ok(result.timings.totalMs >= 0);
   assert.deepEqual(events, [
     "prepare-dataset:tpch/sf1",
     "prepare-dataset:tpch/sf10",

@@ -19,6 +19,25 @@ const JOB: NewJob = {
   headSha: "b".repeat(40),
 };
 
+const TIMINGS = {
+  validationMs: 2_000,
+  baseCompileMs: 61_000,
+  baseDeployMs: 122_000,
+  baseBenchmarks: [
+    { dataset: "tpch/sf1", durationMs: 10_000 },
+    { dataset: "tpch/sf10", durationMs: 20_000 },
+    { dataset: "tpch/sf100", durationMs: 30_000 },
+  ],
+  headCompileMs: 65_000,
+  headDeployMs: 125_000,
+  headBenchmarks: [
+    { dataset: "tpch/sf1", durationMs: 11_000 },
+    { dataset: "tpch/sf10", durationMs: 21_000 },
+    { dataset: "tpch/sf100", durationMs: 31_000 },
+  ],
+  totalMs: 420_000,
+};
+
 test("reports a completed comparison and consumes the job", async () => {
   const database = new JobDatabase(":memory:");
   const comments: string[] = [];
@@ -33,7 +52,10 @@ test("reports a completed comparison and consumes the job", async () => {
     const jobId = database.enqueue(JOB)!;
     database.setStatusCommentId(jobId, 77);
     const worker = new JobWorker(database, github, {
-      execute: async () => ({ comparison: "TOTAL: 1.20 faster" }),
+      execute: async () => ({
+        comparison: "TOTAL: 1.20 faster",
+        timings: TIMINGS,
+      }),
     });
     assert.equal(await worker.runOnce(), true);
     assert.equal(await worker.runOnce(), false);
@@ -41,7 +63,12 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[0]!, /`tpch\/sf1`, `tpch\/sf10`, `tpch\/sf100`/);
     assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
     assert.match(comments[1]!, /TOTAL: 1.20 faster/);
-    assert.doesNotMatch(comments[1]!, /Benchmark completed|Base:|Head:/);
+    assert.match(comments[1]!, /pull\/99#issuecomment-7/);
+    assert.match(comments[1]!, /Run metadata/);
+    assert.match(comments[1]!, /Compilation \| 1m 1s \| 1m 5s/);
+    assert.match(comments[1]!, /Kubernetes provisioning \| 2m 2s \| 2m 5s/);
+    assert.match(comments[1]!, /Benchmark `tpch\/sf100` \| 30s \| 31s/);
+    assert.match(comments[1]!, /Total: 7m 0s/);
     assert.deepEqual(commentIds, [77, 77]);
   } finally {
     database.close();
@@ -84,7 +111,10 @@ test("HTML-escapes benchmark comparison output", async () => {
     const jobId = database.enqueue(JOB)!;
     database.setStatusCommentId(jobId, 77);
     const worker = new JobWorker(database, github, {
-      execute: async () => ({ comparison: "</pre><script>alert(1)</script>" }),
+      execute: async () => ({
+        comparison: "</pre><script>alert(1)</script>",
+        timings: TIMINGS,
+      }),
     });
     await worker.runOnce();
     assert.match(comments[1]!, /&lt;script&gt;/);
