@@ -4,6 +4,8 @@ import { z } from "zod";
 import {datasetPath} from "./@paths";
 
 export const RESULTS_DIR = ".results-remote"
+const QUERY_HIGHLIGHT_THRESHOLD = 1.5
+const TOTAL_HIGHLIGHT_THRESHOLD = 1.1
 
 // Interface for a single iteration of a benchmark query
 export interface QueryIter {
@@ -116,18 +118,18 @@ export class BenchmarkRun {
         if (totalTimeNew < totalTimePrev) {
             f = totalTimePrev / totalTimeNew;
             tag = "faster";
-            emoji = f > 1.2 ? "✅" : "✔";
+            emoji = f >= TOTAL_HIGHLIGHT_THRESHOLD ? "✅" : "✔";
         } else {
             f = totalTimeNew / totalTimePrev;
             tag = "slower";
-            emoji = f > 1.2 ? "❌" : "✖";
+            emoji = f >= TOTAL_HIGHLIGHT_THRESHOLD ? "❌" : "✖";
         }
-        console.log(
-            `${"TOTAL".padStart(8)}: prev=${totalTimePrev.toString()} ms, new=${totalTimeNew.toString()} ms, diff=${f.toFixed(2)} ${tag} ${emoji}`
-        );
 
         printQErrorComparison("QERR P50", statsQErrorP50Prev, statsQErrorP50New)
         printQErrorComparison("QERR P95", statsQErrorP95Prev, statsQErrorP95New)
+        console.log(
+            `${"TOTAL".padStart(8)}: prev=${totalTimePrev.toString()} ms, new=${totalTimeNew.toString()} ms, diff=${f.toFixed(2)} ${tag} ${emoji}`
+        );
     }
 
     compareWithPrevious(): void {
@@ -207,11 +209,11 @@ export class BenchResult {
         if (p50 < p50Prev) {
             f = p50Prev / p50;
             tag = "faster";
-            emoji = f > 1.2 ? "✅" : "✔";
+            emoji = f >= QUERY_HIGHLIGHT_THRESHOLD ? "✅" : "✔";
         } else {
             f = p50 / p50Prev;
             tag = "slower";
-            emoji = f > 1.2 ? "❌" : "✖";
+            emoji = f >= QUERY_HIGHLIGHT_THRESHOLD ? "❌" : "✖";
         }
 
         console.log(
