@@ -79,8 +79,8 @@ export class BenchmarkRun {
         }
     }
 
-    compare(other: BenchmarkRun): void {
-        console.log(`=== Comparing ${this.dataset} results from engine '${other.engine}' [prev] with '${this.engine}' [new] ===`);
+    comparison(other: BenchmarkRun): string {
+        const lines = [`=== Comparing ${this.dataset} results from engine '${other.engine}' [prev] with '${this.engine}' [new] ===`]
         let totalTimePrev = 0
         let totalTimeNew = 0
         const statsQErrorP50Prev: number[] = []
@@ -111,7 +111,7 @@ export class BenchmarkRun {
                 ))
             }
 
-            query.compare(prevQuery);
+            lines.push(query.comparison(prevQuery));
         }
 
         let f, tag, emoji
@@ -125,11 +125,20 @@ export class BenchmarkRun {
             emoji = f >= TOTAL_HIGHLIGHT_THRESHOLD ? "❌" : "✖";
         }
 
-        printQErrorComparison("QERR P50", statsQErrorP50Prev, statsQErrorP50New)
-        printQErrorComparison("QERR P95", statsQErrorP95Prev, statsQErrorP95New)
-        console.log(
+        const qErrorP50 = qErrorComparison("QERR P50", statsQErrorP50Prev, statsQErrorP50New)
+        const qErrorP95 = qErrorComparison("QERR P95", statsQErrorP95Prev, statsQErrorP95New)
+        if (qErrorP50) lines.push(qErrorP50)
+        if (qErrorP95) lines.push(qErrorP95)
+        lines.push(
             `${"TOTAL".padStart(8)}: prev=${totalTimePrev.toString()} ms, new=${totalTimeNew.toString()} ms, diff=${f.toFixed(2)} ${tag} ${emoji}`
         );
+        return lines.join("\n")
+    }
+
+    compare(other: BenchmarkRun): void {
+        for (const line of this.comparison(other).split("\n")) {
+            console.log(line);
+        }
     }
 
     compareWithPrevious(): void {
@@ -182,21 +191,18 @@ export class BenchResult {
         return this.p50();
     }
 
-    compare(prevQuery: BenchResult): void {
+    comparison(prevQuery: BenchResult): string {
         const prevErr = prevQuery.iterations.find(v => v.error)?.error;
         const newErr = this.iterations.find(v => v.error)?.error;
 
         if (prevErr && !newErr) {
-            console.log(`${this.id}: Previously failed, but now succeeded 🟠`);
-            return;
+            return `${this.id}: Previously failed, but now succeeded 🟠`;
         }
         if (!prevErr && newErr) {
-            console.log(`${this.id}: Previously succeeded, but now failed ❌`);
-            return;
+            return `${this.id}: Previously succeeded, but now failed ❌`;
         }
         if (prevErr && newErr) {
-            console.log(`${this.id}: Previously failed, and now also failed ❌`);
-            return;
+            return `${this.id}: Previously failed, and now also failed ❌`;
         }
 
         const p50Prev = prevQuery.p50();
@@ -216,9 +222,11 @@ export class BenchResult {
             emoji = f >= QUERY_HIGHLIGHT_THRESHOLD ? "❌" : "✖";
         }
 
-        console.log(
-            `${this.id.padStart(8)}: prev=${p50Prev.toString().padStart(4)} ms, new=${p50.toString().padStart(4)} ms, diff=${f.toFixed(2)} ${tag} ${emoji}`
-        );
+        return `${this.id.padStart(8)}: prev=${p50Prev.toString().padStart(4)} ms, new=${p50.toString().padStart(4)} ms, diff=${f.toFixed(2)} ${tag} ${emoji}`;
+    }
+
+    compare(prevQuery: BenchResult): void {
+        console.log(this.comparison(prevQuery));
     }
 
     store(): void {
@@ -309,16 +317,17 @@ function numericId(queryName: string): number {
     return parseInt([...queryName.matchAll(/(\d+)/g)][0][0])
 }
 
-function printQErrorComparison(label: string, prev: number[], next: number[]): void {
+function qErrorComparison(label: string, prev: number[], next: number[]): string | undefined {
     const prevValue = median(prev)
     const nextValue = median(next)
     if (prevValue !== undefined && nextValue !== undefined) {
-        console.log(`${label.padStart(8)}: prev=${prevValue.toFixed(2)}x, new=${nextValue.toFixed(2)}x`)
+        return `${label.padStart(8)}: prev=${prevValue.toFixed(2)}x, new=${nextValue.toFixed(2)}x`
     } else if (prevValue !== undefined) {
-        console.log(`${label.padStart(8)}: prev=${prevValue.toFixed(2)}x, new=n/a`)
+        return `${label.padStart(8)}: prev=${prevValue.toFixed(2)}x, new=n/a`
     } else if (nextValue !== undefined) {
-        console.log(`${label.padStart(8)}: prev=n/a, new=${nextValue.toFixed(2)}x`)
+        return `${label.padStart(8)}: prev=n/a, new=${nextValue.toFixed(2)}x`
     }
+    return undefined
 }
 
 function median(values: number[]): number | undefined {

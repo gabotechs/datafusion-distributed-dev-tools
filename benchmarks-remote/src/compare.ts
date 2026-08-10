@@ -1,11 +1,15 @@
 import {Command} from "commander";
-import { BenchmarkRun, BenchResult } from "./@results";
+import fs from "node:fs";
+import path from "node:path";
+
+import { compareStoredResults } from "./@compare";
 
 async function main() {
     const program = new Command();
 
     program
         .requiredOption('--dataset <string>', 'Dataset to run queries on')
+        .option('--output <path>', 'Write the comparison to a file instead of stdout')
         .argument("<base_engine>", "the base engine")
         .argument("<compare_engine>", "the engine to compare to")
         .parse(process.argv);
@@ -15,12 +19,13 @@ async function main() {
         throw new Error(`Expected exactly 2 arguments, got ${program.args.length}`)
     }
 
-    const prevRun = new BenchmarkRun(options.dataset, program.args[0])
-    prevRun.loadResults()
-    const newRun = new BenchmarkRun(options.dataset, program.args[1])
-    newRun.loadResults()
-
-    newRun.compare(prevRun)
+    const comparison = compareStoredResults(options.dataset, program.args[0], program.args[1])
+    if (options.output) {
+        fs.mkdirSync(path.dirname(options.output), {recursive: true});
+        fs.writeFileSync(options.output, `${comparison}\n`);
+    } else {
+        console.log(comparison)
+    }
 }
 
 main()
