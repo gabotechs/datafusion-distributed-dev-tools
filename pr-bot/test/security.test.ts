@@ -34,6 +34,9 @@ test("hides controller state and cannot silently lose offline isolation", () => 
     );
   }
   const build = controllerScript("cargo-build");
+  const fetch = controllerScript("cargo-fetch");
+  assert.match(fetch, /nameserver.*\/etc\/resolv\.conf/);
+  assert.match(fetch, /IPAddressAllow="\$\{dns_server\}"/);
   assert.match(build, /PrivateNetwork=yes/);
   assert.match(build, /--offline/);
   assert.match(build, /benchmarks\/Cargo\.toml/);
