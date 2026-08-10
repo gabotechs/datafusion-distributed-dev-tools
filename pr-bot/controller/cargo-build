@@ -32,6 +32,7 @@ exec systemd-run --quiet --wait --pipe --collect \
   --property=PrivateNetwork=yes \
   --setenv=HOME=/var/lib/datafusion-pr-build \
   --setenv=PATH=/var/lib/datafusion-pr-build/.cargo/bin:/usr/local/bin:/usr/bin \
+  --setenv=RUSTUP_TOOLCHAIN=1.94.0 \
   --setenv=CARGO_HOME="${cargo_home}" \
   --setenv=CARGO_TARGET_DIR="${target}" \
   --setenv=XDG_CACHE_HOME="${cargo_home}/cache" \
