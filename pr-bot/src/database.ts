@@ -20,6 +20,7 @@ export interface NewJob {
 
 export interface Job extends NewJob {
   id: number;
+  statusCommentId: number | null;
   status: JobStatus;
   error: string | null;
   createdAt: string;
@@ -53,6 +54,7 @@ export class JobDatabase {
     this.#database.exec(readFileSync(MIGRATION, "utf8"));
     this.ensureAttemptCountColumn();
     this.ensureBenchmarkCapacityColumns();
+    this.ensureStatusCommentIdColumn();
     if (databasePath !== ":memory:") chmodSync(databasePath, 0o600);
   }
 
@@ -173,9 +175,18 @@ export class JobDatabase {
   nextPending(): Job | null {
     const row = this.#database
       .prepare(
-        "SELECT * FROM jobs WHERE status = 'pending' ORDER BY id LIMIT 1",
+        `SELECT * FROM jobs
+         WHERE status = 'pending' AND status_comment_id IS NOT NULL
+         ORDER BY id LIMIT 1`,
       )
       .get() as Record<string, unknown> | undefined;
+    return row ? jobFromRow(row) : null;
+  }
+
+  getJobForComment(commentId: number): Job | null {
+    const row = this.#database
+      .prepare("SELECT * FROM jobs WHERE comment_id = ?")
+      .get(commentId) as Record<string, unknown> | undefined;
     return row ? jobFromRow(row) : null;
   }
 
@@ -206,6 +217,14 @@ export class JobDatabase {
       this.#database.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  setStatusCommentId(id: number, commentId: number): void {
+    this.#database
+      .prepare(
+        "UPDATE jobs SET status_comment_id = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(commentId, new Date().toISOString(), id);
   }
 
   recoverRunningJobs(maxAttempts = 3, now = new Date()): RecoveryResult {
@@ -285,11 +304,24 @@ export class JobDatabase {
       );
     }
   }
+
+  private ensureStatusCommentIdColumn(): void {
+    const columns = this.#database.prepare("PRAGMA table_info(jobs)").all() as {
+      name: string;
+    }[];
+    if (!columns.some((column) => column.name === "status_comment_id")) {
+      this.#database.exec(
+        "ALTER TABLE jobs ADD COLUMN status_comment_id INTEGER",
+      );
+    }
+  }
 }
 
 function jobFromRow(row: Record<string, unknown>): Job {
   return {
     id: Number(row.id),
+    statusCommentId:
+      row.status_comment_id === null ? null : Number(row.status_comment_id),
     commentId: Number(row.comment_id),
     repository: String(row.repository),
     pullRequestNumber: Number(row.pull_request_number),

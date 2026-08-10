@@ -22,6 +22,11 @@ export interface GitHubApi {
     repository: string,
     pullRequestNumber: number,
     body: string,
+  ): Promise<number>;
+  updateComment(
+    repository: string,
+    commentId: number,
+    body: string,
   ): Promise<void>;
 }
 
@@ -75,10 +80,23 @@ export class GitHubClient implements GitHubApi {
     repository: string,
     pullRequestNumber: number,
     body: string,
-  ): Promise<void> {
-    await this.request(
+  ): Promise<number> {
+    const response = await this.request(
       `${API}/repos/${repositoryPath(repository)}/issues/${pullRequestNumber}/comments`,
       { method: "POST", body: JSON.stringify({ body }) },
+    );
+    const comment = (await response.json()) as { id: number };
+    return comment.id;
+  }
+
+  async updateComment(
+    repository: string,
+    commentId: number,
+    body: string,
+  ): Promise<void> {
+    await this.request(
+      `${API}/repos/${repositoryPath(repository)}/issues/comments/${commentId}`,
+      { method: "PATCH", body: JSON.stringify({ body }) },
     );
   }
 
