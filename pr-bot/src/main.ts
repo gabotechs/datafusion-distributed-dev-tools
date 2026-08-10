@@ -39,9 +39,10 @@ if (recovery.retried > 0) {
 }
 for (const job of recovery.failed) {
   try {
-    await github.postComment(
+    if (job.statusCommentId === null) continue;
+    await github.updateComment(
       job.repository,
-      job.pullRequestNumber,
+      job.statusCommentId,
       `Benchmark job ${job.id} failed after three controller restarts. Full details are available in the controller journal.`,
     );
   } catch (error) {

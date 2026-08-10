@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     attempt_count INTEGER NOT NULL DEFAULT 0,
+    status_comment_id INTEGER,
     FOREIGN KEY (comment_id) REFERENCES seen_comments(comment_id)
 );
 
