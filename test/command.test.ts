@@ -4,6 +4,14 @@ import test from "node:test";
 import { parseComment } from "../src/command.js";
 
 test("parses the requested dataset and capacity", () => {
+  assert.deepEqual(parseComment("benchmarks run tpch/sf1"), {
+    kind: "request",
+    request: {
+      dataset: "tpch/sf1",
+      instanceType: "c5n.2xlarge",
+      nodeCount: 12,
+    },
+  });
   assert.deepEqual(
     parseComment(
       "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 12",
@@ -30,14 +38,28 @@ test("parses the requested dataset and capacity", () => {
       },
     },
   );
+  assert.deepEqual(parseComment("benchmarks run tpch/sf1 --nodes 4"), {
+    kind: "request",
+    request: {
+      dataset: "tpch/sf1",
+      instanceType: "c5n.2xlarge",
+      nodeCount: 4,
+    },
+  });
+  assert.deepEqual(
+    parseComment("benchmarks run tpch/sf1 --instance-type c7i.2xlarge"),
+    {
+      kind: "request",
+      request: {
+        dataset: "tpch/sf1",
+        instanceType: "c7i.2xlarge",
+        nodeCount: 12,
+      },
+    },
+  );
 });
 
-test("requires and sanitizes benchmark capacity", () => {
-  assert.deepEqual(parseComment("benchmarks run tpch/sf1"), {
-    kind: "invalid",
-    message:
-      "Expected `benchmarks run <suite>/<variant> --instance-type <type> --nodes <count>`.",
-  });
+test("sanitizes benchmark capacity", () => {
   assert.deepEqual(
     parseComment(
       "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 25",
@@ -89,7 +111,7 @@ test("rejects aliases and extra arguments", () => {
     {
       kind: "invalid",
       message:
-        "Expected `benchmarks run <suite>/<variant> --instance-type <type> --nodes <count>`.",
+        "Expected `benchmarks run <suite>/<variant> [--instance-type <type>] [--nodes <count>]`.",
     },
   );
 });
