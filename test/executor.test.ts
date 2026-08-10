@@ -7,14 +7,12 @@ import test from "node:test";
 import type { Job } from "../src/database.js";
 import {
   BenchmarkExecutor,
-  copyOnWrite,
   safeDatasetPath,
   type ExecutorConfig,
 } from "../src/executor.js";
 import {
   LocalProcessRunner,
   type ProcessRunner,
-  type RunOptions,
   type RunResult,
 } from "../src/process.js";
 
@@ -58,11 +56,9 @@ function fixture(): { root: string; config: ExecutorConfig } {
     config: {
       repositoryUrl: "https://example.invalid/repository.git",
       stateRoot: root,
-      builderImage: "builder:fixed",
       foundationOutputsFile: outputs,
       kubeconfig: path.join(root, "kubeconfig"),
       testdataRoot: path.join(root, "testdata"),
-      containerRuntime: "podman",
       region: "us-east-1",
     },
   };
@@ -140,37 +136,6 @@ test("executes base before head and always uses the trusted base harness", async
   ]);
 });
 
-test("copies cache contents into an isolated destination", async () => {
-  const root = mkdtempSync(path.join(tmpdir(), "benchmark-cache-"));
-  const source = path.join(root, "base");
-  const destination = path.join(root, "head");
-  mkdirSync(source);
-  writeFileSync(path.join(source, "artifact"), "cached");
-  const calls: { program: string; arguments_: readonly string[] }[] = [];
-  const processes: ProcessRunner = {
-    async run(
-      program: string,
-      arguments_: readonly string[],
-      _options?: RunOptions,
-    ): Promise<RunResult> {
-      calls.push({ program, arguments_ });
-      return { exitCode: 0, stdout: "", stderr: "" };
-    },
-  };
-  await copyOnWrite(processes, source, destination);
-  assert.deepEqual(calls, [
-    {
-      program: "cp",
-      arguments_: [
-        "--archive",
-        "--reflink=auto",
-        `${source}${path.sep}.`,
-        `${destination}${path.sep}`,
-      ],
-    },
-  ]);
-});
-
 test("rejects dataset paths that could escape testdata", () => {
   assert.equal(
     safeDatasetPath("/testdata", "tpch/sf1"),
@@ -178,6 +143,44 @@ test("rejects dataset paths that could escape testdata", () => {
   );
   assert.throws(() => safeDatasetPath("/testdata", "../secret"));
   assert.throws(() => safeDatasetPath("/testdata", "tpch/sf1/extra"));
+});
+
+test("uses native cache, fetch, and offline build wrappers", async () => {
+  const { config } = fixture();
+  const source = path.join(config.stateRoot, "jobs", "7", "head");
+  mkdirSync(source, { recursive: true });
+  const calls: Array<{ program: string; arguments_: readonly string[] }> = [];
+  const processes: ProcessRunner = {
+    async run(program, arguments_): Promise<RunResult> {
+      calls.push({ program, arguments_ });
+      if (arguments_[0] === "/usr/local/sbin/datafusion-pr-cargo-build") {
+        const target = arguments_[2]!;
+        const binaryDirectory = path.join(
+          target,
+          "x86_64-unknown-linux-gnu",
+          "release",
+        );
+        mkdirSync(binaryDirectory, { recursive: true });
+        writeFileSync(path.join(binaryDirectory, "worker"), "binary");
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  };
+  await new BenchmarkExecutor(config, processes).build(
+    "b".repeat(40),
+    source,
+    "a".repeat(40),
+  );
+  assert.deepEqual(
+    calls.map((call) => [call.program, call.arguments_[0]]),
+    [
+      ["sudo", "/usr/local/sbin/datafusion-pr-prepare-cache"],
+      ["sudo", "/usr/local/sbin/datafusion-pr-cargo-fetch"],
+      ["sudo", "/usr/local/sbin/datafusion-pr-cargo-build"],
+    ],
+  );
+  assert.match(calls[0]!.arguments_[3]!, /targets\/a{40}$/);
+  assert.match(calls[0]!.arguments_[4]!, /cargo\/a{40}$/);
 });
 
 test("discovers table directories without downloading dataset objects", async () => {

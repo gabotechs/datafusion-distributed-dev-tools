@@ -10,7 +10,7 @@ A single persistent EC2 instance runs the controller. Its EBS volume contains:
 - a bare mirror of `datafusion-distributed`;
 - one worktree per active job side;
 - Cargo registry and Git dependency caches; and
-- a shared Cargo target directory.
+- revision-specific Cargo target directories.
 
 Jobs are serialized initially. This avoids Cargo target locking and guarantees
 that only one deployment owns the dedicated benchmark cluster.
@@ -29,17 +29,19 @@ that existing namespace.
 
 ### GitHub integration
 
-The controller polls PR comments using a GitHub App installation token. It
+The controller polls PR comments through a manually authenticated `gh` CLI. It
 deduplicates comment IDs, validates the commenter's repository permission, and
 accepts only `benchmarks run <suite>/<variant>` commands. Polling keeps the EC2
-instance private with no inbound internet listener.
+instance private with no inbound internet listener. GitHub authentication is not
+managed by Pulumi.
 
 ## Job sequence
 
 1. Resolve and persist the PR base SHA and head SHA.
 2. Create isolated worktrees for both immutable SHAs.
-3. Build the base worker in a credential-free container using persistent Cargo
-   caches.
+3. Fetch the base revision's locked dependencies as the unprivileged build user,
+   then compile offline in a network-disabled systemd sandbox using persistent
+   Cargo caches.
 4. Let the controller upload and deploy the base artifact.
 5. Run the requested dataset and retain its local results.
 6. Build, upload, and deploy the head artifact using the same process.
@@ -54,8 +56,11 @@ instance private with no inbound internet listener.
 Treat pull-request code as untrusted even when a maintainer requests the run.
 Cargo build scripts and the resulting worker can execute arbitrary code.
 
-- Do not expose EC2 instance metadata, AWS credentials, GitHub credentials, the
-  host filesystem, or a container-engine socket to build containers.
+- Run fetch and compilation as the separate `benchmark-build` account. It cannot
+  read the controller's `gh` configuration or environment file.
+- Block EC2 metadata during dependency fetch. Run compilation with networking
+  disabled, the source tree read-only, and only the revision-specific Cargo
+  caches writable.
 - Keep GitHub and deployment credentials in the controller process only.
 - Give the controller a dedicated least-privilege AWS role scoped to describing
   the configured cluster and reading or writing only the bot artifact prefix.
@@ -68,11 +73,11 @@ Cargo build scripts and the resulting worker can execute arbitrary code.
 
 ## Cache strategy
 
-Start with persistent EBS-backed Cargo registry, Git, and target directories.
-Use separate source worktrees but one serialized `CARGO_TARGET_DIR`, allowing
-the base and head builds to reuse dependency artifacts. Add `sccache` only after
-measuring cache misses; an S3 cache is useful for instance replacement but is
-not required for the first implementation.
+Use persistent EBS-backed Cargo registry, Git, and target directories. Cache
+directories are keyed by immutable SHA. The head receives a copy-on-write seed
+from the base cache, so it reuses dependencies without allowing pull-request
+build output to poison the trusted base cache. Add `sccache` only after
+measuring cache misses.
 
 ## Failure behavior
 
