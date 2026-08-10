@@ -1,11 +1,10 @@
-import type { ProcessRunner } from "./process.js";
-
 export interface IssueComment {
   id: number;
   body: string;
   issue_url: string;
   html_url: string;
   created_at: string;
+  updated_at: string;
   user: { login: string };
 }
 
@@ -27,41 +26,63 @@ export interface GitHubApi {
   ): Promise<void>;
 }
 
-export class GhCliClient implements GitHubApi {
-  constructor(readonly processes: ProcessRunner) {}
+type Fetch = typeof fetch;
+
+const API = "https://api.github.com";
+
+export class GitHubApiError extends Error {
+  constructor(
+    readonly status: number,
+    method: string,
+    url: string,
+    responseBody: string,
+  ) {
+    super(`GitHub API ${method} ${url} failed: ${status} ${responseBody}`);
+  }
+}
+
+export class GitHubClient implements GitHubApi {
+  constructor(
+    readonly token: string,
+    readonly fetch_: Fetch = fetch,
+  ) {}
 
   async listIssueComments(
     repository: string,
     since: string,
   ): Promise<IssueComment[]> {
-    const endpoint = `/repos/${repository}/issues/comments?per_page=100&sort=updated&direction=asc&since=${encodeURIComponent(since)}`;
-    const pages = await this.json<IssueComment[][]>([
-      "api",
-      "--paginate",
-      "--slurp",
-      endpoint,
-    ]);
-    return pages.flat();
+    let url: string | null =
+      `${API}/repos/${repositoryPath(repository)}/issues/comments?per_page=100&sort=updated&direction=asc&since=${encodeURIComponent(since)}`;
+    const comments: IssueComment[] = [];
+    for (let page = 0; url && page < 100; page++) {
+      const response = await this.request(url);
+      comments.push(...((await response.json()) as IssueComment[]));
+      url = nextLink(response.headers.get("link"));
+    }
+    return comments;
   }
 
   async getPullRequest(
     repository: string,
     number: number,
   ): Promise<PullRequest> {
-    return await this.json<PullRequest>([
-      "api",
-      `/repos/${repository}/pulls/${number}`,
-    ]);
+    const response = await this.request(
+      `${API}/repos/${repositoryPath(repository)}/pulls/${number}`,
+    );
+    return (await response.json()) as PullRequest;
   }
 
   async hasWritePermission(
     repository: string,
     login: string,
   ): Promise<boolean> {
-    const result = await this.json<{ permission: string }>([
-      "api",
-      `/repos/${repository}/collaborators/${login}/permission`,
-    ]);
+    const response = await this.request(
+      `${API}/repos/${repositoryPath(repository)}/collaborators/${encodeURIComponent(login)}/permission`,
+      {},
+      [404],
+    );
+    if (response.status === 404) return false;
+    const result = (await response.json()) as { permission: string };
     return ["admin", "maintain", "write"].includes(result.permission);
   }
 
@@ -70,26 +91,53 @@ export class GhCliClient implements GitHubApi {
     pullRequestNumber: number,
     body: string,
   ): Promise<void> {
-    await this.processes.run(
-      "gh",
-      [
-        "api",
-        "--method",
-        "POST",
-        `/repos/${repository}/issues/${pullRequestNumber}/comments`,
-        "--field",
-        `body=${body}`,
-      ],
-      { quiet: true },
+    await this.request(
+      `${API}/repos/${repositoryPath(repository)}/issues/${pullRequestNumber}/comments`,
+      { method: "POST", body: JSON.stringify({ body }) },
     );
   }
 
-  async json<T>(arguments_: string[]): Promise<T> {
-    const result = await this.processes.run("gh", arguments_, { quiet: true });
-    try {
-      return JSON.parse(result.stdout) as T;
-    } catch (error) {
-      throw new Error(`gh returned invalid JSON: ${String(error)}`);
+  async request(
+    url: string,
+    init: RequestInit = {},
+    allowedStatuses: readonly number[] = [],
+  ): Promise<Response> {
+    const response = await this.fetch_(url, {
+      ...init,
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${this.token}`,
+        "content-type": "application/json",
+        "user-agent": "datafusion-distributed-pr-bot",
+        "x-github-api-version": "2026-03-10",
+        ...init.headers,
+      },
+    });
+    if (!response.ok && !allowedStatuses.includes(response.status)) {
+      throw new GitHubApiError(
+        response.status,
+        init.method ?? "GET",
+        url,
+        await response.text(),
+      );
     }
+    return response;
   }
+}
+
+function repositoryPath(repository: string): string {
+  const parts = repository.split("/");
+  if (parts.length !== 2 || parts.some((part) => part.length === 0)) {
+    throw new Error(`Invalid GitHub repository ${repository}`);
+  }
+  return parts.map(encodeURIComponent).join("/");
+}
+
+function nextLink(header: string | null): string | null {
+  if (!header) return null;
+  for (const part of header.split(",")) {
+    const match = /<([^>]+)>;\s*rel="next"/.exec(part);
+    if (match?.[1]) return match[1];
+  }
+  return null;
 }

@@ -84,20 +84,27 @@ namespaces, datasets, and benchmark nodes untouched.
 
 ## GitHub authentication
 
-This project does not create or configure a GitHub App. After connecting to the
-controller machine, install `gh` if necessary and authenticate it manually for
-the service account:
+The controller calls the GitHub REST API directly with a manually provisioned
+`GH_TOKEN`. This project does not create a GitHub App or store the token in
+Pulumi or AWS Secrets Manager.
+
+After connecting to the controller through Session Manager, edit the protected
+service environment file without placing the token in shell history:
 
 ```bash
-sudo -u benchmark-bot env HOME=/var/lib/datafusion-pr-bot gh auth login
-sudo -u benchmark-bot env HOME=/var/lib/datafusion-pr-bot gh auth status
+sudoedit /var/lib/datafusion-pr-bot/controller.env
 sudo systemctl restart datafusion-pr-bot
+sudo systemctl status datafusion-pr-bot
 ```
 
-The selected GitHub account must be able to read pull requests and repository
-collaborator permissions, and to read and create issue comments. The service
-uses the persisted `gh` configuration directly; no GitHub token or private key
-is stored in Pulumi or AWS Secrets Manager.
+Add `GH_TOKEN=...` on its own line. Use a fine-grained personal access token
+restricted to the configured repository, with read access to pull requests and
+repository metadata and read/write access to issues. The environment file is
+mode `0600`; the token is available only to the trusted controller process and
+is never forwarded to pull-request builds or benchmark pods.
+
+Replacing the EC2 instance creates a fresh environment file, so the token must
+be configured again after replacement.
 
 ## Development
 

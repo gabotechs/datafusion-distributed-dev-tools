@@ -1,6 +1,7 @@
 export interface Config {
   repository: string;
   sourceRepositoryUrl: string;
+  githubToken: string;
   databasePath: string;
   pollIntervalMs: number;
   executor: {
@@ -28,6 +29,7 @@ export function loadConfig(): Config {
   return {
     repository: required("GITHUB_REPOSITORY"),
     sourceRepositoryUrl: required("SOURCE_REPOSITORY_URL"),
+    githubToken: required("GH_TOKEN"),
     databasePath: process.env.DATABASE_PATH ?? ".data/jobs.db",
     pollIntervalMs: pollIntervalSeconds * 1_000,
     executor: {
