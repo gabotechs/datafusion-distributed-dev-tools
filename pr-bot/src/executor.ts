@@ -8,7 +8,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  utimesSync,
 } from "node:fs";
 import path from "node:path";
 
@@ -330,9 +329,6 @@ export class BenchmarkExecutor {
     if (!existsSync(binary)) {
       throw new Error(`Build completed without producing ${binary}`);
     }
-    const now = new Date();
-    utimesSync(target, now, now);
-    utimesSync(cargoHome, now, now);
     return binary;
   }
 

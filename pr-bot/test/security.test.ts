@@ -52,6 +52,10 @@ test("cache preparation performs filesystem changes as the build user", () => {
     prepare,
     /runuser --user benchmark-build --group benchmark-cache --.*mkdir/s,
   );
+  assert.match(
+    prepare,
+    /runuser --user benchmark-build --group benchmark-cache --.*touch/s,
+  );
   assert.doesNotMatch(prepare, /install --directory/);
   assert.doesNotMatch(prepare, /chown/);
 });
