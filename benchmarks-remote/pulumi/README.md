@@ -13,9 +13,9 @@ The stack also creates:
   Identity; and
 - a CodeBuild project for publishing the Spark image.
 
-EKS Auto Mode provisions nodes only for scheduled benchmark pods. The local
-benchmark wrapper uninstalls the selected engine after a run, allowing the
-cluster to return to zero worker nodes.
+EKS Auto Mode provisions nodes only for scheduled benchmark pods. Engine
+deployments remain installed until an explicit engine destroy command removes
+them.
 
 ## Prerequisites
 
@@ -42,9 +42,11 @@ worktree-local kubeconfig at `../k8s/.kubeconfig`.
 
 ## Stack configuration
 
-The region and network defaults are committed in `Pulumi.benchmark.yaml`.
-Credentials, account selection, and state backend choices stay in the caller's
-local AWS and Pulumi configuration. Object-storage stacks use the KMS alias
+Copy `Pulumi.benchmark.example.yaml` to the ignored
+`Pulumi.benchmark.yaml` before creating the stack. This keeps network choices,
+endpoint allowlists, the secrets-provider key, and other operational stack
+configuration local. Credentials, account selection, and state backend choices
+also stay in the caller's AWS and Pulumi configuration. Object-storage stacks use the KMS alias
 `alias/datafusion-bench-pulumi-state` by default. `PULUMI_SECRETS_PROVIDER` can
 select a different Pulumi secrets provider.
 
@@ -57,11 +59,16 @@ Optional configuration:
 | `benchmarkNodeCount`        | `12`               | Default worker replica count.         |
 | `systemInstanceType`        | `m6i.large`        | Coordinator pod instance type.        |
 | `eksVersion`                | `1.36`             | Exact EKS Kubernetes minor release.   |
-| `kubernetesApiAllowedCidrs` | required           | Trusted CIDRs for the public EKS API. |
+| `kubernetesApiAllowedCidrs` | none               | Persistent trusted EKS API CIDRs.     |
 
 `KUBERNETES_API_ALLOWED_CIDRS` can provide a comma-separated list. When it is
-unset, `npm run foundation-deploy` detects the current public IP and restricts the endpoint
-to that `/32`.
+unset, `npm run foundation-deploy` combines the current public IP with the
+persistent CIDRs stored in the selected stack. Configure a controller's stable
+public IP once without committing it:
+
+```bash
+pulumi config set --path 'kubernetesApiAllowedCidrs[0]' '<controller-public-ip>/32'
+```
 
 ## Multiple foundations
 
