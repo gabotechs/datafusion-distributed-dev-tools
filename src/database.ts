@@ -102,6 +102,40 @@ export class JobDatabase {
     return row ? jobFromRow(row) : null;
   }
 
+  claimNextPending(now = new Date()): Job | null {
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      const pending = this.nextPending();
+      if (!pending) {
+        this.#database.exec("COMMIT");
+        return null;
+      }
+      const result = this.#database
+        .prepare(
+          `UPDATE jobs SET status = 'running', updated_at = ?
+           WHERE id = ? AND status = 'pending'`,
+        )
+        .run(now.toISOString(), pending.id);
+      this.#database.exec("COMMIT");
+      return result.changes === 1
+        ? { ...pending, status: "running", updatedAt: now.toISOString() }
+        : null;
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  recoverRunningJobs(now = new Date()): number {
+    const result = this.#database
+      .prepare(
+        `UPDATE jobs SET status = 'pending', error = NULL, updated_at = ?
+         WHERE status = 'running'`,
+      )
+      .run(now.toISOString());
+    return Number(result.changes);
+  }
+
   updateStatus(id: number, status: JobStatus, error?: string): void {
     this.#database
       .prepare(

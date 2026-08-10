@@ -29,3 +29,26 @@ test("deduplicates comments while preserving immutable refs", () => {
     database.close();
   }
 });
+
+test("claims a pending job atomically", () => {
+  const database = new JobDatabase(":memory:");
+  try {
+    database.enqueue(JOB);
+    assert.equal(database.claimNextPending()?.status, "running");
+    assert.equal(database.claimNextPending(), null);
+  } finally {
+    database.close();
+  }
+});
+
+test("recovers a job interrupted while running", () => {
+  const database = new JobDatabase(":memory:");
+  try {
+    database.enqueue(JOB);
+    assert.equal(database.claimNextPending()?.status, "running");
+    assert.equal(database.recoverRunningJobs(), 1);
+    assert.equal(database.claimNextPending()?.status, "running");
+  } finally {
+    database.close();
+  }
+});
