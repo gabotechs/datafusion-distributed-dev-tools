@@ -47,6 +47,7 @@ test("writes progress to stderr and only comparisons to stdout", async () => {
         const options = {
             dataset: "tpch/sf1",
             iterations: 1,
+            timeSecs: 0,
             queries: [] as string[],
             debug: false,
             warmup: false,

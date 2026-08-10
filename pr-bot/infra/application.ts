@@ -37,6 +37,9 @@ export function applicationArchive(): pulumi.asset.AssetArchive {
         "datafusion-bench.cjs": new pulumi.asset.FileAsset(
           path.join(benchmarkRoot, "dist", "datafusion-bench.cjs"),
         ),
+        "compare.cjs": new pulumi.asset.FileAsset(
+          path.join(benchmarkRoot, "dist", "compare.cjs"),
+        ),
       }),
       engines: new pulumi.asset.AssetArchive({
         datafusion: new pulumi.asset.AssetArchive({

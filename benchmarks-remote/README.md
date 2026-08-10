@@ -133,6 +133,12 @@ npm run spark-bench -- --dataset tpch/sf1 --iterations 1
 npm run ballista-bench -- --dataset tpch/sf1 --iterations 1
 ```
 
+`--iterations` and `--time-secs` are both minimums. For example,
+`--iterations 5 --time-secs 10` runs each query until it has completed at least
+five measured iterations and at least ten seconds of measured wall-clock time.
+Warmup is excluded from both minimums. Comparisons use the p50 latency for each
+query and sum those per-query p50 values for `TOTAL`.
+
 `npm run command -- <engine> <command>` runs a diagnostic command in a worker
 pod. `npm run compare` compares locally stored result sets.
 
