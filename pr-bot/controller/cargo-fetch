@@ -34,6 +34,7 @@ exec systemd-run --quiet --wait --pipe --collect \
   --property=IPAddressDeny=fe80::/10 \
   --property=IPAddressDeny=fd00:ec2::254/128 \
   --setenv=HOME=/var/lib/datafusion-pr-build \
+  --setenv=PATH=/var/lib/datafusion-pr-build/.cargo/bin:/usr/local/bin:/usr/bin \
   --setenv=CARGO_HOME="${cargo_home}" \
   --setenv=CARGO_TARGET_DIR="${target}" \
   --setenv=AWS_EC2_METADATA_DISABLED=true \

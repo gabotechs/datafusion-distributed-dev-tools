@@ -26,9 +26,11 @@ test("validates every cache path passed to privileged build wrappers", () => {
 
 test("hides controller state and cannot silently lose offline isolation", () => {
   for (const name of ["cargo-fetch", "cargo-build"]) {
+    const script = controllerScript(name);
+    assert.match(script, /InaccessiblePaths=\/var\/lib\/datafusion-pr-bot/);
     assert.match(
-      controllerScript(name),
-      /InaccessiblePaths=\/var\/lib\/datafusion-pr-bot/,
+      script,
+      /PATH=\/var\/lib\/datafusion-pr-build\/\.cargo\/bin:\/usr\/local\/bin:\/usr\/bin/,
     );
   }
   const build = controllerScript("cargo-build");
