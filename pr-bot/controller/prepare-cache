@@ -2,6 +2,7 @@
 set -euo pipefail
 
 source /usr/local/libexec/datafusion-pr-bot/cache-paths
+umask 0007
 target=${1:?target cache is required}
 cargo_home=${2:?Cargo home is required}
 seed_target=${3:-}

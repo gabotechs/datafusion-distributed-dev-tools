@@ -64,6 +64,7 @@ export class BenchmarkExecutor {
       await this.addWorktree(mirror, headSource, job.headSha);
       this.prepareWorker(baseSource);
       this.prepareWorker(headSource);
+      await this.prepareSourcePermissions(jobRoot);
       this.resetResults(job.dataset, baseSource);
       await this.prepareDatasetLayout(job.dataset, outputs.datasetBucketName);
 
@@ -205,6 +206,16 @@ export class BenchmarkExecutor {
       );
     }
     cpSync(trustedWorker, targetWorker);
+  }
+
+  async prepareSourcePermissions(jobRoot: string): Promise<void> {
+    await this.processes.run("chgrp", [
+      "--recursive",
+      "benchmark-cache",
+      "--",
+      jobRoot,
+    ]);
+    await this.processes.run("chmod", ["--recursive", "g+rX", "--", jobRoot]);
   }
 
   resetResults(dataset: string, baseSource: string): void {
