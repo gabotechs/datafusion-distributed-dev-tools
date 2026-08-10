@@ -29,7 +29,7 @@ export class JobWorker {
       await this.github.updateComment(
         job.repository,
         job.statusCommentId,
-        renderResult(job, result.comparison),
+        renderResult(result.comparison),
       );
       this.database.updateStatus(job.id, "completed");
     } catch (error) {
@@ -46,8 +46,8 @@ export class JobWorker {
   }
 }
 
-function renderResult(job: Job, comparison: string): string {
-  return `Benchmark completed for \`${job.dataset}\` on ${capacity(job)}.\n\nBase: \`${job.baseSha}\`\nHead: \`${job.headSha}\`\n\n<details><summary>Comparison</summary>\n\n<pre>${htmlEscape(truncate(comparison))}</pre>\n</details>`;
+function renderResult(comparison: string): string {
+  return `<pre>${htmlEscape(truncate(comparison.trim()))}</pre>`;
 }
 
 function capacity(job: Job): string {

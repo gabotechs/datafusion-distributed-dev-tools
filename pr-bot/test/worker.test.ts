@@ -40,7 +40,7 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[0]!, /Running/);
     assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
     assert.match(comments[1]!, /TOTAL: 1.20 faster/);
-    assert.match(comments[1]!, /12 `c7i\.2xlarge` nodes/);
+    assert.doesNotMatch(comments[1]!, /Benchmark completed|Base:|Head:/);
     assert.deepEqual(commentIds, [77, 77]);
   } finally {
     database.close();
