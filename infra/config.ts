@@ -10,9 +10,11 @@ export interface ControllerConfig {
   datasetBucketName: string;
   benchmarkInstanceType: string;
   benchmarkNodeCount: number;
+  benchmarkWorkloadRoleArn: string;
   githubRepository: string;
   sourceRepositoryUrl: string;
   nodeVersion: string;
+  nodeSha256: string;
 }
 
 function positiveInteger(name: string, value: number): number {
@@ -32,6 +34,14 @@ export function validateControllerConfig(
   }
   positiveInteger("controllerVolumeSizeGiB", config.controllerVolumeSizeGiB);
   positiveInteger("benchmarkNodeCount", config.benchmarkNodeCount);
+  if (!/^[0-9a-f]{64}$/.test(config.nodeSha256)) {
+    throw new Error("nodeSha256 must be a lowercase SHA-256 digest");
+  }
+  if (
+    !/^arn:[^:]+:iam::[0-9]{12}:role\/.+/.test(config.benchmarkWorkloadRoleArn)
+  ) {
+    throw new Error("benchmarkWorkloadRoleArn must be an IAM role ARN");
+  }
   return config;
 }
 
@@ -49,8 +59,12 @@ export function loadControllerConfig(): ControllerConfig {
     datasetBucketName: config.require("datasetBucketName"),
     benchmarkInstanceType: config.require("benchmarkInstanceType"),
     benchmarkNodeCount: config.requireNumber("benchmarkNodeCount"),
+    benchmarkWorkloadRoleArn: config.require("benchmarkWorkloadRoleArn"),
     githubRepository: config.require("githubRepository"),
     sourceRepositoryUrl: config.require("sourceRepositoryUrl"),
     nodeVersion: config.get("nodeVersion") ?? "24.18.1",
+    nodeSha256:
+      config.get("nodeSha256") ??
+      "d6c664df3f3f61458e8c277585571328522d705166723a7c7823a9253a4d15a0",
   });
 }

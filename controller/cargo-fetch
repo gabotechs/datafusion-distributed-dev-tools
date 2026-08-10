@@ -1,26 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source /usr/local/libexec/datafusion-pr-bot/cache-paths
+
 source_root=${1:?source root is required}
 target=${2:?target cache is required}
 cargo_home=${3:?Cargo home is required}
 
-[[ $(realpath "${source_root}") == /var/lib/datafusion-pr-bot/jobs/* ]] || {
-  echo "Source is outside the job root" >&2
-  exit 2
-}
+validate_source_path "${source_root}"
+validate_cache_path "${target}"
+validate_cache_path "${cargo_home}"
 
 exec systemd-run --quiet --wait --pipe --collect \
   --property=User=benchmark-build \
-  --property=Group=benchmark-build \
+  --property=Group=benchmark-cache \
+  --property=UMask=0007 \
   --property=NoNewPrivileges=yes \
   --property=PrivateTmp=yes \
   --property=ProtectHome=yes \
   --property=ProtectSystem=strict \
+  --property=InaccessiblePaths=/var/lib/datafusion-pr-bot \
   --property=ReadOnlyPaths="${source_root}" \
   --property=ReadWritePaths="${target}" \
   --property=ReadWritePaths="${cargo_home}" \
+  --property=IPAddressDeny=10.0.0.0/8 \
+  --property=IPAddressDeny=100.64.0.0/10 \
+  --property=IPAddressDeny=127.0.0.0/8 \
+  --property=IPAddressDeny=172.16.0.0/12 \
+  --property=IPAddressDeny=192.168.0.0/16 \
   --property=IPAddressDeny=169.254.169.254/32 \
+  --property=IPAddressDeny=::1/128 \
+  --property=IPAddressDeny=fc00::/7 \
+  --property=IPAddressDeny=fe80::/10 \
   --property=IPAddressDeny=fd00:ec2::254/128 \
   --setenv=HOME=/var/lib/datafusion-pr-build \
   --setenv=CARGO_HOME="${cargo_home}" \

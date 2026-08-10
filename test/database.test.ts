@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { JobDatabase, type NewJob } from "../src/database.js";
+import { JobDatabase, QueueLimitError, type NewJob } from "../src/database.js";
 
 const JOB: NewJob = {
   commentId: 42,
@@ -46,8 +46,54 @@ test("recovers a job interrupted while running", () => {
   try {
     database.enqueue(JOB);
     assert.equal(database.claimNextPending()?.status, "running");
-    assert.equal(database.recoverRunningJobs(), 1);
+    assert.deepEqual(database.recoverRunningJobs(), { retried: 1, failed: [] });
     assert.equal(database.claimNextPending()?.status, "running");
+  } finally {
+    database.close();
+  }
+});
+
+test("fails a job after three interrupted attempts", () => {
+  const database = new JobDatabase(":memory:");
+  try {
+    database.enqueue(JOB);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      assert.equal(database.claimNextPending()?.status, "running");
+      const recovery = database.recoverRunningJobs();
+      assert.equal(recovery.failed.length, attempt === 2 ? 1 : 0);
+    }
+    assert.equal(database.nextPending(), null);
+  } finally {
+    database.close();
+  }
+});
+
+test("backs off repeated comment failures", () => {
+  const database = new JobDatabase(":memory:");
+  try {
+    const now = new Date("2026-08-10T00:00:00.000Z");
+    assert.equal(database.recordCommentFailure(7, "temporary", now), 1);
+    assert.equal(database.canAttemptComment(7, now), false);
+    assert.equal(
+      database.canAttemptComment(7, new Date(now.getTime() + 30_000)),
+      true,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("caps active jobs per requester", () => {
+  const database = new JobDatabase(":memory:");
+  try {
+    for (let index = 0; index < 3; index++) {
+      database.enqueue({ ...JOB, commentId: 100 + index });
+    }
+    assert.throws(
+      () => database.enqueue({ ...JOB, commentId: 200 }),
+      QueueLimitError,
+    );
+    assert.equal(database.isCommentSeen(200), false);
   } finally {
     database.close();
   }

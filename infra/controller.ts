@@ -6,6 +6,7 @@ import type { ControllerConfig } from "./config.js";
 export interface ControllerArguments {
   config: ControllerConfig;
   application: aws.s3.BucketObjectv2;
+  artifactBucketName: pulumi.Output<string>;
   profile: aws.iam.InstanceProfile;
   identityDependencies: pulumi.Resource[];
 }
@@ -47,12 +48,14 @@ export function createController(args: ControllerArguments) {
   const ami = aws.ssm.getParameterOutput({
     name: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
   });
-  const userData = args.application.key.apply(
-    (applicationKey) => `#!/bin/bash
+  const userData = pulumi
+    .all([args.application.key, args.artifactBucketName])
+    .apply(
+      ([applicationKey, artifactBucketName]) => `#!/bin/bash
 set -euo pipefail
 
 dnf install --assumeyes \
-  clang cmake curl gcc gcc-c++ git jq make openssl-devel perl-core \
+  amazon-cloudwatch-agent clang cmake curl gcc gcc-c++ git jq make openssl-devel perl-core \
   pkgconf-pkg-config protobuf-compiler tar xz
 
 node_version=${config.nodeVersion}
@@ -61,10 +64,8 @@ node_root=/opt/node-v\${node_version}-linux-x64
 if [[ ! -x \${node_root}/bin/node ]]; then
   temporary=$(mktemp -d)
   curl --fail --silent --show-error --location https://nodejs.org/dist/v\${node_version}/\${node_archive} --output \${temporary}/\${node_archive}
-  curl --fail --silent --show-error --location https://nodejs.org/dist/v\${node_version}/SHASUMS256.txt --output \${temporary}/SHASUMS256.txt
-  cd \${temporary}
-  grep "  \${node_archive}$" SHASUMS256.txt | sha256sum --check --strict
-  tar --extract --file \${node_archive} --directory /opt
+  echo "${config.nodeSha256}  \${temporary}/\${node_archive}" | sha256sum --check --strict
+  tar --extract --file \${temporary}/\${node_archive} --directory /opt --no-same-owner
   ln --symbolic --force \${node_root}/bin/node /usr/local/bin/node
   ln --symbolic --force \${node_root}/bin/npm /usr/local/bin/npm
   ln --symbolic --force \${node_root}/bin/npx /usr/local/bin/npx
@@ -72,18 +73,26 @@ fi
 
 id benchmark-bot >/dev/null 2>&1 || useradd --create-home --home-dir /var/lib/datafusion-pr-bot benchmark-bot
 id benchmark-build >/dev/null 2>&1 || useradd --create-home --home-dir /var/lib/datafusion-pr-build benchmark-build
-install --directory --owner benchmark-bot --group benchmark-bot /opt/datafusion-pr-bot/releases /var/lib/datafusion-pr-bot
-install --directory --owner benchmark-build --group benchmark-build /var/lib/datafusion-pr-bot/build-cache /var/lib/datafusion-pr-build
+getent group benchmark-cache >/dev/null 2>&1 || groupadd benchmark-cache
+usermod --append --groups benchmark-cache benchmark-bot
+usermod --append --groups benchmark-cache benchmark-build
+install --directory --owner root --group root --mode 0755 /opt/datafusion-pr-bot /opt/datafusion-pr-bot/releases
+install --directory --owner benchmark-bot --group benchmark-bot --mode 0700 /var/lib/datafusion-pr-bot
+install --directory --owner benchmark-bot --group benchmark-cache --mode 2750 /var/lib/datafusion-pr-work /var/lib/datafusion-pr-work/jobs
+install --directory --owner benchmark-build --group benchmark-cache --mode 2770 /var/cache/datafusion-pr-build /var/lib/datafusion-pr-build
 release=/opt/datafusion-pr-bot/releases/bootstrap
 rm --recursive --force \${release}
-install --directory --owner benchmark-bot --group benchmark-bot \${release}
-aws s3 cp s3://${config.datasetBucketName}/${applicationKey} /tmp/datafusion-pr-bot.tar.gz
-tar --extract --gzip --file /tmp/datafusion-pr-bot.tar.gz --directory \${release}
-chown --recursive benchmark-bot:benchmark-bot \${release}
+install --directory --owner root --group root --mode 0755 \${release}
+application_temporary=$(mktemp -d)
+aws s3 cp s3://\${artifactBucketName}/\${applicationKey} \${application_temporary}/application.tar.gz
+tar --extract --gzip --file \${application_temporary}/application.tar.gz --directory \${release} --no-same-owner
+chown --recursive root:root \${release}
+chmod --recursive go-w \${release}
 ln --symbolic --force --no-dereference \${release} /opt/datafusion-pr-bot/current
 
-sudo -u benchmark-bot env HOME=/var/lib/datafusion-pr-bot npm --prefix \${release} ci
-
+install --directory --owner root --group root --mode 0755 /usr/local/libexec/datafusion-pr-bot
+install --owner root --group root --mode 0644 \
+  \${release}/controller/cache-paths /usr/local/libexec/datafusion-pr-bot/cache-paths
 install --owner root --group root --mode 0755 \
   \${release}/controller/prepare-cache /usr/local/sbin/datafusion-pr-prepare-cache
 install --owner root --group root --mode 0755 \
@@ -95,18 +104,27 @@ benchmark-bot ALL=(root) NOPASSWD: /usr/local/sbin/datafusion-pr-prepare-cache, 
 SUDOERS
 chmod 0440 /etc/sudoers.d/datafusion-pr-bot
 
-curl --fail --silent --show-error --proto '=https' --tlsv1.2 https://sh.rustup.rs --output /tmp/rustup-init.sh
-chmod 0755 /tmp/rustup-init.sh
+rustup_version=1.28.2
+rustup_sha256=20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c
+rustup_temporary=$(mktemp -d)
+curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+  https://static.rust-lang.org/rustup/archive/\${rustup_version}/x86_64-unknown-linux-gnu/rustup-init \
+  --output \${rustup_temporary}/rustup-init
+echo "\${rustup_sha256}  \${rustup_temporary}/rustup-init" | sha256sum --check --strict
+chmod 0755 \${rustup_temporary}/rustup-init
 sudo -u benchmark-build env HOME=/var/lib/datafusion-pr-build \
-  /tmp/rustup-init.sh --yes --profile minimal --default-toolchain 1.91.0
+  \${rustup_temporary}/rustup-init --yes --profile minimal --default-toolchain 1.91.0
 
 zig_version=0.14.1
+zig_sha256=24aeeec8af16c381934a6cd7d95c807a8cb2cf7df9fa40d359aa884195c4716c
 zig_root=/opt/zig-x86_64-linux-\${zig_version}
 if [[ ! -x \${zig_root}/zig ]]; then
+  zig_temporary=$(mktemp -d)
   curl --fail --silent --show-error --location \
     https://ziglang.org/download/\${zig_version}/zig-x86_64-linux-\${zig_version}.tar.xz \
-    --output /tmp/zig.tar.xz
-  tar --extract --file /tmp/zig.tar.xz --directory /opt
+    --output \${zig_temporary}/zig.tar.xz
+  echo "\${zig_sha256}  \${zig_temporary}/zig.tar.xz" | sha256sum --check --strict
+  tar --extract --file \${zig_temporary}/zig.tar.xz --directory /opt --no-same-owner
 fi
 ln --symbolic --force \${zig_root}/zig /usr/local/bin/zig
 sudo -u benchmark-build env HOME=/var/lib/datafusion-pr-build \
@@ -119,6 +137,9 @@ GITHUB_REPOSITORY=${config.githubRepository}
 SOURCE_REPOSITORY_URL=${config.sourceRepositoryUrl}
 DATABASE_PATH=/var/lib/datafusion-pr-bot/jobs.db
 STATE_ROOT=/var/lib/datafusion-pr-bot
+BENCHMARK_WORK_ROOT=/var/lib/datafusion-pr-work
+BUILD_CACHE_ROOT=/var/cache/datafusion-pr-build
+BUILD_CACHE_MAX_GIB=400
 KUBECONFIG=/var/lib/datafusion-pr-bot/kubeconfig
 FOUNDATION_OUTPUTS_FILE=/var/lib/datafusion-pr-bot/foundation-outputs.json
 BENCHMARK_TESTDATA_ROOT=/var/lib/datafusion-pr-bot/testdata
@@ -128,9 +149,10 @@ chmod 0600 /var/lib/datafusion-pr-bot/controller.env
 
 sudo -u benchmark-bot aws eks update-kubeconfig --region ${config.region} --name ${config.clusterName} --alias ${config.clusterName} --kubeconfig /var/lib/datafusion-pr-bot/kubeconfig
 cat > /var/lib/datafusion-pr-bot/foundation-outputs.json <<'OUTPUTS'
-{"clusterName":"${config.clusterName}","datasetBucketName":"${config.datasetBucketName}","artifactBucketName":"${config.datasetBucketName}","benchmarkInstanceType":"${config.benchmarkInstanceType}","benchmarkNodeCount":${config.benchmarkNodeCount}}
+{"clusterName":"${config.clusterName}","datasetBucketName":"${config.datasetBucketName}","artifactBucketName":"\${artifactBucketName}","benchmarkInstanceType":"${config.benchmarkInstanceType}","benchmarkNodeCount":${config.benchmarkNodeCount}}
 OUTPUTS
 chown benchmark-bot:benchmark-bot /var/lib/datafusion-pr-bot/foundation-outputs.json /var/lib/datafusion-pr-bot/kubeconfig
+chmod 0600 /var/lib/datafusion-pr-bot/foundation-outputs.json /var/lib/datafusion-pr-bot/kubeconfig
 
 cat > /etc/systemd/system/datafusion-pr-bot.service <<'SERVICE'
 [Unit]
@@ -142,20 +164,45 @@ Wants=network-online.target
 Type=simple
 User=benchmark-bot
 Group=benchmark-bot
+UMask=0077
 WorkingDirectory=/opt/datafusion-pr-bot/current
 Environment=HOME=/var/lib/datafusion-pr-bot
 EnvironmentFile=/var/lib/datafusion-pr-bot/controller.env
-ExecStart=/usr/local/bin/npm start
+ExecStart=/usr/local/bin/node /opt/datafusion-pr-bot/current/src/main.js
 Restart=always
 RestartSec=15
 
 [Install]
 WantedBy=multi-user.target
 SERVICE
+
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CLOUDWATCH'
+{
+  "agent": {"metrics_collection_interval": 60},
+  "metrics": {
+    "namespace": "DataFusionPRBot",
+    "append_dimensions": {"InstanceId": "\${aws:InstanceId}"},
+    "aggregation_dimensions": [["InstanceId"]],
+    "metrics_collected": {
+      "disk": {
+        "measurement": ["used_percent"],
+        "metrics_collection_interval": 60,
+        "resources": ["/"],
+        "drop_device": true,
+        "drop_original_metrics": ["used_percent"]
+      }
+    }
+  }
+}
+CLOUDWATCH
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
 systemctl daemon-reload
 systemctl enable --now datafusion-pr-bot.service
 `,
-  );
+    );
   const controller = new aws.ec2.Instance(
     "bot-controller",
     {
@@ -192,5 +239,18 @@ systemctl enable --now datafusion-pr-bot.service
     allocationId: publicAddress.id,
     instanceId: controller.id,
   });
-  return { controller, publicAddress };
+  const diskAlarm = new aws.cloudwatch.MetricAlarm("bot-controller-disk", {
+    namespace: "DataFusionPRBot",
+    metricName: "disk_used_percent",
+    dimensions: { InstanceId: controller.id },
+    comparisonOperator: "GreaterThanOrEqualToThreshold",
+    evaluationPeriods: 2,
+    period: 300,
+    statistic: "Maximum",
+    threshold: 85,
+    treatMissingData: "breaching",
+    alarmDescription:
+      "PR benchmark controller root disk is above 85% or not reporting",
+  });
+  return { controller, publicAddress, diskAlarm };
 }

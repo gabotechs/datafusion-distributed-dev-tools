@@ -25,16 +25,9 @@ const repositoryRoot = findRepositoryRoot();
 
 export function applicationArchive(): pulumi.asset.AssetArchive {
   return new pulumi.asset.AssetArchive({
-    "package.json": new pulumi.asset.FileAsset(
-      path.join(repositoryRoot, "package.json"),
+    src: new pulumi.asset.FileArchive(
+      path.join(repositoryRoot, "dist", "application", "src"),
     ),
-    "package-lock.json": new pulumi.asset.FileAsset(
-      path.join(repositoryRoot, "package-lock.json"),
-    ),
-    "tsconfig.json": new pulumi.asset.FileAsset(
-      path.join(repositoryRoot, "tsconfig.json"),
-    ),
-    src: new pulumi.asset.FileArchive(path.join(repositoryRoot, "src")),
     migrations: new pulumi.asset.FileArchive(
       path.join(repositoryRoot, "migrations"),
     ),

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+cache_root=/var/cache/datafusion-pr-build
+work_root=/var/lib/datafusion-pr-work/jobs
+
+validate_cache_path() {
+  local resolved
+  resolved=$(realpath --canonicalize-missing "$1")
+  [[ ${resolved} =~ ^${cache_root}/(targets|cargo)/(trusted|untrusted)-[0-9a-f]{40}$ ]] || {
+    echo "Cache path is outside ${cache_root}" >&2
+    exit 2
+  }
+}
+
+validate_source_path() {
+  local resolved
+  resolved=$(realpath "$1")
+  [[ ${resolved} =~ ^${work_root}/[0-9]+/(base|head)$ ]] || {
+    echo "Source is outside ${work_root}" >&2
+    exit 2
+  }
+}

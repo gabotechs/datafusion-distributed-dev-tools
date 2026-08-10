@@ -25,9 +25,13 @@ function testConfig(): ControllerConfig {
     datasetBucketName: "human-managed-datasets",
     benchmarkInstanceType: "c5n.2xlarge",
     benchmarkNodeCount: 12,
+    benchmarkWorkloadRoleArn:
+      "arn:aws:iam::123456789012:role/benchmark-workload-role",
     githubRepository: "owner/repository",
     sourceRepositoryUrl: "https://example.invalid/repository.git",
     nodeVersion: "24.18.1",
+    nodeSha256:
+      "d6c664df3f3f61458e8c277585571328522d705166723a7c7823a9253a4d15a0",
   };
 }
 
@@ -46,6 +50,8 @@ before(async () => {
           state.arn = `arn:aws:iam::123456789012:role/${args.name}`;
         } else if (args.type === "aws:ec2/eip:Eip") {
           state.publicIp = "192.0.2.20";
+        } else if (args.type === "aws:s3/bucket:Bucket") {
+          state.arn = `arn:aws:s3:::${args.name}`;
         }
         return { id: `${args.name}_id`, state };
       },
@@ -152,4 +158,58 @@ test("limits AWS permissions to the configured foundation", () => {
   assert.match(document, /human-managed-benchmark-cluster/);
   assert.doesNotMatch(document, /eks:CreateCluster/);
   assert.doesNotMatch(document, /ec2:RunInstances/);
+  assert.match(document, /bot-artifacts\/controller\/\*/);
+  assert.match(document, /bot-artifacts\/workers\/\*/);
+  assert.doesNotMatch(document, /bot-artifacts\/\*"/);
+  assert.match(document, /cloudwatch:PutMetricData/);
+  assert.match(document, /DataFusionPRBot/);
+});
+
+test("separates private bot artifacts from the dataset bucket", () => {
+  resource("aws:s3/bucket:Bucket", "bot-artifacts");
+  const publicAccess = resource(
+    "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock",
+    "bot-artifacts-public-access",
+  );
+  assert.equal(publicAccess.inputs.blockPublicAcls, true);
+  assert.equal(publicAccess.inputs.blockPublicPolicy, true);
+  resource(
+    "aws:s3/bucketVersioning:BucketVersioning",
+    "bot-artifacts-versioning",
+  );
+  const application = resource(
+    "aws:s3/bucketObjectv2:BucketObjectv2",
+    "bot-controller-application",
+  );
+  assert.equal(application.inputs.key, "controller/application.tar.gz");
+  assert.notEqual(application.inputs.bucket, "human-managed-datasets");
+  const bucketPolicy = resource(
+    "aws:s3/bucketPolicy:BucketPolicy",
+    "bot-artifacts-policy",
+  );
+  const policy = String(bucketPolicy.inputs.policy);
+  assert.match(policy, /benchmark-workload-role/);
+  assert.match(policy, /workers\/\*/);
+  assert.doesNotMatch(policy, /controller\/\*/);
+});
+
+test("installs protected controller state and verified native toolchains", () => {
+  const instance = resource("aws:ec2/instance:Instance", "bot-controller");
+  const userData = String(instance.inputs.userData);
+  assert.match(userData, /--mode 0700 \/var\/lib\/datafusion-pr-bot/);
+  assert.match(userData, /\/var\/cache\/datafusion-pr-build/);
+  assert.match(userData, /sha256sum --check --strict/);
+  assert.match(userData, /chown --recursive root:root \$\{release\}/);
+  assert.match(
+    userData,
+    /ExecStart=\/usr\/local\/bin\/node \/opt\/datafusion-pr-bot\/current\/src\/main\.js/,
+  );
+  assert.doesNotMatch(userData, /npm --prefix .* ci/);
+  assert.match(userData, /amazon-cloudwatch-agent/);
+  const diskAlarm = resource(
+    "aws:cloudwatch/metricAlarm:MetricAlarm",
+    "bot-controller-disk",
+  );
+  assert.equal(diskAlarm.inputs.threshold, 85);
+  assert.equal(diskAlarm.inputs.treatMissingData, "breaching");
 });

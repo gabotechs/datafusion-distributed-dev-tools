@@ -24,6 +24,8 @@ workload, and posts the comparison to the pull request.
 - SQLite on EBS stores seen comments and job state. GitHub remains the
   user-facing source of requests and results.
 - Only trusted repository users can enqueue work.
+- A dedicated private S3 bucket separates controller and worker artifacts from
+  the human-managed dataset bucket.
 
 The persistent machine may be stopped when idle without losing its EBS cache.
 Benchmark worker nodes remain managed by EKS Auto Mode and scale independently.
@@ -41,6 +43,7 @@ outputs:
 - `datasetBucketName`
 - `benchmarkInstanceType`
 - `benchmarkNodeCount`
+- the ARN of the foundation's benchmark workload IAM role
 
 Configure the controller stack without storing credentials in the repository:
 
@@ -51,6 +54,7 @@ pulumi config set clusterName your-benchmark-cluster
 pulumi config set datasetBucketName your-dataset-bucket
 pulumi config set benchmarkInstanceType c5n.2xlarge
 pulumi config set benchmarkNodeCount 12
+pulumi config set benchmarkWorkloadRoleArn arn:aws:iam::YOUR_ACCOUNT:role/YOUR_BENCHMARK_WORKLOAD_ROLE
 pulumi config set githubRepository datafusion-contrib/datafusion-distributed
 pulumi config set sourceRepositoryUrl https://github.com/datafusion-contrib/datafusion-distributed.git
 npm run controller-deploy
@@ -61,10 +65,10 @@ By default the controller uses a subnet from the account's default VPC. Set
 group has no inbound rules; administration uses AWS Systems Manager Session
 Manager.
 
-The deployment outputs `controllerPublicIp` and `controllerRoleArn`. A human
-must add the public IP as a `/32` to the benchmark foundation's
-`kubernetesApiAllowedCidrs` and grant the role access to the existing
-`benchmark-datafusion` namespace:
+The deployment outputs `controllerPublicIp`, `controllerRoleArn`, and
+`artifactBucketName`. A human must add the public IP as a `/32` to the benchmark
+foundation's `kubernetesApiAllowedCidrs` and grant the role access to the
+existing `benchmark-datafusion` namespace:
 
 ```bash
 aws eks create-access-entry \
@@ -105,6 +109,10 @@ is never forwarded to pull-request builds or benchmark pods.
 
 Replacing the EC2 instance creates a fresh environment file, so the token must
 be configured again after replacement.
+
+The controller bundle is compiled before deployment and installed root-owned;
+the service does not install development dependencies or transpile TypeScript at
+runtime.
 
 ## Development
 
