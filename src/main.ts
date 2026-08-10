@@ -7,6 +7,7 @@ import { LocalProcessRunner } from "./process.js";
 import { JobWorker } from "./worker.js";
 
 const config = loadConfig();
+process.umask(0o077);
 const database = new JobDatabase(config.databasePath);
 const processes = new LocalProcessRunner();
 const github = new GitHubClient(config.githubToken);
@@ -20,9 +21,29 @@ const executor = new BenchmarkExecutor(
 );
 const worker = new JobWorker(database, github, executor);
 
-const recovered = database.recoverRunningJobs();
-if (recovered > 0) {
-  console.log(`Recovered ${recovered} interrupted benchmark job(s)`);
+try {
+  await executor.cleanup();
+} catch (error) {
+  console.error("Failed to remove a stale benchmark deployment", error);
+}
+
+const recovery = database.recoverRunningJobs();
+if (recovery.retried > 0) {
+  console.log(`Recovered ${recovery.retried} interrupted benchmark job(s)`);
+}
+for (const job of recovery.failed) {
+  try {
+    await github.postComment(
+      job.repository,
+      job.pullRequestNumber,
+      `Benchmark job ${job.id} failed after three controller restarts. Full details are available in the controller journal.`,
+    );
+  } catch (error) {
+    console.error(
+      `Failed to report terminal recovery for job ${job.id}`,
+      error,
+    );
+  }
 }
 
 let stopping = false;
@@ -35,11 +56,15 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 while (!stopping) {
   try {
     await poller.poll();
+  } catch (error) {
+    console.error("GitHub comment poll failed", error);
+  }
+  try {
     while (!stopping && (await worker.runOnce())) {
       // Drain the serialized queue before waiting for the next poll.
     }
   } catch (error) {
-    console.error(error);
+    console.error("Benchmark queue processing failed", error);
   }
   if (!stopping) {
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));

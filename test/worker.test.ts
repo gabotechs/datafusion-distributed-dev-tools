@@ -38,3 +38,47 @@ test("reports a completed comparison and consumes the job", async () => {
     database.close();
   }
 });
+
+test("does not publish command output when a job fails", async () => {
+  const database = new JobDatabase(":memory:");
+  const comments: string[] = [];
+  const github = {
+    postComment: async (_repo: string, _pr: number, body: string) => {
+      comments.push(body);
+    },
+  } as GitHubApi;
+  try {
+    database.enqueue(JOB);
+    const worker = new JobWorker(database, github, {
+      execute: async () => {
+        throw new Error("arn:aws:iam::123456789012:role/private");
+      },
+    });
+    await worker.runOnce();
+    assert.match(comments[1]!, /controller journal/);
+    assert.doesNotMatch(comments[1]!, /123456789012/);
+  } finally {
+    database.close();
+  }
+});
+
+test("HTML-escapes benchmark comparison output", async () => {
+  const database = new JobDatabase(":memory:");
+  const comments: string[] = [];
+  const github = {
+    postComment: async (_repo: string, _pr: number, body: string) => {
+      comments.push(body);
+    },
+  } as GitHubApi;
+  try {
+    database.enqueue(JOB);
+    const worker = new JobWorker(database, github, {
+      execute: async () => ({ comparison: "</pre><script>alert(1)</script>" }),
+    });
+    await worker.runOnce();
+    assert.match(comments[1]!, /&lt;script&gt;/);
+    assert.doesNotMatch(comments[1]!, /<script>/);
+  } finally {
+    database.close();
+  }
+});

@@ -1,26 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cache_root=/var/lib/datafusion-pr-bot/build-cache
+source /usr/local/libexec/datafusion-pr-bot/cache-paths
 target=${1:?target cache is required}
 cargo_home=${2:?Cargo home is required}
 seed_target=${3:-}
 seed_cargo_home=${4:-}
 
-validate_cache_path() {
-  local resolved
-  resolved=$(realpath --canonicalize-missing "$1")
-  [[ ${resolved} == "${cache_root}/"* ]] || {
-    echo "Cache path is outside ${cache_root}" >&2
-    exit 2
-  }
-}
-
 copy_seed() {
   local seed=$1 destination=$2
   [[ -n ${seed} && -d ${seed} && ! -e ${destination} ]] || return 0
-  install --directory --owner benchmark-build --group benchmark-build "${destination}"
-  runuser --user benchmark-build -- \
+  runuser --user benchmark-build --group benchmark-cache -- mkdir --parents "${destination}"
+  runuser --user benchmark-build --group benchmark-cache -- \
     cp --archive --reflink=auto "${seed}/." "${destination}/"
 }
 
@@ -31,5 +22,5 @@ validate_cache_path "${cargo_home}"
 
 copy_seed "${seed_target}" "${target}"
 copy_seed "${seed_cargo_home}" "${cargo_home}"
-install --directory --owner benchmark-build --group benchmark-build \
-  "${target}" "${cargo_home}"
+runuser --user benchmark-build --group benchmark-cache -- \
+  mkdir --parents "${target}" "${cargo_home}"
