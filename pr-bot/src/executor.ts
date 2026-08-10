@@ -57,13 +57,24 @@ export interface ExecutionTimings {
   totalMs: number;
 }
 
+export interface ExecutionProgress {
+  step: number;
+  totalSteps: number;
+  message: string;
+}
+
+export type ProgressReporter = (progress: ExecutionProgress) => Promise<void>;
+
 export class BenchmarkExecutor {
   constructor(
     readonly config: ExecutorConfig,
     readonly processes: ProcessRunner,
   ) {}
 
-  async execute(job: Job): Promise<ExecutionResult> {
+  async execute(
+    job: Job,
+    onProgress: ProgressReporter = async () => {},
+  ): Promise<ExecutionResult> {
     const executionStarted = performance.now();
     const timings: ExecutionTimings = {
       validationMs: 0,
@@ -86,14 +97,25 @@ export class BenchmarkExecutor {
     const baseSource = path.join(jobRoot, "base");
     const headSource = path.join(jobRoot, "head");
     let deploymentStarted = false;
+    let progressStep = 0;
+    const totalProgressSteps = 7 + 2 * job.datasets.length;
+    const reportProgress = async (message: string): Promise<void> => {
+      await onProgress({
+        step: ++progressStep,
+        totalSteps: totalProgressSteps,
+        message,
+      });
+    };
     mkdirSync(jobRoot, { recursive: true });
 
     try {
+      await reportProgress("Validating all requested datasets");
       const validationStarted = performance.now();
       for (const dataset of job.datasets) {
         await this.prepareDatasetLayout(dataset, outputs.datasetBucketName);
       }
       timings.validationMs = performance.now() - validationStarted;
+      await reportProgress("Preparing immutable base and PR source checkouts");
       await this.prepareMirror(mirror);
       await this.removeWorktree(mirror, headSource);
       await this.removeWorktree(mirror, baseSource);
@@ -106,6 +128,7 @@ export class BenchmarkExecutor {
         this.resetResults(dataset, baseSource);
       }
 
+      await reportProgress("Compiling the base revision");
       const baseCompileStarted = performance.now();
       const baseBinary = await this.build(
         job.baseSha,
@@ -119,10 +142,12 @@ export class BenchmarkExecutor {
         outputs.artifactBucketName,
       );
       deploymentStarted = true;
+      await reportProgress("Provisioning the base Kubernetes deployment");
       const baseDeployStarted = performance.now();
       await this.deploy(baseArtifact, outputs, job);
       timings.baseDeployMs = performance.now() - baseDeployStarted;
       for (const dataset of job.datasets) {
+        await reportProgress(`Benchmarking base: ${dataset}`);
         const benchmarkStarted = performance.now();
         await this.runBenchmark(dataset, job.id);
         timings.baseBenchmarks.push({
@@ -131,6 +156,7 @@ export class BenchmarkExecutor {
         });
       }
 
+      await reportProgress("Compiling the PR head");
       const headCompileStarted = performance.now();
       const headBinary = await this.build(
         job.headSha,
@@ -143,11 +169,13 @@ export class BenchmarkExecutor {
         headBinary,
         outputs.artifactBucketName,
       );
+      await reportProgress("Provisioning the PR-head Kubernetes deployment");
       const headDeployStarted = performance.now();
       await this.deploy(headArtifact, outputs, job);
       timings.headDeployMs = performance.now() - headDeployStarted;
       const comparisons: string[] = [];
       for (const dataset of job.datasets) {
+        await reportProgress(`Benchmarking PR head: ${dataset}`);
         const benchmarkStarted = performance.now();
         comparisons.push(await this.runBenchmark(dataset, job.id));
         timings.headBenchmarks.push({
@@ -162,6 +190,7 @@ export class BenchmarkExecutor {
 
       return { comparison, baseArtifact, headArtifact, timings };
     } finally {
+      await reportProgress("Cleaning up the isolated deployment and worktrees");
       if (deploymentStarted) {
         await this.cleanupDeployment(outputs, job.id);
       }

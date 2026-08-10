@@ -19,7 +19,8 @@ The bot creates one status comment for each accepted request and edits it in
 place as the job moves from queued to running and then completed or failed. The
 comment links back to the request and includes a compact metadata section with
 queue, validation, compilation, Kubernetes provisioning, per-dataset benchmark,
-and total timings.
+and total timings. While a job runs, the same comment shows its current phase
+and completed step count.
 
 ```text
 benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --instance-type c7i.2xlarge --nodes 6
