@@ -177,11 +177,23 @@ export class BenchmarkExecutor {
       for (const dataset of job.datasets) {
         await reportProgress(`Benchmarking PR head: ${dataset}`);
         const benchmarkStarted = performance.now();
-        comparisons.push(await this.runBenchmark(dataset, job.id, headSource));
+        await this.runBenchmark(dataset, job.id, headSource);
         timings.headBenchmarks.push({
           dataset,
           durationMs: performance.now() - benchmarkStarted,
         });
+        comparisons.push(
+          await this.compareResults(
+            dataset,
+            engineName(job.baseSha),
+            engineName(job.headSha),
+            path.join(
+              jobRoot,
+              "comparisons",
+              `${dataset.replaceAll("/", "-")}.txt`,
+            ),
+          ),
+        );
       }
       const comparison = comparisons
         .map((value) => value.trim())
@@ -530,8 +542,8 @@ export class BenchmarkExecutor {
     dataset: string,
     jobId: number,
     sourceRoot: string,
-  ): Promise<string> {
-    const result = await this.processes.run(
+  ): Promise<void> {
+    await this.processes.run(
       "bash",
       [
         path.join(this.config.harnessRoot, "k8s", "run-benchmark.sh"),
@@ -544,6 +556,7 @@ export class BenchmarkExecutor {
         env: {
           ...process.env,
           AWS_REGION: this.config.region,
+          BENCHMARK_COMPARE: "false",
           BENCHMARK_RUNNER: path.join(
             this.config.harnessRoot,
             "dist",
@@ -557,8 +570,40 @@ export class BenchmarkExecutor {
         },
       },
     );
-    return result.stdout;
   }
+
+  async compareResults(
+    dataset: string,
+    baseEngine: string,
+    headEngine: string,
+    output: string,
+  ): Promise<string> {
+    await this.processes.run(
+      "node",
+      [
+        path.join(this.config.harnessRoot, "dist", "compare.cjs"),
+        "--dataset",
+        dataset,
+        "--output",
+        output,
+        baseEngine,
+        headEngine,
+      ],
+      {
+        cwd: this.config.harnessRoot,
+        env: {
+          ...process.env,
+          BENCHMARK_TESTDATA_ROOT: this.config.testdataRoot,
+        },
+      },
+    );
+    return readFileSync(output, "utf8");
+  }
+}
+
+function engineName(sha: string): string {
+  validateSha(sha);
+  return `datafusion-distributed-${sha.slice(0, 12)}`;
 }
 
 function loadOutputs(file: string): FoundationOutputs {
