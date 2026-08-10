@@ -8,6 +8,23 @@ to run distributed benchmarks on Kubernetes.
 - `k8s/` contains the engine charts and lifecycle scripts.
 - `engines/` contains engine-specific runtime sources.
 
+## Source checkout
+
+`datafusion-distributed-dev-tools` expects the DataFusion Distributed source
+repository to be checked out beside it. Datasets and benchmark queries are read
+from that source checkout's `testdata/` directory:
+
+```text
+<parent>/
+  datafusion-distributed/
+    testdata/
+  datafusion-distributed-dev-tools/
+    benchmarks-remote/
+```
+
+Set `BENCHMARK_TESTDATA_ROOT` only when deliberately using a different source
+checkout or testdata directory.
+
 The foundation, engine workloads, datasets, and benchmark runs have independent
 lifecycles. Benchmark commands never provision infrastructure, install engines,
 upload datasets, or remove workloads.
@@ -64,10 +81,8 @@ available benchmark dataset. Delete selected datasets explicitly with:
 npm run dataset-destroy -- --dataset tpch/sf1 --yes
 ```
 
-Dataset names are their paths relative to `testdata/`, such as `tpch/sf10` or
-`clickbench/0-100`. Linked Git worktrees automatically reuse generated datasets from the primary
-checkout. Set `BENCHMARK_TESTDATA_ROOT` to use a different shared `testdata/`
-directory explicitly.
+Dataset names are paths relative to the sibling source checkout's `testdata/`,
+such as `tpch/sf10` or `clickbench/0-100`.
 
 Dataset sync and destroy commands can be rerun after interruption to converge
 the contents stored in S3.
