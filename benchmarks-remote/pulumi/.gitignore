@@ -2,5 +2,5 @@ node_modules/
 dist/
 .pulumi/
 Pulumi.*.yaml
-!Pulumi.benchmark.yaml
+!Pulumi.benchmark.example.yaml
 .pulumi-outputs*.json
