@@ -27,9 +27,6 @@ function testConfig(): ControllerConfig {
     benchmarkNodeCount: 12,
     githubRepository: "owner/repository",
     sourceRepositoryUrl: "https://example.invalid/repository.git",
-    githubAppId: "app-id",
-    githubInstallationId: "installation-id",
-    githubPrivateKey: pulumi.secret("PRIVATE_KEY_TEST"),
     nodeVersion: "24.18.1",
   };
 }
@@ -47,8 +44,6 @@ before(async () => {
         if (args.type === "aws:iam/role:Role") {
           state.name = args.name;
           state.arn = `arn:aws:iam::123456789012:role/${args.name}`;
-        } else if (args.type === "aws:secretsmanager/secret:Secret") {
-          state.arn = `arn:aws:secretsmanager:us-east-1:123456789012:secret:${args.name}`;
         } else if (args.type === "aws:ec2/eip:Eip") {
           state.publicIp = "192.0.2.20";
         }
@@ -133,10 +128,18 @@ test("creates only a passive controller with stable outbound identity", () => {
   );
 });
 
-test("does not expose the GitHub private key through EC2 user data", () => {
-  const instance = resource("aws:ec2/instance:Instance", "bot-controller");
-  assert.doesNotMatch(String(instance.inputs.userData), /PRIVATE_KEY_TEST/);
-  resource("aws:secretsmanager/secretVersion:SecretVersion");
+test("leaves GitHub authentication to manual gh configuration", () => {
+  assert.equal(
+    resources.filter((candidate) =>
+      candidate.type.startsWith("aws:secretsmanager/"),
+    ).length,
+    0,
+  );
+  const policy = resource(
+    "aws:iam/rolePolicy:RolePolicy",
+    "bot-controller-policy",
+  );
+  assert.doesNotMatch(String(policy.inputs.policy), /secretsmanager/);
 });
 
 test("limits AWS permissions to the configured foundation", () => {

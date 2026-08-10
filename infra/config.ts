@@ -12,9 +12,6 @@ export interface ControllerConfig {
   benchmarkNodeCount: number;
   githubRepository: string;
   sourceRepositoryUrl: string;
-  githubAppId: string;
-  githubInstallationId: string;
-  githubPrivateKey: pulumi.Output<string>;
   nodeVersion: string;
 }
 
@@ -54,9 +51,6 @@ export function loadControllerConfig(): ControllerConfig {
     benchmarkNodeCount: config.requireNumber("benchmarkNodeCount"),
     githubRepository: config.require("githubRepository"),
     sourceRepositoryUrl: config.require("sourceRepositoryUrl"),
-    githubAppId: config.require("githubAppId"),
-    githubInstallationId: config.require("githubInstallationId"),
-    githubPrivateKey: config.requireSecret("githubPrivateKey"),
     nodeVersion: config.get("nodeVersion") ?? "24.18.1",
   });
 }

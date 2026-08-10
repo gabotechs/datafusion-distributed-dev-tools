@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source_root=${1:?source root is required}
+target=${2:?target cache is required}
+cargo_home=${3:?Cargo home is required}
+
+[[ $(realpath "${source_root}") == /var/lib/datafusion-pr-bot/jobs/* ]] || {
+  echo "Source is outside the job root" >&2
+  exit 2
+}
+
+exec systemd-run --quiet --wait --pipe --collect \
+  --property=User=benchmark-build \
+  --property=Group=benchmark-build \
+  --property=NoNewPrivileges=yes \
+  --property=PrivateTmp=yes \
+  --property=ProtectHome=yes \
+  --property=ProtectSystem=strict \
+  --property=ReadOnlyPaths="${source_root}" \
+  --property=ReadWritePaths="${target}" \
+  --property=ReadWritePaths="${cargo_home}" \
+  --property=IPAddressDeny=169.254.169.254/32 \
+  --property=IPAddressDeny=fd00:ec2::254/128 \
+  --setenv=HOME=/var/lib/datafusion-pr-build \
+  --setenv=CARGO_HOME="${cargo_home}" \
+  --setenv=CARGO_TARGET_DIR="${target}" \
+  --setenv=AWS_EC2_METADATA_DISABLED=true \
+  /var/lib/datafusion-pr-build/.cargo/bin/cargo fetch \
+  --locked \
+  --manifest-path "${source_root}/benchmarks-remote/engines/datafusion/Cargo.toml"

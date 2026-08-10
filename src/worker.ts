@@ -1,5 +1,5 @@
 import type { Job, JobDatabase } from "./database.js";
-import type { GitHubClient } from "./github.js";
+import type { GitHubApi } from "./github.js";
 
 export interface JobExecutor {
   execute(job: Job): Promise<{ comparison: string }>;
@@ -8,7 +8,7 @@ export interface JobExecutor {
 export class JobWorker {
   constructor(
     readonly database: JobDatabase,
-    readonly github: GitHubClient,
+    readonly github: GitHubApi,
     readonly executor: JobExecutor,
   ) {}
 

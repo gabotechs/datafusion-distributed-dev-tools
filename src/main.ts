@@ -1,25 +1,22 @@
 import { loadConfig } from "./config.js";
 import { JobDatabase } from "./database.js";
 import { BenchmarkExecutor } from "./executor.js";
-import { GitHubClient } from "./github.js";
+import { GhCliClient } from "./github.js";
 import { CommentPoller } from "./poller.js";
 import { LocalProcessRunner } from "./process.js";
 import { JobWorker } from "./worker.js";
 
 const config = loadConfig();
 const database = new JobDatabase(config.databasePath);
-const github = new GitHubClient(
-  config.githubAppId,
-  config.githubInstallationId,
-  config.githubPrivateKey,
-);
+const processes = new LocalProcessRunner();
+const github = new GhCliClient(processes);
 const poller = new CommentPoller(config.repository, database, github);
 const executor = new BenchmarkExecutor(
   {
     repositoryUrl: config.sourceRepositoryUrl,
     ...config.executor,
   },
-  new LocalProcessRunner(),
+  processes,
 );
 const worker = new JobWorker(database, github, executor);
 
