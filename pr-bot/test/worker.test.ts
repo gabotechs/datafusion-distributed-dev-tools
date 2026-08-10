@@ -174,3 +174,38 @@ test("HTML-escapes benchmark comparison output", async () => {
     database.close();
   }
 });
+
+test("keeps escaped multi-dataset output within GitHub's comment limit", async () => {
+  const database = new JobDatabase(":memory:");
+  const comments: string[] = [];
+  const github = {
+    updateComment: async (_repo: string, _commentId: number, body: string) => {
+      comments.push(body);
+    },
+  } as GitHubApi;
+  const comparison = JOB.datasets
+    .map(
+      (
+        dataset,
+      ) => `=== Comparing ${dataset} results from engine 'base' [prev] with 'head' [new] ===
+      q1: ${"&<>".repeat(30_000)}
+   TOTAL: prev=300 ms, new=270 ms, diff=1.11 faster`,
+    )
+    .join("\n\n");
+  try {
+    const jobId = database.enqueue(JOB)!;
+    database.setStatusCommentId(jobId, 77);
+    const worker = new JobWorker(database, github, {
+      execute: async () => ({ comparison, timings: TIMINGS }),
+    });
+
+    await worker.runOnce();
+
+    const result = comments[1]!;
+    assert.ok(result.length <= 65_536);
+    assert.match(result, /&amp;&lt;&gt;/);
+    assert.doesNotMatch(result, /q1: &<>/);
+  } finally {
+    database.close();
+  }
+});

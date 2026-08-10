@@ -1,6 +1,11 @@
-import * as pulumi from '@pulumi/pulumi';
+import * as pulumi from "@pulumi/pulumi";
 
-export const engineNames = ['datafusion', 'ballista', 'spark', 'trino'] as const;
+export const engineNames = [
+  "datafusion",
+  "ballista",
+  "spark",
+  "trino",
+] as const;
 
 export type EngineName = (typeof engineNames)[number];
 
@@ -23,13 +28,14 @@ export interface FoundationConfig {
 }
 
 function requirePair(name: string, values: string[]): [string, string] {
-  if (values.length !== 2) {
+  const [first, second] = values;
+  if (values.length !== 2 || first === undefined || second === undefined) {
     throw new Error(`${name} must contain exactly two entries`);
   }
-  if (values[0] === values[1]) {
+  if (first === second) {
     throw new Error(`${name} entries must be distinct`);
   }
-  return [values[0], values[1]];
+  return [first, second];
 }
 
 function requirePositiveInteger(name: string, value: number): number {
@@ -40,7 +46,9 @@ function requirePositiveInteger(name: string, value: number): number {
 }
 
 function ipv4CidrRange(name: string, value: string): [number, number] {
-  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/.exec(value);
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/.exec(
+    value,
+  );
   if (!match) {
     throw new Error(`${name} must be a valid IPv4 CIDR`);
   }
@@ -55,29 +63,40 @@ function ipv4CidrRange(name: string, value: string): [number, number] {
   return [start, start + size - 1];
 }
 
-export function validateFoundationConfig(config: FoundationConfig): FoundationConfig {
-  if (!/^[a-z][a-z0-9-]*$/.test(config.namePrefix) || config.namePrefix.length > 20) {
+export function validateFoundationConfig(
+  config: FoundationConfig,
+): FoundationConfig {
+  if (
+    !/^[a-z][a-z0-9-]*$/.test(config.namePrefix) ||
+    config.namePrefix.length > 20
+  ) {
     throw new Error(
-      'namePrefix must start with a lowercase letter, contain only lowercase letters, numbers, and hyphens, and be at most 20 characters',
+      "namePrefix must start with a lowercase letter, contain only lowercase letters, numbers, and hyphens, and be at most 20 characters",
     );
   }
 
-  requirePair('availabilityZones', config.availabilityZones);
-  requirePair('subnetCidrs.public', config.subnetCidrs.public);
-  requirePair('subnetCidrs.private', config.subnetCidrs.private);
+  requirePair("availabilityZones", config.availabilityZones);
+  requirePair("subnetCidrs.public", config.subnetCidrs.public);
+  requirePair("subnetCidrs.private", config.subnetCidrs.private);
 
-  requirePositiveInteger('benchmarkNodeCount', config.benchmarkNodeCount);
+  requirePositiveInteger("benchmarkNodeCount", config.benchmarkNodeCount);
   if (!/^1\.\d+$/.test(config.eksVersion)) {
-    throw new Error('eksVersion must be an exact EKS minor release such as 1.36');
+    throw new Error(
+      "eksVersion must be an exact EKS minor release such as 1.36",
+    );
   }
-  ipv4CidrRange('vpcCidr', config.vpcCidr);
+  ipv4CidrRange("vpcCidr", config.vpcCidr);
   if (config.kubernetesApiAllowedCidrs.length === 0) {
-    throw new Error('kubernetesApiAllowedCidrs must contain at least one trusted CIDR');
+    throw new Error(
+      "kubernetesApiAllowedCidrs must contain at least one trusted CIDR",
+    );
   }
   for (const cidr of config.kubernetesApiAllowedCidrs) {
-    ipv4CidrRange('kubernetesApiAllowedCidrs', cidr);
-    if (cidr === '0.0.0.0/0') {
-      throw new Error('kubernetesApiAllowedCidrs must not expose the Kubernetes API to the world');
+    ipv4CidrRange("kubernetesApiAllowedCidrs", cidr);
+    if (cidr === "0.0.0.0/0") {
+      throw new Error(
+        "kubernetesApiAllowedCidrs must not expose the Kubernetes API to the world",
+      );
     }
   }
 
@@ -86,36 +105,37 @@ export function validateFoundationConfig(config: FoundationConfig): FoundationCo
 
 export function loadFoundationConfig(): FoundationConfig {
   const config = new pulumi.Config();
-  const awsConfig = new pulumi.Config('aws');
-  const apiCidrsFromEnvironment = process.env.KUBERNETES_API_ALLOWED_CIDRS?.split(',')
-    .map((cidr) => cidr.trim())
-    .filter(Boolean);
+  const awsConfig = new pulumi.Config("aws");
+  const apiCidrsFromEnvironment =
+    process.env.KUBERNETES_API_ALLOWED_CIDRS?.split(",")
+      .map((cidr) => cidr.trim())
+      .filter(Boolean);
 
   return validateFoundationConfig({
-    namePrefix: config.get('namePrefix') ?? 'datafusion-bench',
-    region: awsConfig.require('region'),
+    namePrefix: config.get("namePrefix") ?? "datafusion-bench",
+    region: awsConfig.require("region"),
     availabilityZones: requirePair(
-      'availabilityZones',
-      config.requireObject<string[]>('availabilityZones'),
+      "availabilityZones",
+      config.requireObject<string[]>("availabilityZones"),
     ),
-    vpcCidr: config.get('vpcCidr') ?? '10.42.0.0/16',
+    vpcCidr: config.get("vpcCidr") ?? "10.42.0.0/16",
     subnetCidrs: {
       public: requirePair(
-        'subnetCidrs.public',
-        config.requireObject<string[]>('publicSubnetCidrs'),
+        "subnetCidrs.public",
+        config.requireObject<string[]>("publicSubnetCidrs"),
       ),
       private: requirePair(
-        'subnetCidrs.private',
-        config.requireObject<string[]>('privateSubnetCidrs'),
+        "subnetCidrs.private",
+        config.requireObject<string[]>("privateSubnetCidrs"),
       ),
     },
-    benchmarkInstanceType: config.get('benchmarkInstanceType') ?? 'c5n.2xlarge',
-    benchmarkNodeCount: config.getNumber('benchmarkNodeCount') ?? 12,
-    systemInstanceType: config.get('systemInstanceType') ?? 'm6i.large',
-    eksVersion: config.get('eksVersion') ?? '1.36',
+    benchmarkInstanceType: config.get("benchmarkInstanceType") ?? "c5n.2xlarge",
+    benchmarkNodeCount: config.getNumber("benchmarkNodeCount") ?? 12,
+    systemInstanceType: config.get("systemInstanceType") ?? "m6i.large",
+    eksVersion: config.get("eksVersion") ?? "1.36",
     kubernetesApiAllowedCidrs:
       apiCidrsFromEnvironment && apiCidrsFromEnvironment.length > 0
         ? apiCidrsFromEnvironment
-        : config.requireObject<string[]>('kubernetesApiAllowedCidrs'),
+        : config.requireObject<string[]>("kubernetesApiAllowedCidrs"),
   });
 }

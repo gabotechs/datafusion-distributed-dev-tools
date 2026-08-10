@@ -32,7 +32,9 @@ export interface GitHubApi {
 
 type Fetch = typeof fetch;
 
-const API = "https://api.github.com";
+const GITHUB_API = "https://api.github.com";
+const GITHUB_PAGE_SIZE = 100;
+const MAX_GITHUB_PAGES = 100;
 
 export class GitHubApiError extends Error {
   constructor(
@@ -48,7 +50,7 @@ export class GitHubApiError extends Error {
 export class GitHubClient implements GitHubApi {
   constructor(
     readonly token: string,
-    readonly fetch_: Fetch = fetch,
+    readonly fetchImpl: Fetch = fetch,
   ) {}
 
   async listIssueComments(
@@ -56,9 +58,9 @@ export class GitHubClient implements GitHubApi {
     since: string,
   ): Promise<IssueComment[]> {
     let url: string | null =
-      `${API}/repos/${repositoryPath(repository)}/issues/comments?per_page=100&sort=updated&direction=asc&since=${encodeURIComponent(since)}`;
+      `${GITHUB_API}/repos/${repositoryPath(repository)}/issues/comments?per_page=${GITHUB_PAGE_SIZE}&sort=updated&direction=asc&since=${encodeURIComponent(since)}`;
     const comments: IssueComment[] = [];
-    for (let page = 0; url && page < 100; page++) {
+    for (let page = 0; url && page < MAX_GITHUB_PAGES; page++) {
       const response = await this.request(url);
       comments.push(...((await response.json()) as IssueComment[]));
       url = nextLink(response.headers.get("link"));
@@ -71,7 +73,7 @@ export class GitHubClient implements GitHubApi {
     number: number,
   ): Promise<PullRequest> {
     const response = await this.request(
-      `${API}/repos/${repositoryPath(repository)}/pulls/${number}`,
+      `${GITHUB_API}/repos/${repositoryPath(repository)}/pulls/${number}`,
     );
     return (await response.json()) as PullRequest;
   }
@@ -82,7 +84,7 @@ export class GitHubClient implements GitHubApi {
     body: string,
   ): Promise<number> {
     const response = await this.request(
-      `${API}/repos/${repositoryPath(repository)}/issues/${pullRequestNumber}/comments`,
+      `${GITHUB_API}/repos/${repositoryPath(repository)}/issues/${pullRequestNumber}/comments`,
       { method: "POST", body: JSON.stringify({ body }) },
     );
     const comment = (await response.json()) as { id: number };
@@ -95,17 +97,13 @@ export class GitHubClient implements GitHubApi {
     body: string,
   ): Promise<void> {
     await this.request(
-      `${API}/repos/${repositoryPath(repository)}/issues/comments/${commentId}`,
+      `${GITHUB_API}/repos/${repositoryPath(repository)}/issues/comments/${commentId}`,
       { method: "PATCH", body: JSON.stringify({ body }) },
     );
   }
 
-  async request(
-    url: string,
-    init: RequestInit = {},
-    allowedStatuses: readonly number[] = [],
-  ): Promise<Response> {
-    const response = await this.fetch_(url, {
+  async request(url: string, init: RequestInit = {}): Promise<Response> {
+    const response = await this.fetchImpl(url, {
       ...init,
       headers: {
         accept: "application/vnd.github+json",
@@ -116,7 +114,7 @@ export class GitHubClient implements GitHubApi {
         ...init.headers,
       },
     });
-    if (!response.ok && !allowedStatuses.includes(response.status)) {
+    if (!response.ok) {
       throw new GitHubApiError(
         response.status,
         init.method ?? "GET",

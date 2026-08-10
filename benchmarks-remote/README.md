@@ -10,17 +10,9 @@ to run distributed benchmarks on Kubernetes.
 
 ## Source checkout
 
-`datafusion-distributed-dev-tools` expects the DataFusion Distributed source
-repository to be checked out beside it. Datasets and benchmark queries are read
-from that source checkout's `testdata/` directory:
-
-```text
-<parent>/
-  datafusion-distributed/
-    testdata/
-  datafusion-distributed-dev-tools/
-    benchmarks-remote/
-```
+Use the [repository checkout layout](../README.md#checkout-layout). Datasets and
+benchmark queries are read from the DataFusion Distributed checkout's
+`testdata/` directory.
 
 For a source worktree elsewhere, set `DATAFUSION_DISTRIBUTED_ROOT` to that
 checkout. `BENCHMARK_TESTDATA_ROOT` is a more specific override for a custom

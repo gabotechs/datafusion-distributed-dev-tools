@@ -5,6 +5,7 @@ import * as pulumi from "@pulumi/pulumi";
 
 import type { ControllerConfig } from "../infra/config.js";
 import { createControllerInfrastructure } from "../infra/foundation.js";
+import { controllerToolVersions } from "../infra/versions.js";
 
 interface RegisteredResource {
   type: string;
@@ -203,9 +204,17 @@ test("installs protected controller state and verified native toolchains", () =>
     /rustup_temporary=\$\(mktemp -d\)\nchmod 0755 \$\{rustup_temporary\}/,
   );
   assert.match(userData, /rustup-init -y --profile minimal/);
-  assert.match(userData, /--default-toolchain 1\.94\.0/);
-  assert.match(userData, /kubectl_version=1\.36\.1/);
-  assert.match(userData, /helm_version=4\.2\.3/);
+  assert.ok(
+    userData.includes(`--default-toolchain ${controllerToolVersions.rust}`),
+  );
+  assert.ok(
+    userData.includes(
+      `kubectl_version=${controllerToolVersions.kubectl.version}`,
+    ),
+  );
+  assert.ok(
+    userData.includes(`helm_version=${controllerToolVersions.helm.version}`),
+  );
   assert.match(userData, /install .*\/usr\/local\/bin\/kubectl/);
   assert.match(userData, /install .*\/usr\/local\/bin\/helm/);
   assert.match(userData, /chown --recursive root:root \$\{release\}/);
@@ -225,6 +234,7 @@ test("installs protected controller state and verified native toolchains", () =>
     userData,
     /\$\{artifactBucketName\}|\$\{applicationKey\}/,
   );
+  assert.doesNotMatch(userData, /\{\{[A-Z0-9_]+\}\}/);
   const diskAlarm = resource(
     "aws:cloudwatch/metricAlarm:MetricAlarm",
     "bot-controller-disk",

@@ -1,5 +1,5 @@
-import { loadFoundationConfig } from './config';
-import { createFoundation } from './foundation';
+import { loadFoundationConfig } from "./config";
+import { createFoundation } from "./foundation";
 
 const foundation = createFoundation(loadFoundationConfig());
 

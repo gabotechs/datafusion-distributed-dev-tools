@@ -9,4 +9,4 @@ config:
   datafusion-distributed-benchmarks:privateSubnetCidrs:
     - 10.42.16.0/20
     - 10.42.32.0/20
-  datafusion-distributed-benchmarks:eksVersion: '1.36'
+  datafusion-distributed-benchmarks:eksVersion: "1.36"

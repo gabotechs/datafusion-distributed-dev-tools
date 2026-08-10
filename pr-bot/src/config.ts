@@ -1,3 +1,7 @@
+import path from "node:path";
+
+import type { ExecutorConfig } from "./executor.js";
+
 export interface Config {
   repository: string;
   sourceRepositoryUrl: string;
@@ -5,17 +9,7 @@ export interface Config {
   authorizedGithubLogins: ReadonlySet<string>;
   databasePath: string;
   pollIntervalMs: number;
-  executor: {
-    stateRoot: string;
-    workRoot: string;
-    buildCacheRoot: string;
-    buildCacheMaxBytes: number;
-    foundationOutputsFile: string;
-    harnessRoot: string;
-    kubeconfig: string;
-    testdataRoot: string;
-    region: string;
-  };
+  executor: Omit<ExecutorConfig, "repositoryUrl">;
 }
 
 function required(name: string): string {
@@ -78,4 +72,3 @@ function parseGithubLogins(value: string): ReadonlySet<string> {
   }
   return new Set(logins);
 }
-import path from "node:path";

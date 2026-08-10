@@ -247,6 +247,47 @@ test("validates every dataset before build or deployment", async () => {
   assert.deepEqual(events, ["validate:tpch/sf1", "validate:tpch/sf10"]);
 });
 
+test("preserves base-deployment failure precedence in the concurrent phase", async () => {
+  const { config } = fixture();
+  const events: string[] = [];
+  class ConcurrentFailureExecutor extends BenchmarkExecutor {
+    override async prepareDatasetLayout(): Promise<void> {}
+    override async prepareMirror(): Promise<void> {}
+    override async removeWorktree(): Promise<void> {}
+    override async addWorktree(): Promise<void> {}
+    override prepareWorker(): void {}
+    override async prepareSourcePermissions(): Promise<void> {}
+    override resetResults(): void {}
+    override async build(sha: string): Promise<string> {
+      if (sha === JOB.headSha) {
+        events.push("head-build-failed");
+        throw new Error("head build failed");
+      }
+      return "/base-binary";
+    }
+    override async publish(): Promise<string> {
+      return "s3://artifacts/base";
+    }
+    override async deploy(): Promise<void> {
+      events.push("base-deploy-failed");
+      throw new Error("base deployment failed");
+    }
+    override async cleanupDeployment(): Promise<void> {
+      events.push("cleanup-deployment");
+    }
+  }
+
+  await assert.rejects(
+    new ConcurrentFailureExecutor(config, NOOP_PROCESSES).execute(JOB),
+    /base deployment failed/,
+  );
+  assert.deepEqual(events, [
+    "head-build-failed",
+    "base-deploy-failed",
+    "cleanup-deployment",
+  ]);
+});
+
 test("uses request capacity in an isolated per-job Helm release", async () => {
   const { config } = fixture();
   const calls: Array<{ program: string; arguments_: readonly string[] }> = [];
@@ -278,11 +319,13 @@ test("uses request capacity in an isolated per-job Helm release", async () => {
   ]);
 });
 
-test("runs benchmarks against the selected source worktree without comparing stdout", async () => {
+test("runs benchmarks against the selected source worktree without comparing results", async () => {
   const { config } = fixture();
+  let arguments_: readonly string[] | undefined;
   let options: RunOptions | undefined;
   const processes: ProcessRunner = {
-    async run(_program, _arguments, runOptions): Promise<RunResult> {
+    async run(_program, runArguments, runOptions): Promise<RunResult> {
+      arguments_ = runArguments;
       options = runOptions;
       return { exitCode: 0, stdout: "ignored output", stderr: "" };
     },
@@ -296,7 +339,8 @@ test("runs benchmarks against the selected source worktree without comparing std
   );
 
   assert.equal(options?.env?.DATAFUSION_DISTRIBUTED_ROOT, sourceRoot);
-  assert.equal(options?.env?.BENCHMARK_COMPARE, "false");
+  assert.ok(arguments_?.includes("--no-compare"));
+  assert.equal(options?.env?.BENCHMARK_COMPARE, undefined);
 });
 
 test("reads comparisons generated from stored result files", async () => {
@@ -385,16 +429,22 @@ test("overlays the trusted worker and base queries onto historical revisions", (
   );
   const targetWorker = path.join(source, "benchmarks/cdk/bin/worker.rs");
   const sourceQueries = path.join(source, "testdata/tpch/queries");
+  const previousRun = path.join(
+    config.testdataRoot,
+    "tpch/sf1/.results-remote/previous-run.json",
+  );
   for (const directory of [
     path.dirname(trustedWorker),
     path.dirname(targetWorker),
     sourceQueries,
+    path.dirname(previousRun),
   ]) {
     mkdirSync(directory, { recursive: true });
   }
   writeFileSync(trustedWorker, "trusted worker");
   writeFileSync(targetWorker, "revision worker");
   writeFileSync(path.join(sourceQueries, "q1.sql"), "select 1");
+  writeFileSync(previousRun, "stale manifest");
 
   const executor = new BenchmarkExecutor(config, NOOP_PROCESSES);
   executor.prepareWorker(source);
@@ -405,16 +455,21 @@ test("overlays the trusted worker and base queries onto historical revisions", (
     readFileSync(path.join(config.testdataRoot, "tpch/queries/q1.sql"), "utf8"),
     "select 1",
   );
+  assert.equal(existsSync(previousRun), false);
 });
 
 test("uses native cache, fetch, and offline build wrappers", async () => {
   const { config } = fixture();
   const source = path.join(config.workRoot, "jobs", "7", "head");
   mkdirSync(source, { recursive: true });
-  const calls: Array<{ program: string; arguments_: readonly string[] }> = [];
+  const calls: Array<{
+    program: string;
+    arguments_: readonly string[];
+    options: RunOptions | undefined;
+  }> = [];
   const processes: ProcessRunner = {
-    async run(program, arguments_): Promise<RunResult> {
-      calls.push({ program, arguments_ });
+    async run(program, arguments_, options): Promise<RunResult> {
+      calls.push({ program, arguments_, options });
       if (arguments_[0] === "/usr/local/sbin/datafusion-pr-prepare-cache") {
         mkdirSync(arguments_[1]!, { recursive: true });
         mkdirSync(arguments_[2]!, { recursive: true });
@@ -449,6 +504,7 @@ test("uses native cache, fetch, and offline build wrappers", async () => {
   assert.match(calls[0]!.arguments_[1]!, /targets\/untrusted-b{40}$/);
   assert.match(calls[0]!.arguments_[3]!, /targets\/trusted-a{40}$/);
   assert.match(calls[0]!.arguments_[4]!, /cargo\/trusted-a{40}$/);
+  assert.equal(calls[2]!.options?.outputTailBytes, 128 * 1024);
 });
 
 test("shares worktree sources read-only with the isolated build account", async () => {
@@ -545,4 +601,34 @@ test("local process execution does not invoke a shell", async () => {
     { quiet: true },
   );
   assert.equal(result.stdout, value);
+});
+
+test("local process execution retains only a bounded output tail", async () => {
+  const result = await new LocalProcessRunner().run(
+    process.execPath,
+    ["-e", 'process.stdout.write("earlier-" + "x".repeat(10_000) + "-tail")'],
+    { quiet: true, outputTailBytes: 32 },
+  );
+
+  assert.ok(Buffer.byteLength(result.stdout) <= 32);
+  assert.match(result.stdout, /-tail$/);
+  assert.doesNotMatch(result.stdout, /earlier/);
+});
+
+test("process failures report only the configured output tail", async () => {
+  await assert.rejects(
+    new LocalProcessRunner().run(
+      process.execPath,
+      [
+        "-e",
+        'process.stderr.write("earlier-" + "x".repeat(10_000) + "-failure-tail"); process.exit(2)',
+      ],
+      { quiet: true, outputTailBytes: 64 },
+    ),
+    (error: Error) => {
+      assert.match(error.message, /-failure-tail$/);
+      assert.doesNotMatch(error.message, /earlier/);
+      return true;
+    },
+  );
 });

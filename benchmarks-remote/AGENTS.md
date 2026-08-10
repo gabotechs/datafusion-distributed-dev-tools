@@ -48,10 +48,11 @@ generic benchmark wrapper:
    engine deployment path, not benchmark execution.
 6. Add `<engine>-deploy`, `<engine>-destroy`, `<engine>-bench`, and
    `runner:<engine>-bench` npm commands following the existing naming scheme.
-7. Implement the local client under `src/`; keep results local and use literal
-   dataset paths.
-8. Extend the generic engine validation lists and focused tests. Do not add
-   per-engine port selection or lazy readiness, dataset, or deployment logic to
+7. Implement the local client under `src/bin/` and reusable support under
+   `src/lib/`; keep results local and use literal dataset paths.
+8. Add the engine and its worker selector to the shared validation in
+   `k8s/lib.sh`, then extend the focused tests. Do not add per-engine port
+   selection or lazy readiness, dataset, or deployment logic to
    `k8s/run-benchmark.sh`.
 
 ## Validation

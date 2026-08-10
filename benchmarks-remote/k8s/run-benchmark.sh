@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${script_dir}/lib.sh"
+
 engine=${1:?usage: run-benchmark.sh ENGINE [benchmark options]}
 shift
-region=${AWS_REGION:-us-east-1}
-outputs_file=${PULUMI_OUTPUTS_FILE:-${root}/benchmarks-remote/pulumi/.pulumi-outputs.json}
-
-if [[ ! -f ${outputs_file} ]]; then
-  echo "Missing ${outputs_file}; run npm run foundation-deploy first" >&2
-  exit 2
-fi
-cluster_name=$(jq -er '.clusterName' "${outputs_file}")
+validate_engine "${engine}"
+init_environment
 dataset_bucket=$(jq -er '.datasetBucketName' "${outputs_file}")
-source "${root}/benchmarks-remote/k8s/lib.sh"
 
 namespace="benchmark-${engine}"
 
@@ -49,6 +44,8 @@ until grep -q '^Forwarding from ' "${port_forward_log}"; do
 done
 
 cd "${root}/benchmarks-remote"
+# pr-bot/src/executor.ts sets BENCHMARK_RUNNER, BENCHMARK_SERVICE_NAME, and
+# BENCHMARK_TESTDATA_ROOT when it invokes this trusted harness for an isolated job.
 if [[ -n ${BENCHMARK_RUNNER:-} ]]; then
   env "BENCHMARK_BUCKET=s3://${dataset_bucket}" node "${BENCHMARK_RUNNER}" "$@"
 else
