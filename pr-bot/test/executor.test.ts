@@ -137,10 +137,16 @@ test("executes base before head with the bundled trusted harness", async () => {
   }
 
   const datasets = ["tpch/sf1", "tpch/sf10", "tpch/sf100"];
-  const result = await new RecordingExecutor(config, NOOP_PROCESSES).execute({
-    ...JOB,
-    datasets,
-  });
+  const progress: string[] = [];
+  const result = await new RecordingExecutor(config, NOOP_PROCESSES).execute(
+    {
+      ...JOB,
+      datasets,
+    },
+    async ({ step, totalSteps, message }) => {
+      progress.push(`${step}/${totalSteps}:${message}`);
+    },
+  );
   assert.equal(
     result.comparison,
     datasets.map((dataset) => `comparison:${dataset}`).join("\n\n"),
@@ -154,6 +160,21 @@ test("executes base before head with the bundled trusted harness", async () => {
     datasets,
   );
   assert.ok(result.timings.totalMs >= 0);
+  assert.deepEqual(progress, [
+    "1/13:Validating all requested datasets",
+    "2/13:Preparing immutable base and PR source checkouts",
+    "3/13:Compiling the base revision",
+    "4/13:Provisioning the base Kubernetes deployment",
+    "5/13:Benchmarking base: tpch/sf1",
+    "6/13:Benchmarking base: tpch/sf10",
+    "7/13:Benchmarking base: tpch/sf100",
+    "8/13:Compiling the PR head",
+    "9/13:Provisioning the PR-head Kubernetes deployment",
+    "10/13:Benchmarking PR head: tpch/sf1",
+    "11/13:Benchmarking PR head: tpch/sf10",
+    "12/13:Benchmarking PR head: tpch/sf100",
+    "13/13:Cleaning up the isolated deployment and worktrees",
+  ]);
   assert.deepEqual(events, [
     "prepare-dataset:tpch/sf1",
     "prepare-dataset:tpch/sf10",
