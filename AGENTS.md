@@ -12,6 +12,9 @@
   clusters per concurrent run.
 - Keep the bot's EKS cluster and artifact prefixes separate from interactive
   remote benchmarks.
+- Treat the EKS foundation as human-managed external infrastructure. Bot IaC may
+  provision the persistent controller, but must not create, update, or destroy
+  EKS, VPC, subnet, node, namespace, or pod-identity resources.
 
 ## Commands
 
