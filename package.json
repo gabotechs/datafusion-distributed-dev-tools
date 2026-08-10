@@ -1,0 +1,22 @@
+{
+  "name": "datafusion-distributed-pr-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "start": "tsx src/main.ts",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2"
+  }
+}
