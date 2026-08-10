@@ -98,7 +98,7 @@ export class BenchmarkExecutor {
     const headSource = path.join(jobRoot, "head");
     let deploymentStarted = false;
     let progressStep = 0;
-    const totalProgressSteps = 7 + 2 * job.datasets.length;
+    const totalProgressSteps = 6 + 2 * job.datasets.length;
     const reportProgress = async (message: string): Promise<void> => {
       await onProgress({
         step: ++progressStep,
@@ -142,10 +142,37 @@ export class BenchmarkExecutor {
         outputs.artifactBucketName,
       );
       deploymentStarted = true;
-      await reportProgress("Provisioning the base Kubernetes deployment");
-      const baseDeployStarted = performance.now();
-      await this.deploy(baseArtifact, outputs, job);
-      timings.baseDeployMs = performance.now() - baseDeployStarted;
+      await reportProgress(
+        "Provisioning the base Kubernetes deployment and compiling the PR head",
+      );
+      const headArtifactPromise = (async () => {
+        const headCompileStarted = performance.now();
+        const headBinary = await this.build(
+          job.headSha,
+          headSource,
+          "untrusted",
+          job.baseSha,
+        );
+        timings.headCompileMs = performance.now() - headCompileStarted;
+        return await this.publish(headBinary, outputs.artifactBucketName);
+      })();
+      const baseDeploymentPromise = (async () => {
+        const baseDeployStarted = performance.now();
+        await this.deploy(baseArtifact, outputs, job);
+        timings.baseDeployMs = performance.now() - baseDeployStarted;
+      })();
+      const [headArtifactResult, baseDeploymentResult] =
+        await Promise.allSettled([
+          headArtifactPromise,
+          baseDeploymentPromise,
+        ] as const);
+      if (baseDeploymentResult.status === "rejected") {
+        throw baseDeploymentResult.reason;
+      }
+      if (headArtifactResult.status === "rejected") {
+        throw headArtifactResult.reason;
+      }
+      const headArtifact = headArtifactResult.value;
       for (const dataset of job.datasets) {
         await reportProgress(`Benchmarking base: ${dataset}`);
         const benchmarkStarted = performance.now();
@@ -156,19 +183,6 @@ export class BenchmarkExecutor {
         });
       }
 
-      await reportProgress("Compiling the PR head");
-      const headCompileStarted = performance.now();
-      const headBinary = await this.build(
-        job.headSha,
-        headSource,
-        "untrusted",
-        job.baseSha,
-      );
-      timings.headCompileMs = performance.now() - headCompileStarted;
-      const headArtifact = await this.publish(
-        headBinary,
-        outputs.artifactBucketName,
-      );
       await reportProgress("Provisioning the PR-head Kubernetes deployment");
       const headDeployStarted = performance.now();
       await this.deploy(headArtifact, outputs, job);
