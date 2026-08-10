@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { z } from 'zod';
 import { BenchmarkRunner, ExecuteQueryResult, runBenchmark, TableSpec } from "./@bench-common";
-import { execSync } from "child_process";
+import { datafusionDistributedGitReference } from "./@git-reference";
 
 async function main() {
     const program = new Command();
@@ -69,7 +69,7 @@ async function main() {
 
     await runBenchmark(runner, {
         dataset,
-        engine: `datafusion-distributed-${getCurrentBranch()}`,
+        engine: `datafusion-distributed-${datafusionDistributedGitReference()}`,
         iterations,
         queries,
         debug,
@@ -173,19 +173,6 @@ class DataFusionRunner implements BenchmarkRunner {
     `);
     }
 
-}
-
-function getCurrentBranch(): string {
-    try {
-        // Try to get current git branch. For branches with a slash prefix, keep the last entry.
-        return execSync('git rev-parse --abbrev-ref HEAD', {
-            encoding: 'utf-8',
-            stdio: ['ignore', 'pipe', 'ignore']
-        }).trim().split("/").slice(-1)[0];
-    } catch {
-        // Fallback if git command fails
-        return 'unknown';
-    }
 }
 
 main()

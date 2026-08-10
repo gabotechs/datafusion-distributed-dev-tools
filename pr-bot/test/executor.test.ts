@@ -21,6 +21,7 @@ import {
 import {
   LocalProcessRunner,
   type ProcessRunner,
+  type RunOptions,
   type RunResult,
 } from "../src/process.js";
 
@@ -124,8 +125,9 @@ test("executes base before head with the bundled trusted harness", async () => {
     override async runBenchmark(
       dataset: string,
       jobId: number,
+      sourceRoot: string,
     ): Promise<string> {
-      events.push(`run:${jobId}:${dataset}`);
+      events.push(`run:${jobId}:${dataset}:${path.basename(sourceRoot)}`);
       return `comparison:${dataset}`;
     }
     override async cleanupDeployment(
@@ -192,15 +194,15 @@ test("executes base before head with the bundled trusted harness", async () => {
     "build:a",
     "publish:a",
     "deploy:a:c7i.2xlarge:12",
-    "run:7:tpch/sf1",
-    "run:7:tpch/sf10",
-    "run:7:tpch/sf100",
+    "run:7:tpch/sf1:base",
+    "run:7:tpch/sf10:base",
+    "run:7:tpch/sf100:base",
     "build:b",
     "publish:b",
     "deploy:b:c7i.2xlarge:12",
-    "run:7:tpch/sf1",
-    "run:7:tpch/sf10",
-    "run:7:tpch/sf100",
+    "run:7:tpch/sf1:head",
+    "run:7:tpch/sf10:head",
+    "run:7:tpch/sf100:head",
     "cleanup-deployment:7",
     "remove:head",
     "remove:base",
@@ -269,6 +271,26 @@ test("uses request capacity in an isolated per-job Helm release", async () => {
     "datafusion-job-7",
     "--namespace",
   ]);
+});
+
+test("runs benchmarks against the selected source worktree", async () => {
+  const { config } = fixture();
+  let options: RunOptions | undefined;
+  const processes: ProcessRunner = {
+    async run(_program, _arguments, runOptions): Promise<RunResult> {
+      options = runOptions;
+      return { exitCode: 0, stdout: "comparison", stderr: "" };
+    },
+  };
+  const sourceRoot = path.join(config.workRoot, "jobs", "7", "head");
+
+  const comparison = await new BenchmarkExecutor(
+    config,
+    processes,
+  ).runBenchmark("tpch/sf1", JOB.id, sourceRoot);
+
+  assert.equal(comparison, "comparison");
+  assert.equal(options?.env?.DATAFUSION_DISTRIBUTED_ROOT, sourceRoot);
 });
 
 test("removes stale per-job releases when the controller starts", async () => {
