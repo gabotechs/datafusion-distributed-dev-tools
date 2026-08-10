@@ -113,6 +113,13 @@ struct Cmd {
     #[structopt(long, default_value = "datafusion-distributed-benchmarks")]
     bucket: String,
 
+    /// The headless worker service used for worker discovery.
+    #[structopt(
+        long,
+        default_value = "datafusion-workers.benchmark-datafusion.svc.cluster.local"
+    )]
+    worker_dns_name: String,
+
     // Turns broadcast joins on.
     #[structopt(long)]
     broadcast_joins: bool,
@@ -160,7 +167,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_default_features()
         .with_runtime_env(runtime_env)
         .with_distributed_local_worker_context(worker.to_local_worker_context(self_url))
-        .with_distributed_worker_resolver(DnsWorkerResolver::new())
+        .with_distributed_worker_resolver(DnsWorkerResolver::new(cmd.worker_dns_name.clone()))
         .with_distributed_planner()
         .with_distributed_broadcast_joins(cmd.broadcast_joins)?
         // Uncomment for enabling WorkUnitFileScans.
@@ -297,7 +304,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }),
             ),
     );
-    let dns_worker_resolver = Arc::new(DnsWorkerResolver::new());
+    let dns_worker_resolver = Arc::new(DnsWorkerResolver::new(cmd.worker_dns_name));
     let grpc_server = Server::builder()
         .add_service(worker.with_observability_service(dns_worker_resolver))
         .add_service(worker.into_worker_server())
@@ -381,14 +388,9 @@ struct DnsWorkerResolver {
     urls: Arc<RwLock<Vec<Url>>>,
 }
 
-async fn background_dns_worker_resolver(urls: Arc<RwLock<Vec<Url>>>) {
+async fn background_dns_worker_resolver(urls: Arc<RwLock<Vec<Url>>>, worker_dns_name: String) {
     loop {
-        let addresses = match tokio::net::lookup_host((
-            "datafusion-workers.benchmark-datafusion.svc.cluster.local",
-            9001,
-        ))
-        .await
-        {
+        let addresses = match tokio::net::lookup_host((worker_dns_name.as_str(), 9001)).await {
             Ok(addresses) => addresses,
             Err(err) => {
                 warn!("Error resolving benchmark workers: {err}");
@@ -418,10 +420,13 @@ async fn background_dns_worker_resolver(urls: Arc<RwLock<Vec<Url>>>) {
 }
 
 impl DnsWorkerResolver {
-    fn new() -> Self {
+    fn new(worker_dns_name: String) -> Self {
         let urls = Arc::new(RwLock::new(Vec::new()));
         #[allow(clippy::disallowed_methods)]
-        tokio::spawn(background_dns_worker_resolver(urls.clone()));
+        tokio::spawn(background_dns_worker_resolver(
+            urls.clone(),
+            worker_dns_name,
+        ));
         Self { urls }
     }
 }

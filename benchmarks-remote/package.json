@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "build": "tsc --noEmit",
+    "application:build": "esbuild src/datafusion-bench.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/datafusion-bench.cjs",
     "test": "node --test --require ts-node/register test/*.test.ts",
     "foundation-deploy": "./pulumi/deploy.sh",
     "foundation-destroy": "./pulumi/destroy.sh",
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@types/node": "22.7.9",
+    "esbuild": "^0.28.2",
     "ts-node": "^10.9.2",
     "typescript": "~5.6.3"
   }

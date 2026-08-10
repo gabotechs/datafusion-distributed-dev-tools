@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -68,6 +69,7 @@ function fixture(): { root: string; config: ExecutorConfig } {
       buildCacheRoot: path.join(root, "build-cache"),
       buildCacheMaxBytes: 1024 ** 3,
       foundationOutputsFile: outputs,
+      harnessRoot: path.join(root, "harness"),
       kubeconfig: path.join(root, "kubeconfig"),
       testdataRoot: path.join(root, "testdata"),
       region: "us-east-1",
@@ -75,7 +77,7 @@ function fixture(): { root: string; config: ExecutorConfig } {
   };
 }
 
-test("executes base before head and always uses the trusted base harness", async () => {
+test("executes base before head with the bundled trusted harness", async () => {
   const { config } = fixture();
   const events: string[] = [];
   class RecordingExecutor extends BenchmarkExecutor {
@@ -92,8 +94,8 @@ test("executes base before head and always uses the trusted base harness", async
     ) {
       events.push(`add:${path.basename(destination)}:${sha[0]}`);
     }
-    override async installHarness(): Promise<void> {
-      events.push("install-harness");
+    override prepareWorker(source: string): void {
+      events.push(`prepare-worker:${path.basename(source)}`);
     }
     override resetResults(): void {
       events.push("reset-results");
@@ -110,20 +112,19 @@ test("executes base before head and always uses the trusted base harness", async
       return `s3://bucket/${binary.at(-1)}`;
     }
     override async deploy(
-      baseSource: string,
       artifact: string,
-      _outputs: Parameters<BenchmarkExecutor["deploy"]>[2],
+      _outputs: Parameters<BenchmarkExecutor["deploy"]>[1],
       job: Job,
     ): Promise<void> {
       events.push(
-        `deploy:${path.basename(baseSource)}:${artifact.at(-1)}:${job.benchmarkInstanceType}:${job.benchmarkNodeCount}`,
+        `deploy:${artifact.at(-1)}:${job.benchmarkInstanceType}:${job.benchmarkNodeCount}`,
       );
     }
     override async runBenchmark(
-      baseSource: string,
       dataset: string,
+      jobId: number,
     ): Promise<string> {
-      events.push(`run:${path.basename(baseSource)}:${dataset}`);
+      events.push(`run:${jobId}:${dataset}`);
       return "comparison";
     }
     override async cleanupDeployment(
@@ -144,17 +145,18 @@ test("executes base before head and always uses the trusted base harness", async
     "remove:base",
     "add:base:a",
     "add:head:b",
-    "install-harness",
+    "prepare-worker:base",
+    "prepare-worker:head",
     "reset-results",
     "prepare-dataset",
     "build:a",
     "publish:a",
-    "deploy:base:a:c7i.2xlarge:12",
-    "run:base:tpch/sf1",
+    "deploy:a:c7i.2xlarge:12",
+    "run:7:tpch/sf1",
     "build:b",
     "publish:b",
-    "deploy:base:b:c7i.2xlarge:12",
-    "run:base:tpch/sf1",
+    "deploy:b:c7i.2xlarge:12",
+    "run:7:tpch/sf1",
     "cleanup-deployment:7",
     "remove:head",
     "remove:base",
@@ -177,13 +179,14 @@ test("uses request capacity in an isolated per-job Helm release", async () => {
     artifactBucketName: "artifacts",
   };
 
-  await executor.deploy("/trusted", "s3://artifacts/worker", outputs, JOB);
+  await executor.deploy("s3://artifacts/worker", outputs, JOB);
   await executor.cleanupDeployment(outputs, JOB.id);
 
   assert.equal(calls[0]?.program, "helm");
   assert.equal(calls[0]?.arguments_[2], "datafusion-job-7");
   assert.ok(calls[0]?.arguments_.includes("worker.replicas=12"));
   assert.ok(calls[0]?.arguments_.includes("worker.instanceType=c7i.2xlarge"));
+  assert.ok(calls[0]?.arguments_.includes("name=datafusion-job-7"));
   assert.deepEqual(calls[1]?.arguments_.slice(0, 3), [
     "uninstall",
     "datafusion-job-7",
@@ -224,6 +227,37 @@ test("rejects dataset paths that could escape testdata", () => {
   );
   assert.throws(() => safeDatasetPath("/testdata", "../secret"));
   assert.throws(() => safeDatasetPath("/testdata", "tpch/sf1/extra"));
+});
+
+test("overlays the trusted worker and base queries onto historical revisions", () => {
+  const { config, root } = fixture();
+  const source = path.join(root, "source");
+  const trustedWorker = path.join(
+    config.harnessRoot,
+    "engines/datafusion/src/main.rs",
+  );
+  const targetWorker = path.join(source, "benchmarks/cdk/bin/worker.rs");
+  const sourceQueries = path.join(source, "testdata/tpch/queries");
+  for (const directory of [
+    path.dirname(trustedWorker),
+    path.dirname(targetWorker),
+    sourceQueries,
+  ]) {
+    mkdirSync(directory, { recursive: true });
+  }
+  writeFileSync(trustedWorker, "trusted worker");
+  writeFileSync(targetWorker, "revision worker");
+  writeFileSync(path.join(sourceQueries, "q1.sql"), "select 1");
+
+  const executor = new BenchmarkExecutor(config, NOOP_PROCESSES);
+  executor.prepareWorker(source);
+  executor.resetResults("tpch/sf1", source);
+
+  assert.equal(readFileSync(targetWorker, "utf8"), "trusted worker");
+  assert.equal(
+    readFileSync(path.join(config.testdataRoot, "tpch/queries/q1.sql"), "utf8"),
+    "select 1",
+  );
 });
 
 test("uses native cache, fetch, and offline build wrappers", async () => {

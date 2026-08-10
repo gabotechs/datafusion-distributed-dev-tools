@@ -51,8 +51,8 @@ authentication is not managed by Pulumi.
 3. Fetch the base revision's locked dependencies as the unprivileged build user,
    then compile offline in a network-disabled systemd sandbox using persistent
    Cargo caches.
-4. Let the controller upload and deploy the base artifact in a Helm release
-   dedicated to the job.
+4. Let the controller upload and deploy the base artifact with the trusted
+   harness bundled from this repository in a Helm release dedicated to the job.
 5. Run the requested dataset and retain its local results.
 6. Build, upload, and deploy the head artifact using the same process.
 7. Run the identical benchmark arguments against the head deployment.
@@ -78,8 +78,8 @@ Cargo build scripts and the resulting worker can execute arbitrary code.
   and reading or writing only worker artifacts.
 - Give benchmark pods only dataset-read permission.
 - Never execute scripts or Helm charts from the pull request. Use the trusted
-  immutable base revision's deployment and benchmark harness; consume only the
-  worker artifact built from the pull request.
+  deployment and benchmark harness bundled with the controller; consume only
+  DataFusion Distributed source from the requested revisions.
 - Restrict triggers to trusted repository roles and keep an auditable job
   record.
 

@@ -23,11 +23,6 @@ source "${root}/benchmarks-remote/k8s/lib.sh"
 require_aws_credentials
 ensure_kubeconfig
 
-if benchmark_lock_is_active; then
-  echo "A benchmark is running; wait for it to finish before destroying ${engine}" >&2
-  exit 1
-fi
-
 helm uninstall "${engine}" \
   --namespace "benchmark-${engine}" \
   --kube-context "${cluster_name}" \
