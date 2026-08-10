@@ -49,10 +49,11 @@ export function loadConfig(): Config {
         process.env.FOUNDATION_OUTPUTS_FILE ?? ".data/foundation-outputs.json",
       harnessRoot:
         process.env.BENCHMARK_HARNESS_ROOT ??
-        new URL("../benchmarks-remote", import.meta.url).pathname,
+        path.resolve(process.cwd(), "benchmarks-remote"),
       kubeconfig: process.env.KUBECONFIG ?? ".data/kubeconfig",
       testdataRoot: process.env.BENCHMARK_TESTDATA_ROOT ?? ".data/testdata",
       region: process.env.AWS_REGION ?? "us-east-1",
     },
   };
 }
+import path from "node:path";
