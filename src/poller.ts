@@ -106,6 +106,8 @@ export class CommentPoller {
         pullRequestUrl: pullRequest.html_url,
         requestedBy: comment.user.login,
         dataset: parsed.request.dataset,
+        benchmarkInstanceType: parsed.request.instanceType,
+        benchmarkNodeCount: parsed.request.nodeCount,
         baseSha: pullRequest.base.sha,
         headSha: pullRequest.head.sha,
       });
@@ -123,7 +125,7 @@ export class CommentPoller {
       await this.github.postComment(
         this.repository,
         pullRequestNumber,
-        `Queued benchmark job ${jobId}: \`${parsed.request.dataset}\` comparing base \`${shortSha(pullRequest.base.sha)}\` with head \`${shortSha(pullRequest.head.sha)}\`.`,
+        `Queued benchmark job ${jobId}: \`${parsed.request.dataset}\` on ${parsed.request.nodeCount} \`${parsed.request.instanceType}\` nodes, comparing base \`${shortSha(pullRequest.base.sha)}\` with head \`${shortSha(pullRequest.head.sha)}\`.`,
       );
     }
   }
