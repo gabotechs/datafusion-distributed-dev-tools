@@ -10,6 +10,8 @@ cargo_home=${3:?Cargo home is required}
 validate_source_path "${source_root}"
 validate_cache_path "${target}"
 validate_cache_path "${cargo_home}"
+dns_server=$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)
+[[ -n ${dns_server} ]] || { echo "No DNS resolver configured" >&2; exit 1; }
 
 exec systemd-run --quiet --wait --pipe --collect \
   --property=User=benchmark-build \
@@ -23,6 +25,7 @@ exec systemd-run --quiet --wait --pipe --collect \
   --property=ReadOnlyPaths="${source_root}" \
   --property=ReadWritePaths="${target}" \
   --property=ReadWritePaths="${cargo_home}" \
+  --property=IPAddressAllow="${dns_server}" \
   --property=IPAddressDeny=10.0.0.0/8 \
   --property=IPAddressDeny=100.64.0.0/10 \
   --property=IPAddressDeny=127.0.0.0/8 \
