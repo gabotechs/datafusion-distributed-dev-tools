@@ -94,6 +94,19 @@ test("checks repository write permission", async () => {
   );
 });
 
+test("treats a missing collaborator as lacking permission", async () => {
+  const { fetch_ } = recordingFetch([
+    new Response("not found", { status: 404 }),
+  ]);
+  assert.equal(
+    await new GitHubClient("secret-token", fetch_).hasWritePermission(
+      "owner/repository",
+      "former-collaborator",
+    ),
+    false,
+  );
+});
+
 test("reports API failures without exposing the token", async () => {
   const { fetch_ } = recordingFetch([
     new Response("bad credentials", { status: 401 }),

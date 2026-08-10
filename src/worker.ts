@@ -31,11 +31,12 @@ export class JobWorker {
       this.database.updateStatus(job.id, "completed");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      console.error(`Benchmark job ${job.id} failed`, error);
       this.database.updateStatus(job.id, "failed", message);
       await this.github.postComment(
         job.repository,
         job.pullRequestNumber,
-        `Benchmark failed for \`${job.dataset}\` comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`.\n\n\`\`\`text\n${truncate(message)}\n\`\`\``,
+        `Benchmark job ${job.id} failed for \`${job.dataset}\` while comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`. Full details are available in the controller journal.`,
       );
     }
     return true;
@@ -43,14 +44,20 @@ export class JobWorker {
 }
 
 function renderResult(job: Job, comparison: string): string {
-  return `Benchmark completed for \`${job.dataset}\`.\n\nBase: \`${job.baseSha}\`\nHead: \`${job.headSha}\`\n\n\`\`\`text\n${truncate(comparison)}\n\`\`\``;
+  return `Benchmark completed for \`${job.dataset}\`.\n\nBase: \`${job.baseSha}\`\nHead: \`${job.headSha}\`\n\n<details><summary>Comparison</summary>\n\n<pre>${htmlEscape(truncate(comparison))}</pre>\n</details>`;
 }
 
 function truncate(value: string): string {
-  const sanitized = value.replaceAll("```", "` ` `");
-  return sanitized.length <= 50_000
-    ? sanitized
-    : `... earlier output truncated\n${sanitized.slice(-49_900)}`;
+  return value.length <= 50_000
+    ? value
+    : `... earlier output truncated\n${value.slice(-49_900)}`;
+}
+
+function htmlEscape(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function shortSha(sha: string): string {

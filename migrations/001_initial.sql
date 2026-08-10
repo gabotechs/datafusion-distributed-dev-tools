@@ -8,6 +8,13 @@ CREATE TABLE IF NOT EXISTS scan_state (
     scanned_through TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS comment_failures (
+    comment_id INTEGER PRIMARY KEY,
+    attempts INTEGER NOT NULL,
+    next_attempt_at TEXT NOT NULL,
+    last_error TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     comment_id INTEGER NOT NULL UNIQUE,
@@ -22,6 +29,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (comment_id) REFERENCES seen_comments(comment_id)
 );
 

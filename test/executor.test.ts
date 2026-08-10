@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,6 +13,7 @@ import test from "node:test";
 import type { Job } from "../src/database.js";
 import {
   BenchmarkExecutor,
+  pruneBuildCache,
   safeDatasetPath,
   type ExecutorConfig,
 } from "../src/executor.js";
@@ -30,6 +37,7 @@ const JOB: Job = {
   error: null,
   createdAt: "2026-08-10T00:00:00.000Z",
   updatedAt: "2026-08-10T00:00:00.000Z",
+  attemptCount: 1,
 };
 
 const NOOP_PROCESSES: ProcessRunner = {
@@ -56,6 +64,9 @@ function fixture(): { root: string; config: ExecutorConfig } {
     config: {
       repositoryUrl: "https://example.invalid/repository.git",
       stateRoot: root,
+      workRoot: path.join(root, "work"),
+      buildCacheRoot: path.join(root, "build-cache"),
+      buildCacheMaxBytes: 1024 ** 3,
       foundationOutputsFile: outputs,
       kubeconfig: path.join(root, "kubeconfig"),
       testdataRoot: path.join(root, "testdata"),
@@ -108,6 +119,9 @@ test("executes base before head and always uses the trusted base harness", async
       events.push(`run:${path.basename(baseSource)}:${dataset}`);
       return "comparison";
     }
+    override async cleanupDeployment(): Promise<void> {
+      events.push("cleanup-deployment");
+    }
   }
 
   const result = await new RecordingExecutor(config, NOOP_PROCESSES).execute(
@@ -131,6 +145,7 @@ test("executes base before head and always uses the trusted base harness", async
     "publish:b",
     "deploy:base:b",
     "run:base:tpch/sf1",
+    "cleanup-deployment",
     "remove:head",
     "remove:base",
   ]);
@@ -147,12 +162,16 @@ test("rejects dataset paths that could escape testdata", () => {
 
 test("uses native cache, fetch, and offline build wrappers", async () => {
   const { config } = fixture();
-  const source = path.join(config.stateRoot, "jobs", "7", "head");
+  const source = path.join(config.workRoot, "jobs", "7", "head");
   mkdirSync(source, { recursive: true });
   const calls: Array<{ program: string; arguments_: readonly string[] }> = [];
   const processes: ProcessRunner = {
     async run(program, arguments_): Promise<RunResult> {
       calls.push({ program, arguments_ });
+      if (arguments_[0] === "/usr/local/sbin/datafusion-pr-prepare-cache") {
+        mkdirSync(arguments_[1]!, { recursive: true });
+        mkdirSync(arguments_[2]!, { recursive: true });
+      }
       if (arguments_[0] === "/usr/local/sbin/datafusion-pr-cargo-build") {
         const target = arguments_[2]!;
         const binaryDirectory = path.join(
@@ -169,6 +188,7 @@ test("uses native cache, fetch, and offline build wrappers", async () => {
   await new BenchmarkExecutor(config, processes).build(
     "b".repeat(40),
     source,
+    "untrusted",
     "a".repeat(40),
   );
   assert.deepEqual(
@@ -179,8 +199,46 @@ test("uses native cache, fetch, and offline build wrappers", async () => {
       ["sudo", "/usr/local/sbin/datafusion-pr-cargo-build"],
     ],
   );
-  assert.match(calls[0]!.arguments_[3]!, /targets\/a{40}$/);
-  assert.match(calls[0]!.arguments_[4]!, /cargo\/a{40}$/);
+  assert.match(calls[0]!.arguments_[1]!, /targets\/untrusted-b{40}$/);
+  assert.match(calls[0]!.arguments_[3]!, /targets\/trusted-a{40}$/);
+  assert.match(calls[0]!.arguments_[4]!, /cargo\/trusted-a{40}$/);
+});
+
+test("rejects non-SHA Git operands", async () => {
+  const { config } = fixture();
+  await assert.rejects(
+    new BenchmarkExecutor(config, NOOP_PROCESSES).addWorktree(
+      "mirror",
+      "destination",
+      "--help",
+    ),
+    /Invalid Git commit SHA/,
+  );
+});
+
+test("prunes the least-recently-used SHA cache first", () => {
+  const { root } = fixture();
+  const cache = path.join(root, "cache");
+  const oldSha = `trusted-${"a".repeat(40)}`;
+  const newSha = `untrusted-${"b".repeat(40)}`;
+  for (const sha of [oldSha, newSha]) {
+    const directory = path.join(cache, "targets", sha);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(path.join(directory, "artifact"), "0123456789");
+  }
+  utimesSync(
+    path.join(cache, "targets", oldSha),
+    new Date("2026-01-01"),
+    new Date("2026-01-01"),
+  );
+  utimesSync(
+    path.join(cache, "targets", newSha),
+    new Date("2026-02-01"),
+    new Date("2026-02-01"),
+  );
+  pruneBuildCache(cache, 10);
+  assert.equal(existsSync(path.join(cache, "targets", oldSha)), false);
+  assert.equal(existsSync(path.join(cache, "targets", newSha)), true);
 });
 
 test("discovers table directories without downloading dataset objects", async () => {
