@@ -21,6 +21,10 @@ interface FoundationOutputs {
   artifactBucketName: string;
 }
 
+const HELM_DEPLOY_TIMEOUT = "25m";
+const HELM_CLEANUP_TIMEOUT = "10m";
+const CARGO_BUILD_OUTPUT_TAIL_BYTES = 128 * 1024;
+
 export interface ExecutorConfig {
   repositoryUrl: string;
   stateRoot: string;
@@ -65,6 +69,34 @@ export interface ExecutionProgress {
 
 export type ProgressReporter = (progress: ExecutionProgress) => Promise<void>;
 
+interface ProgressPlan {
+  validation: string;
+  sources: string;
+  baseCompile: string;
+  parallelPreparation: string;
+  baseBenchmarks: readonly string[];
+  headDeploy: string;
+  headBenchmarks: readonly string[];
+  cleanup: string;
+  all: readonly string[];
+}
+
+interface CompiledArtifact {
+  artifact: string;
+  compileMs: number;
+}
+
+interface PreparedRevisions {
+  headArtifact: string;
+  baseDeployMs: number;
+  headCompileMs: number;
+}
+
+interface HeadBenchmarkResult {
+  timings: BenchmarkTiming[];
+  comparison: string;
+}
+
 export class BenchmarkExecutor {
   constructor(
     readonly config: ExecutorConfig,
@@ -76,16 +108,6 @@ export class BenchmarkExecutor {
     onProgress: ProgressReporter = async () => {},
   ): Promise<ExecutionResult> {
     const executionStarted = performance.now();
-    const timings: ExecutionTimings = {
-      validationMs: 0,
-      baseCompileMs: 0,
-      baseDeployMs: 0,
-      baseBenchmarks: [],
-      headCompileMs: 0,
-      headDeployMs: 0,
-      headBenchmarks: [],
-      totalMs: 0,
-    };
     validateSha(job.baseSha);
     validateSha(job.headSha);
     if (job.datasets.length === 0) {
@@ -97,139 +119,272 @@ export class BenchmarkExecutor {
     const baseSource = path.join(jobRoot, "base");
     const headSource = path.join(jobRoot, "head");
     let deploymentStarted = false;
+    const progressPlan = createProgressPlan(job.datasets);
     let progressStep = 0;
-    const totalProgressSteps = 6 + 2 * job.datasets.length;
     const reportProgress = async (message: string): Promise<void> => {
       await onProgress({
         step: ++progressStep,
-        totalSteps: totalProgressSteps,
+        totalSteps: progressPlan.all.length,
         message,
       });
     };
+    let completed:
+      | {
+          comparison: string;
+          baseArtifact: string;
+          headArtifact: string;
+          timings: Omit<ExecutionTimings, "totalMs">;
+        }
+      | undefined;
+    let totalMs = 0;
     mkdirSync(jobRoot, { recursive: true });
 
     try {
-      await reportProgress("Validating all requested datasets");
-      const validationStarted = performance.now();
-      for (const dataset of job.datasets) {
-        await this.prepareDatasetLayout(dataset, outputs.datasetBucketName);
-      }
-      timings.validationMs = performance.now() - validationStarted;
-      await reportProgress("Preparing immutable base and PR source checkouts");
-      await this.prepareMirror(mirror);
-      await this.removeWorktree(mirror, headSource);
-      await this.removeWorktree(mirror, baseSource);
-      await this.addWorktree(mirror, baseSource, job.baseSha);
-      await this.addWorktree(mirror, headSource, job.headSha);
-      this.prepareWorker(baseSource);
-      this.prepareWorker(headSource);
-      await this.prepareSourcePermissions(jobRoot);
-      for (const dataset of job.datasets) {
-        this.resetResults(dataset, baseSource);
-      }
+      await reportProgress(progressPlan.validation);
+      const validationMs = await this.validateDatasets(
+        job.datasets,
+        outputs.datasetBucketName,
+      );
 
-      await reportProgress("Compiling the base revision");
-      const baseCompileStarted = performance.now();
-      const baseBinary = await this.build(
+      await reportProgress(progressPlan.sources);
+      await this.prepareSources(job, mirror, jobRoot, baseSource, headSource);
+
+      await reportProgress(progressPlan.baseCompile);
+      const base = await this.compileAndPublish(
         job.baseSha,
         baseSource,
         "trusted",
         undefined,
-      );
-      timings.baseCompileMs = performance.now() - baseCompileStarted;
-      const baseArtifact = await this.publish(
-        baseBinary,
         outputs.artifactBucketName,
       );
       deploymentStarted = true;
-      await reportProgress(
-        "Provisioning the base Kubernetes deployment and compiling the PR head",
-      );
-      const headArtifactPromise = (async () => {
-        const headCompileStarted = performance.now();
-        const headBinary = await this.build(
-          job.headSha,
-          headSource,
-          "untrusted",
-          job.baseSha,
-        );
-        timings.headCompileMs = performance.now() - headCompileStarted;
-        return await this.publish(headBinary, outputs.artifactBucketName);
-      })();
-      const baseDeploymentPromise = (async () => {
-        const baseDeployStarted = performance.now();
-        await this.deploy(baseArtifact, outputs, job);
-        timings.baseDeployMs = performance.now() - baseDeployStarted;
-      })();
-      const [headArtifactResult, baseDeploymentResult] =
-        await Promise.allSettled([
-          headArtifactPromise,
-          baseDeploymentPromise,
-        ] as const);
-      if (baseDeploymentResult.status === "rejected") {
-        throw baseDeploymentResult.reason;
-      }
-      if (headArtifactResult.status === "rejected") {
-        throw headArtifactResult.reason;
-      }
-      const headArtifact = headArtifactResult.value;
-      for (const dataset of job.datasets) {
-        await reportProgress(`Benchmarking base: ${dataset}`);
-        const benchmarkStarted = performance.now();
-        await this.runBenchmark(dataset, job.id, baseSource);
-        timings.baseBenchmarks.push({
-          dataset,
-          durationMs: performance.now() - benchmarkStarted,
-        });
-      }
 
-      await reportProgress("Provisioning the PR-head Kubernetes deployment");
-      const headDeployStarted = performance.now();
-      await this.deploy(headArtifact, outputs, job);
-      timings.headDeployMs = performance.now() - headDeployStarted;
-      const comparisons: string[] = [];
-      for (const dataset of job.datasets) {
-        await reportProgress(`Benchmarking PR head: ${dataset}`);
-        const benchmarkStarted = performance.now();
-        await this.runBenchmark(dataset, job.id, headSource);
-        timings.headBenchmarks.push({
+      await reportProgress(progressPlan.parallelPreparation);
+      const prepared = await this.prepareRevisions(
+        job,
+        outputs,
+        base.artifact,
+        headSource,
+      );
+
+      const baseBenchmarks = await this.benchmarkDatasets(
+        job.datasets,
+        progressPlan.baseBenchmarks,
+        reportProgress,
+        job.id,
+        baseSource,
+      );
+
+      await reportProgress(progressPlan.headDeploy);
+      const headDeployMs = await this.deployTimed(
+        prepared.headArtifact,
+        outputs,
+        job,
+      );
+
+      const head = await this.benchmarkHeadDatasets(
+        job,
+        progressPlan.headBenchmarks,
+        reportProgress,
+        headSource,
+        jobRoot,
+      );
+
+      completed = {
+        comparison: head.comparison,
+        baseArtifact: base.artifact,
+        headArtifact: prepared.headArtifact,
+        timings: {
+          validationMs,
+          baseCompileMs: base.compileMs,
+          baseDeployMs: prepared.baseDeployMs,
+          baseBenchmarks,
+          headCompileMs: prepared.headCompileMs,
+          headDeployMs,
+          headBenchmarks: head.timings,
+        },
+      };
+    } finally {
+      await reportProgress(progressPlan.cleanup);
+      await this.cleanupJob(
+        job,
+        outputs,
+        mirror,
+        jobRoot,
+        baseSource,
+        headSource,
+        deploymentStarted,
+      );
+      totalMs = performance.now() - executionStarted;
+    }
+
+    if (!completed) throw new Error("Benchmark execution did not complete");
+    return {
+      comparison: completed.comparison,
+      baseArtifact: completed.baseArtifact,
+      headArtifact: completed.headArtifact,
+      timings: { ...completed.timings, totalMs },
+    };
+  }
+
+  private async validateDatasets(
+    datasets: readonly string[],
+    bucket: string,
+  ): Promise<number> {
+    const started = performance.now();
+    for (const dataset of datasets) {
+      await this.prepareDatasetLayout(dataset, bucket);
+    }
+    return performance.now() - started;
+  }
+
+  private async prepareSources(
+    job: Job,
+    mirror: string,
+    jobRoot: string,
+    baseSource: string,
+    headSource: string,
+  ): Promise<void> {
+    await this.prepareMirror(mirror);
+    await this.removeWorktree(mirror, headSource);
+    await this.removeWorktree(mirror, baseSource);
+    await this.addWorktree(mirror, baseSource, job.baseSha);
+    await this.addWorktree(mirror, headSource, job.headSha);
+    this.prepareWorker(baseSource);
+    this.prepareWorker(headSource);
+    await this.prepareSourcePermissions(jobRoot);
+    for (const dataset of job.datasets) this.resetResults(dataset, baseSource);
+  }
+
+  private async compileAndPublish(
+    sha: string,
+    source: string,
+    trust: "trusted" | "untrusted",
+    seedSha: string | undefined,
+    artifactBucket: string,
+  ): Promise<CompiledArtifact> {
+    const started = performance.now();
+    const binary = await this.build(sha, source, trust, seedSha);
+    const compileMs = performance.now() - started;
+    return {
+      artifact: await this.publish(binary, artifactBucket),
+      compileMs,
+    };
+  }
+
+  private async prepareRevisions(
+    job: Job,
+    outputs: FoundationOutputs,
+    baseArtifact: string,
+    headSource: string,
+  ): Promise<PreparedRevisions> {
+    const headArtifactPromise = this.compileAndPublish(
+      job.headSha,
+      headSource,
+      "untrusted",
+      job.baseSha,
+      outputs.artifactBucketName,
+    );
+    const baseDeploymentPromise = this.deployTimed(baseArtifact, outputs, job);
+    const [headArtifactResult, baseDeploymentResult] = await Promise.allSettled(
+      [headArtifactPromise, baseDeploymentPromise] as const,
+    );
+
+    // Deployment failures take precedence because the base benchmark cannot run.
+    if (baseDeploymentResult.status === "rejected") {
+      throw baseDeploymentResult.reason;
+    }
+    if (headArtifactResult.status === "rejected") {
+      throw headArtifactResult.reason;
+    }
+    return {
+      headArtifact: headArtifactResult.value.artifact,
+      headCompileMs: headArtifactResult.value.compileMs,
+      baseDeployMs: baseDeploymentResult.value,
+    };
+  }
+
+  private async deployTimed(
+    artifact: string,
+    outputs: FoundationOutputs,
+    job: Job,
+  ): Promise<number> {
+    const started = performance.now();
+    await this.deploy(artifact, outputs, job);
+    return performance.now() - started;
+  }
+
+  private async benchmarkDatasets(
+    datasets: readonly string[],
+    progressMessages: readonly string[],
+    reportProgress: (message: string) => Promise<void>,
+    jobId: number,
+    source: string,
+  ): Promise<BenchmarkTiming[]> {
+    const timings: BenchmarkTiming[] = [];
+    for (const [index, dataset] of datasets.entries()) {
+      await reportProgress(progressMessages[index]!);
+      const started = performance.now();
+      await this.runBenchmark(dataset, jobId, source);
+      timings.push({ dataset, durationMs: performance.now() - started });
+    }
+    return timings;
+  }
+
+  private async benchmarkHeadDatasets(
+    job: Job,
+    progressMessages: readonly string[],
+    reportProgress: (message: string) => Promise<void>,
+    headSource: string,
+    jobRoot: string,
+  ): Promise<HeadBenchmarkResult> {
+    const timings: BenchmarkTiming[] = [];
+    const comparisons: string[] = [];
+    for (const [index, dataset] of job.datasets.entries()) {
+      await reportProgress(progressMessages[index]!);
+      const started = performance.now();
+      await this.runBenchmark(dataset, job.id, headSource);
+      timings.push({ dataset, durationMs: performance.now() - started });
+      comparisons.push(
+        await this.compareResults(
           dataset,
-          durationMs: performance.now() - benchmarkStarted,
-        });
-        comparisons.push(
-          await this.compareResults(
-            dataset,
-            engineName(job.baseSha),
-            engineName(job.headSha),
-            path.join(
-              jobRoot,
-              "comparisons",
-              `${dataset.replaceAll("/", "-")}.txt`,
-            ),
+          engineName(job.baseSha),
+          engineName(job.headSha),
+          path.join(
+            jobRoot,
+            "comparisons",
+            `${dataset.replaceAll("/", "-")}.txt`,
           ),
-        );
-      }
-      const comparison = comparisons
+        ),
+      );
+    }
+    return {
+      timings,
+      comparison: comparisons
         .map((value) => value.trim())
         .filter(Boolean)
-        .join("\n\n");
+        .join("\n\n"),
+    };
+  }
 
-      return { comparison, baseArtifact, headArtifact, timings };
-    } finally {
-      await reportProgress("Cleaning up the isolated deployment and worktrees");
-      if (deploymentStarted) {
-        await this.cleanupDeployment(outputs, job.id);
-      }
-      await this.removeWorktree(mirror, headSource);
-      await this.removeWorktree(mirror, baseSource);
-      rmSync(jobRoot, { recursive: true, force: true });
-      pruneBuildCache(
-        this.config.buildCacheRoot,
-        this.config.buildCacheMaxBytes,
-        new Set([`trusted-${job.baseSha}`, `untrusted-${job.headSha}`]),
-      );
-      timings.totalMs = performance.now() - executionStarted;
-    }
+  private async cleanupJob(
+    job: Job,
+    outputs: FoundationOutputs,
+    mirror: string,
+    jobRoot: string,
+    baseSource: string,
+    headSource: string,
+    deploymentStarted: boolean,
+  ): Promise<void> {
+    if (deploymentStarted) await this.cleanupDeployment(outputs, job.id);
+    await this.removeWorktree(mirror, headSource);
+    await this.removeWorktree(mirror, baseSource);
+    rmSync(jobRoot, { recursive: true, force: true });
+    pruneBuildCache(
+      this.config.buildCacheRoot,
+      this.config.buildCacheMaxBytes,
+      new Set([`trusted-${job.baseSha}`, `untrusted-${job.headSha}`]),
+    );
   }
 
   async cleanup(): Promise<void> {
@@ -345,9 +500,6 @@ export class BenchmarkExecutor {
 
   resetResults(dataset: string, baseSource: string): void {
     const datasetDirectory = safeDatasetPath(this.config.testdataRoot, dataset);
-    rmSync(path.join(datasetDirectory, "previous-remote.json"), {
-      force: true,
-    });
     rmSync(path.join(datasetDirectory, ".results-remote"), {
       recursive: true,
       force: true,
@@ -439,12 +591,11 @@ export class BenchmarkExecutor {
       target,
       cargoHome,
     ]);
-    await this.processes.run("sudo", [
-      "/usr/local/sbin/datafusion-pr-cargo-build",
-      source,
-      target,
-      cargoHome,
-    ]);
+    await this.processes.run(
+      "sudo",
+      ["/usr/local/sbin/datafusion-pr-cargo-build", source, target, cargoHome],
+      { outputTailBytes: CARGO_BUILD_OUTPUT_TAIL_BYTES },
+    );
 
     const binary = path.join(
       target,
@@ -521,7 +672,7 @@ export class BenchmarkExecutor {
         "--cleanup-on-fail",
         "--wait",
         "--timeout",
-        "25m",
+        HELM_DEPLOY_TIMEOUT,
       ],
       { env: { ...process.env, KUBECONFIG: this.config.kubeconfig } },
     );
@@ -543,7 +694,7 @@ export class BenchmarkExecutor {
         "--ignore-not-found",
         "--wait",
         "--timeout",
-        "10m",
+        HELM_CLEANUP_TIMEOUT,
       ],
       {
         allowFailure: true,
@@ -564,13 +715,13 @@ export class BenchmarkExecutor {
         "datafusion",
         "--dataset",
         dataset,
+        "--no-compare",
       ],
       {
         cwd: this.config.harnessRoot,
         env: {
           ...process.env,
           AWS_REGION: this.config.region,
-          BENCHMARK_COMPARE: "false",
           BENCHMARK_RUNNER: path.join(
             this.config.harnessRoot,
             "dist",
@@ -613,6 +764,42 @@ export class BenchmarkExecutor {
     );
     return readFileSync(output, "utf8");
   }
+}
+
+function createProgressPlan(datasets: readonly string[]): ProgressPlan {
+  const validation = "Validating all requested datasets";
+  const sources = "Preparing immutable base and PR source checkouts";
+  const baseCompile = "Compiling the base revision";
+  const parallelPreparation =
+    "Provisioning the base Kubernetes deployment and compiling the PR head";
+  const baseBenchmarks = datasets.map(
+    (dataset) => `Benchmarking base: ${dataset}`,
+  );
+  const headDeploy = "Provisioning the PR-head Kubernetes deployment";
+  const headBenchmarks = datasets.map(
+    (dataset) => `Benchmarking PR head: ${dataset}`,
+  );
+  const cleanup = "Cleaning up the isolated deployment and worktrees";
+  return {
+    validation,
+    sources,
+    baseCompile,
+    parallelPreparation,
+    baseBenchmarks,
+    headDeploy,
+    headBenchmarks,
+    cleanup,
+    all: [
+      validation,
+      sources,
+      baseCompile,
+      parallelPreparation,
+      ...baseBenchmarks,
+      headDeploy,
+      ...headBenchmarks,
+      cleanup,
+    ],
+  };
 }
 
 function engineName(sha: string): string {

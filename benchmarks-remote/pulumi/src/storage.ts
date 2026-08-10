@@ -1,22 +1,25 @@
-import * as aws from '@pulumi/aws';
-import * as pulumi from '@pulumi/pulumi';
+import * as aws from "@pulumi/aws";
+import * as pulumi from "@pulumi/pulumi";
 
-import { FoundationConfig } from './config';
+import { type FoundationConfig } from "./config";
 
 export interface BenchmarkStorage {
   datasetBucket: aws.s3.Bucket;
   resultsBucket: aws.s3.Bucket;
 }
 
-function createProtectedBucket(name: string, bucketPrefix: string): aws.s3.Bucket {
+function createProtectedBucket(
+  name: string,
+  bucketPrefix: string,
+): aws.s3.Bucket {
   const bucket = new aws.s3.Bucket(
     name,
     {
       bucketPrefix,
       forceDestroy: true,
       tags: {
-        Name: bucketPrefix.replace(/-$/, ''),
-        'benchmark.datafusion.apache.org/lifecycle': 'retained',
+        Name: bucketPrefix.replace(/-$/, ""),
+        "benchmark.datafusion.apache.org/lifecycle": "retained",
       },
     },
     { protect: true },
@@ -27,7 +30,7 @@ function createProtectedBucket(name: string, bucketPrefix: string): aws.s3.Bucke
     {
       bucket: bucket.id,
       rule: {
-        objectOwnership: 'BucketOwnerEnforced',
+        objectOwnership: "BucketOwnerEnforced",
       },
     },
     { protect: true },
@@ -50,7 +53,7 @@ function createProtectedBucket(name: string, bucketPrefix: string): aws.s3.Bucke
     {
       bucket: bucket.id,
       versioningConfiguration: {
-        status: 'Enabled',
+        status: "Enabled",
       },
     },
     { protect: true },
@@ -63,7 +66,7 @@ function createProtectedBucket(name: string, bucketPrefix: string): aws.s3.Bucke
       rules: [
         {
           applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
+            sseAlgorithm: "AES256",
           },
           bucketKeyEnabled: true,
         },
@@ -96,10 +99,13 @@ function createProtectedBucket(name: string, bucketPrefix: string): aws.s3.Bucke
 
 export function createStorage(config: FoundationConfig): BenchmarkStorage {
   const datasetBucket = createProtectedBucket(
-    'benchmark-datasets',
+    "benchmark-datasets",
     `${config.namePrefix}-datasets-`,
   );
-  const resultsBucket = createProtectedBucket('benchmark-results', `${config.namePrefix}-results-`);
+  const resultsBucket = createProtectedBucket(
+    "benchmark-results",
+    `${config.namePrefix}-results-`,
+  );
 
   return { datasetBucket, resultsBucket };
 }

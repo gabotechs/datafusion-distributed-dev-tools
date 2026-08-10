@@ -5,6 +5,7 @@ export interface RunOptions {
   env?: NodeJS.ProcessEnv;
   allowFailure?: boolean;
   quiet?: boolean;
+  outputTailBytes?: number;
 }
 
 export interface RunResult {
@@ -27,6 +28,13 @@ export class LocalProcessRunner implements ProcessRunner {
     arguments_: readonly string[],
     options: RunOptions = {},
   ): Promise<RunResult> {
+    if (
+      options.outputTailBytes !== undefined &&
+      (!Number.isSafeInteger(options.outputTailBytes) ||
+        options.outputTailBytes <= 0)
+    ) {
+      throw new Error("outputTailBytes must be a positive safe integer");
+    }
     return await new Promise((resolve, reject) => {
       const child = spawn(program, [...arguments_], {
         cwd: options.cwd,
@@ -38,11 +46,11 @@ export class LocalProcessRunner implements ProcessRunner {
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
+        stdout = appendOutput(stdout, chunk, options.outputTailBytes);
         if (!options.quiet) process.stdout.write(chunk);
       });
       child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
+        stderr = appendOutput(stderr, chunk, options.outputTailBytes);
         if (!options.quiet) process.stderr.write(chunk);
       });
       child.on("error", reject);
@@ -60,4 +68,19 @@ export class LocalProcessRunner implements ProcessRunner {
       });
     });
   }
+}
+
+function appendOutput(
+  captured: string,
+  chunk: string,
+  outputTailBytes: number | undefined,
+): string {
+  const combined = captured + chunk;
+  if (outputTailBytes === undefined) return combined;
+  const bytes = Buffer.from(combined);
+  if (bytes.length <= outputTailBytes) return combined;
+
+  let start = bytes.length - outputTailBytes;
+  while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start += 1;
+  return bytes.subarray(start).toString("utf8");
 }

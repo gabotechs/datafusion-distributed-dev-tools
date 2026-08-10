@@ -1,0 +1,7 @@
+node_modules/
+dist/
+target/
+.cache/
+.data/
+Pulumi.*.yaml
+CODE_QUALITY_COMMENTS.md

@@ -1,161 +1,6 @@
-import {Command} from "commander";
-import {BenchmarkRunner, ExecuteQueryResult, runBenchmark, TableSpec} from "./@bench-common";
-
-async function main() {
-    const program = new Command();
-
-    program
-        .requiredOption('--dataset <string>', 'Dataset to run queries on')
-        .option('-i, --iterations <number>', 'Number of iterations', '5')
-        .option('--time-secs <number>', 'Minimum measured time per query in seconds', '0')
-        .option('--queries <string>', 'Specific queries to run', undefined)
-        .option('--debug <boolean>', 'Print the generated plans to stdout')
-        .option('--warmup <boolean>', 'Perform a warmup query before the benchmarks', 'true')
-        .parse(process.argv);
-
-    const options = program.opts();
-
-    const dataset: string = options.dataset
-    const iterations = parseInt(options.iterations);
-    const timeSecs = parseFloat(options.timeSecs);
-    const queries = options.queries?.split(",") ?? []
-    const debug = options.debug === true || options.debug === 'true' || options.debug === 1
-    const warmup = options.warmup === true || options.warmup === 'true' || options.warmup === 1
-
-    const runner = new TrinoRunner();
-
-    await runBenchmark(runner, {
-        dataset,
-        engine: 'trino',
-        iterations,
-        timeSecs,
-        queries,
-        debug,
-        warmup
-    });
-}
-
-class TrinoRunner implements BenchmarkRunner {
-    private trinoUrl = process.env.TRINO_URL ?? 'http://localhost:9000';
-    private schema?: string
-
-    async executeQuery(sql: string): Promise<ExecuteQueryResult> {
-        // Fix TPCH query 4: Add DATE prefix to date literals that don't have it.
-        sql = sql.replace(/(?<!date\s)('[\d]{4}-[\d]{2}-[\d]{2}')/gi, 'DATE $1');
-
-        // Fix TPCH query 15: Trino doesn't support column list in CREATE VIEW, need to use aliases in SELECT
-        sql = sql.replace(
-            /create view revenue0 \(supplier_no, total_revenue\) as\s+select\s+l_suppkey,\s+sum\(l_extendedprice \* \(1 - l_discount\)\)/is,
-            'create view revenue0 as select l_suppkey as supplier_no, sum(l_extendedprice * (1 - l_discount)) as total_revenue'
-        );
-
-        // Fix ClickBench queries: Convert to_timestamp_seconds to Trino's from_unixtime
-        sql = sql.replace(/to_timestamp_seconds\(/gi, 'from_unixtime(');
-
-        let response
-        if (sql.includes("create view")) {
-            // This is query 15
-            let [createView, query, dropView] = sql.split(";")
-            await this.executeSingleStatement(createView);
-            response = await this.executeSingleStatement(`EXPLAIN ANALYZE ${query}`); // Use EXPLAIN ANALYZE for the actual query
-            await this.executeSingleStatement(dropView);
-        } else {
-            response = await this.executeSingleStatement(`EXPLAIN ANALYZE ${sql}`)
-        }
-
-        return response
-    }
-
-    private async executeSingleStatement(sql: string): Promise<ExecuteQueryResult> {
-        if (!this.schema) {
-            throw new Error("No schema available, where the tables created?")
-        }
-
-        // Submit query
-        const submitResponse = await fetch(`${this.trinoUrl}/v1/statement`, {
-            method: 'POST',
-            headers: {
-                'X-Trino-User': 'benchmark',
-                'X-Trino-Catalog': 'hive',
-                'X-Trino-Schema': this.schema ?? '',
-            },
-            body: sql.trim().replace(/;+$/, ''),
-        });
-
-        if (!submitResponse.ok) {
-            const msg = await submitResponse.text();
-            throw new Error(`Query submission failed: ${submitResponse.status} ${msg}`);
-        }
-
-        let result: any = await submitResponse.json();
-        let rowCount = 0;
-        let plan = "";
-        let elapsed = 0;
-
-        // Poll for results
-        while (result.nextUri) {
-            const pollResponse = await fetch(result.nextUri);
-
-            if (!pollResponse.ok) {
-                const msg = await pollResponse.text();
-                throw new Error(`Query polling failed: ${pollResponse.status} ${msg}`);
-            }
-
-            result = await pollResponse.json();
-
-            // Count rows if data is present
-            if (result.data) {
-                if (typeof result.data?.[0]?.[0] === 'string') {
-                    plan = result.data[0][0]
-                    // Extract row count from EXPLAIN ANALYZE output
-                    const outputMatch = plan.match(/Output.*?(\d+)\s+rows/i);
-                    if (outputMatch) {
-                        rowCount = parseInt(outputMatch[1]);
-                    }
-                } else {
-                    rowCount += result.data.length;
-                }
-            }
-
-            if (result.stats) {
-                elapsed = result.stats.elapsedTimeMillis
-            }
-
-            // Check for errors
-            if (result.error) {
-                throw new Error(`Query failed: ${result.error.message}`);
-            }
-        }
-
-        return {rowCount, plan, elapsed, tasks: 0};
-    }
-
-    async createTables(tables: TableSpec[]): Promise<void> {
-        if (tables.length === 0) {
-            throw new Error("No table passed")
-        }
-        let schema = tables[0].schema
-        let basePath = tables[0].s3Path.split('/').slice(0, -1).join("/")
-
-        this.schema = schema
-
-        await this.executeSingleStatement(`
-            CREATE SCHEMA IF NOT EXISTS hive."${schema}" WITH (location = '${basePath}')`);
-
-        for (const table of tables) {
-            await this.executeSingleStatement(`
-                DROP TABLE IF EXISTS hive."${table.schema}"."${table.name}"`);
-
-            await this.executeSingleStatement(`
-                CREATE TABLE hive."${table.schema}"."${table.name}" ${getSchema(table)}
-                WITH (external_location = '${table.s3Path}', format = 'PARQUET')`);
-        }
-    }
-}
-
-const SCHEMAS: Record<string, Record<string, string>> = {
-    tpch: {
-        customer: `(
+export const TRINO_SCHEMAS: Record<string, Record<string, string>> = {
+  tpch: {
+    customer: `(
    c_custkey    bigint,
    c_name       varchar(25),
    c_address    varchar(40),
@@ -165,7 +10,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    c_mktsegment varchar(10),
    c_comment    varchar(117)
 )`,
-        lineitem: `(
+    lineitem: `(
    l_orderkey      bigint,
    l_partkey       bigint,
    l_suppkey       bigint,
@@ -183,13 +28,13 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    l_shipmode      varchar(10),
    l_comment       varchar(44)
 )`,
-        nation: `(
+    nation: `(
    n_nationkey bigint,
    n_name      varchar(25),
    n_regionkey bigint,
    n_comment   varchar(152)
 )`,
-        orders: `(
+    orders: `(
    o_orderkey      bigint,
    o_custkey       bigint,
    o_orderstatus   varchar(1),
@@ -200,7 +45,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    o_shippriority  integer,
    o_comment       varchar(79)
 )`,
-        part: `(
+    part: `(
    p_partkey     bigint,
    p_name        varchar(55),
    p_mfgr        varchar(25),
@@ -211,19 +56,19 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    p_retailprice decimal(15, 2),
    p_comment     varchar(23)
 )`,
-        partsupp: `(
+    partsupp: `(
    ps_partkey    bigint,
    ps_suppkey    bigint,
    ps_availqty   integer,
    ps_supplycost decimal(15, 2),
    ps_comment    varchar(199)
 )`,
-        region: `(
+    region: `(
    r_regionkey bigint,
    r_name      varchar(25),
    r_comment   varchar(152)
 )`,
-        supplier: `(
+    supplier: `(
    s_suppkey   bigint,
    s_name      varchar(25),
    s_address   varchar(40),
@@ -231,10 +76,10 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    s_phone     varchar(15),
    s_acctbal   decimal(15, 2),
    s_comment   varchar(101)
-)`
-    },
-    clickbench: {
-        hits: `(
+)`,
+  },
+  clickbench: {
+    hits: `(
    WatchID bigint,
    JavaEnable smallint,
    Title varchar,
@@ -340,10 +185,10 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    RefererHash bigint,
    URLHash bigint,
    CLID integer
-)`
-    },
-    tpcds: {
-        call_center: `(
+)`,
+  },
+  tpcds: {
+    call_center: `(
    cc_call_center_sk integer,
    cc_call_center_id varchar,
    cc_rec_start_date date,
@@ -376,7 +221,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    cc_gmt_offset decimal(3, 2),
    cc_tax_percentage decimal(2, 2)
 )`,
-        catalog_page: `(
+    catalog_page: `(
    cp_catalog_page_sk integer,
    cp_catalog_page_id varchar,
    cp_start_date_sk double,
@@ -387,7 +232,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    cp_description varchar,
    cp_type varchar
 )`,
-        catalog_returns: `(
+    catalog_returns: `(
    cr_returned_date_sk integer,
    cr_returned_time_sk integer,
    cr_item_sk integer,
@@ -416,7 +261,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    cr_store_credit decimal(7, 2),
    cr_net_loss decimal(7, 2)
 )`,
-        catalog_sales: `(
+    catalog_sales: `(
    cs_sold_date_sk double,
    cs_sold_time_sk double,
    cs_ship_date_sk double,
@@ -452,7 +297,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    cs_net_paid_inc_ship_tax decimal(7, 2),
    cs_net_profit decimal(7, 2)
 )`,
-        customer: `(
+    customer: `(
    c_customer_sk integer,
    c_customer_id varchar,
    c_current_cdemo_sk double,
@@ -472,7 +317,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    c_email_address varchar,
    c_last_review_date double
 )`,
-        customer_address: `(
+    customer_address: `(
    ca_address_sk integer,
    ca_address_id varchar,
    ca_street_number varchar,
@@ -487,7 +332,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    ca_gmt_offset decimal(4, 2),
    ca_location_type varchar
 )`,
-        customer_demographics: `(
+    customer_demographics: `(
    cd_demo_sk integer,
    cd_gender varchar,
    cd_marital_status varchar,
@@ -498,7 +343,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    cd_dep_employed_count integer,
    cd_dep_college_count integer
 )`,
-        date_dim: `(
+    date_dim: `(
    d_date_sk integer,
    d_date_id varchar,
    d_date date,
@@ -528,25 +373,25 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    d_current_quarter varchar,
    d_current_year varchar
 )`,
-        household_demographics: `(
+    household_demographics: `(
    hd_demo_sk integer,
    hd_income_band_sk integer,
    hd_buy_potential varchar,
    hd_dep_count integer,
    hd_vehicle_count integer
 )`,
-        income_band: `(
+    income_band: `(
    ib_income_band_sk integer,
    ib_lower_bound integer,
    ib_upper_bound integer
 )`,
-        inventory: `(
+    inventory: `(
    inv_date_sk integer,
    inv_item_sk integer,
    inv_warehouse_sk integer,
    inv_quantity_on_hand double
 )`,
-        item: `(
+    item: `(
    i_item_sk integer,
    i_item_id varchar,
    i_rec_start_date date,
@@ -570,7 +415,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    i_manager_id double,
    i_product_name varchar
 )`,
-        promotion: `(
+    promotion: `(
    p_promo_sk integer,
    p_promo_id varchar,
    p_start_date_sk double,
@@ -591,12 +436,12 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    p_purpose varchar,
    p_discount_active varchar
 )`,
-        reason: `(
+    reason: `(
    r_reason_sk integer,
    r_reason_id varchar,
    r_reason_desc varchar
 )`,
-        ship_mode: `(
+    ship_mode: `(
    sm_ship_mode_sk integer,
    sm_ship_mode_id varchar,
    sm_type varchar,
@@ -604,7 +449,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    sm_carrier varchar,
    sm_contract varchar
 )`,
-        store: `(
+    store: `(
    s_store_sk integer,
    s_store_id varchar,
    s_rec_start_date date,
@@ -635,7 +480,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    s_gmt_offset decimal(3, 2),
    s_tax_precentage decimal(2, 2)
 )`,
-        store_returns: `(
+    store_returns: `(
    sr_returned_date_sk double,
    sr_return_time_sk double,
    sr_item_sk integer,
@@ -657,7 +502,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    sr_store_credit decimal(7, 2),
    sr_net_loss decimal(6, 2)
 )`,
-        store_sales: `(
+    store_sales: `(
    ss_sold_date_sk double,
    ss_sold_time_sk double,
    ss_item_sk integer,
@@ -682,7 +527,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    ss_net_paid_inc_tax decimal(7, 2),
    ss_net_profit decimal(6, 2)
 )`,
-        time_dim: `(
+    time_dim: `(
    t_time_sk integer,
    t_time_id varchar,
    t_time integer,
@@ -694,7 +539,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    t_sub_shift varchar,
    t_meal_time varchar
 )`,
-        warehouse: `(
+    warehouse: `(
    w_warehouse_sk integer,
    w_warehouse_id varchar,
    w_warehouse_name varchar,
@@ -710,7 +555,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    w_country varchar,
    w_gmt_offset decimal(3, 2)
 )`,
-        web_page: `(
+    web_page: `(
    wp_web_page_sk integer,
    wp_web_page_id varchar,
    wp_rec_start_date date,
@@ -726,7 +571,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    wp_image_count integer,
    wp_max_ad_count integer
 )`,
-        web_returns: `(
+    web_returns: `(
    wr_returned_date_sk double,
    wr_returned_time_sk double,
    wr_item_sk integer,
@@ -752,7 +597,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    wr_account_credit decimal(7, 2),
    wr_net_loss decimal(7, 2)
 )`,
-        web_sales: `(
+    web_sales: `(
    ws_sold_date_sk double,
    ws_sold_time_sk double,
    ws_ship_date_sk double,
@@ -788,7 +633,7 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    ws_net_paid_inc_ship_tax decimal(7, 2),
    ws_net_profit decimal(7, 2)
 )`,
-        web_site: `(
+    web_site: `(
    web_site_sk integer,
    web_site_id varchar,
    web_rec_start_date date,
@@ -815,20 +660,20 @@ const SCHEMAS: Record<string, Record<string, string>> = {
    web_country varchar,
    web_gmt_offset decimal(3, 2),
    web_tax_percentage decimal(2, 2)
-)`
-    }
-}
+)`,
+  },
+};
 
-function getSchema(table: TableSpec): string {
-    const tableSchema = SCHEMAS[table.suite]?.[table.name]
-    if (!tableSchema) {
-        throw new Error(`Could not find table ${table.name} in schema ${table.schema}`)
-    }
-    return tableSchema
+export function trinoSchemaForTable(table: {
+  suite: string;
+  name: string;
+  schema: string;
+}): string {
+  const tableSchema = TRINO_SCHEMAS[table.suite]?.[table.name];
+  if (!tableSchema) {
+    throw new Error(
+      `Could not find table ${table.name} in schema ${table.schema}`,
+    );
+  }
+  return tableSchema;
 }
-
-main()
-    .catch(err => {
-        console.error(err)
-        process.exit(1)
-    })

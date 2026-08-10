@@ -1,39 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${script_dir}/lib.sh"
+
 engine=${1:?usage: deploy-engine.sh ENGINE}
-region=${AWS_REGION:-us-east-1}
-outputs_file=${PULUMI_OUTPUTS_FILE:-${root}/benchmarks-remote/pulumi/.pulumi-outputs.json}
-runtime_file=${K8S_RUNTIME_FILE:-${root}/benchmarks-remote/k8s/.runtime.json}
+validate_engine "${engine}"
+init_environment
 
-case ${engine} in
-  datafusion | trino | spark | ballista) ;;
-  *)
-    echo "Unknown benchmark engine '${engine}'" >&2
-    exit 2
-    ;;
-esac
-
-if [[ ! -f ${outputs_file} ]]; then
-  echo "Missing ${outputs_file}; run npm run foundation-deploy first" >&2
-  exit 2
-fi
-
-output_value() {
-  local expression=$1
-  local file=$2
-  if [[ -f ${file} ]]; then
-    jq -r "${expression} // empty" "${file}"
-  fi
-}
-
-cluster_name=$(jq -er '.clusterName' "${outputs_file}")
 dataset_bucket=$(jq -er '.datasetBucketName' "${outputs_file}")
 benchmark_instance_type=$(jq -er '.benchmarkInstanceType' "${outputs_file}")
 coordinator_instance_type=$(jq -er '.coordinatorInstanceType' "${outputs_file}")
 node_count=${NODE_COUNT:-$(jq -er '.benchmarkNodeCount' "${outputs_file}")}
-source "${root}/benchmarks-remote/k8s/lib.sh"
 require_aws_credentials
 ensure_kubeconfig
 

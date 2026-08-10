@@ -1,6 +1,7 @@
 import { parseComment } from "./command.js";
-import { JobDatabase, QueueLimitError, type Job } from "./database.js";
+import { QueueLimitError, type Job, type JobDatabase } from "./database.js";
 import type { GitHubApi, IssueComment } from "./github.js";
+import { renderQueued } from "./render.js";
 
 const INITIAL_LOOKBACK_MS = 60 * 60 * 1_000;
 const SCAN_OVERLAP_MS = 2 * 60 * 1_000;
@@ -22,15 +23,15 @@ export class CommentPoller {
       this.repository,
       since,
     );
-    let watermarkBlocked = false;
+    let canAdvanceWatermark = true;
     for (const comment of comments) {
-      const terminal = await this.processSafely(comment, now);
-      if (!terminal) watermarkBlocked = true;
-      if (terminal && !watermarkBlocked) {
+      const settled = await this.processSafely(comment, now);
+      if (!settled) canAdvanceWatermark = false;
+      if (settled && canAdvanceWatermark) {
         this.advanceScanTime(comment.updated_at ?? comment.created_at);
       }
     }
-    if (!watermarkBlocked) {
+    if (canAdvanceWatermark) {
       this.database.setScanTime(
         this.repository,
         new Date(now.getTime() - SCAN_OVERLAP_MS).toISOString(),
@@ -39,13 +40,7 @@ export class CommentPoller {
   }
 
   async processSafely(comment: IssueComment, now: Date): Promise<boolean> {
-    const existing = this.database.getJobForComment(comment.id);
-    if (
-      this.database.isCommentSeen(comment.id) &&
-      existing?.statusCommentId !== null
-    ) {
-      return true;
-    }
+    if (this.isHandled(comment.id)) return true;
     if (!this.database.canAttemptComment(comment.id, now)) return false;
     try {
       await this.process(comment);
@@ -54,12 +49,7 @@ export class CommentPoller {
     } catch (error) {
       console.error(`Failed to process GitHub comment ${comment.id}`, error);
       const pendingStatus = this.database.getJobForComment(comment.id);
-      if (
-        this.database.isCommentSeen(comment.id) &&
-        pendingStatus?.statusCommentId !== null
-      ) {
-        return true;
-      }
+      if (this.isHandled(comment.id)) return true;
       const message = error instanceof Error ? error.message : String(error);
       const attempts = this.database.recordCommentFailure(
         comment.id,
@@ -80,6 +70,14 @@ export class CommentPoller {
       );
       return true;
     }
+  }
+
+  private isHandled(commentId: number): boolean {
+    const existing = this.database.getJobForComment(commentId);
+    return (
+      this.database.isCommentSeen(commentId) &&
+      existing?.statusCommentId !== null
+    );
   }
 
   async process(comment: IssueComment): Promise<void> {
@@ -155,7 +153,7 @@ export class CommentPoller {
     const commentId = await this.github.postComment(
       job.repository,
       job.pullRequestNumber,
-      `Requested by [this comment](${job.pullRequestUrl}#issuecomment-${job.commentId}).\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes, comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`.`,
+      renderQueued(job),
     );
     this.database.setStatusCommentId(job.id, commentId);
   }
@@ -170,15 +168,7 @@ export class CommentPoller {
   }
 }
 
-function formatDatasets(datasets: readonly string[]): string {
-  return datasets.map((dataset) => `\`${dataset}\``).join(", ");
-}
-
 function issueNumber(issueUrl: string): number | null {
   const match = /\/issues\/(\d+)$/.exec(issueUrl);
   return match ? Number(match[1]) : null;
-}
-
-function shortSha(sha: string): string {
-  return sha.slice(0, 12);
 }

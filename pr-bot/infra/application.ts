@@ -1,29 +1,11 @@
-import { existsSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import * as pulumi from "@pulumi/pulumi";
 
-function findRepositoryRoot(): string {
-  let current = path.dirname(fileURLToPath(import.meta.url));
-  while (true) {
-    if (
-      existsSync(path.join(current, "pr-bot", "controller", "cargo-build")) &&
-      existsSync(path.join(current, "benchmarks-remote", "package.json"))
-    ) {
-      return current;
-    }
-    const parent = path.dirname(current);
-    if (parent === current) {
-      throw new Error("Could not locate the controller repository root");
-    }
-    current = parent;
-  }
-}
+import { repositoryRoot } from "./paths.js";
 
-const repositoryRoot = findRepositoryRoot();
-const botRoot = path.join(repositoryRoot, "pr-bot");
-const benchmarkRoot = path.join(repositoryRoot, "benchmarks-remote");
+const botRoot = path.join(repositoryRoot(), "pr-bot");
+const benchmarkRoot = path.join(repositoryRoot(), "benchmarks-remote");
 
 export function applicationArchive(): pulumi.asset.AssetArchive {
   return new pulumi.asset.AssetArchive({

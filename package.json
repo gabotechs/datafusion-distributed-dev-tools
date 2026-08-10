@@ -6,10 +6,12 @@
     "node": ">=24"
   },
   "scripts": {
-    "install:all": "npm --prefix pr-bot install && npm --prefix benchmarks-remote install",
+    "install:all": "npm install && npm --prefix pr-bot install && npm --prefix benchmarks-remote install",
     "build": "npm --prefix pr-bot run build && npm --prefix benchmarks-remote run build",
-    "test": "npm --prefix pr-bot test && npm --prefix benchmarks-remote test",
-    "format:check": "npm --prefix pr-bot run format:check && npm --prefix benchmarks-remote/pulumi run format",
+    "test": "npm run format:check && npm run lint && npm --prefix pr-bot test && npm --prefix benchmarks-remote test",
+    "lint": "eslint .",
+    "format": "prettier --write package.json tsconfig.base.json eslint.config.mjs .github README.md AGENTS.md && npm --prefix pr-bot run format && npm --prefix benchmarks-remote run format",
+    "format:check": "prettier --check package.json tsconfig.base.json eslint.config.mjs .github README.md AGENTS.md && npm --prefix pr-bot run format:check && npm --prefix benchmarks-remote run format:check",
     "controller-deploy": "npm --prefix pr-bot run controller-deploy",
     "controller-destroy": "npm --prefix pr-bot run controller-destroy",
     "controller-outputs": "npm --prefix pr-bot run controller-outputs",
@@ -32,5 +34,13 @@
     "ballista-destroy": "npm --prefix benchmarks-remote run ballista-destroy",
     "ballista-bench": "npm --prefix benchmarks-remote run ballista-bench --",
     "command": "npm --prefix benchmarks-remote run command --"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "globals": "^16.4.0",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.46.2"
   }
 }
