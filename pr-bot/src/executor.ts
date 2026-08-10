@@ -149,7 +149,7 @@ export class BenchmarkExecutor {
       for (const dataset of job.datasets) {
         await reportProgress(`Benchmarking base: ${dataset}`);
         const benchmarkStarted = performance.now();
-        await this.runBenchmark(dataset, job.id);
+        await this.runBenchmark(dataset, job.id, baseSource);
         timings.baseBenchmarks.push({
           dataset,
           durationMs: performance.now() - benchmarkStarted,
@@ -177,7 +177,7 @@ export class BenchmarkExecutor {
       for (const dataset of job.datasets) {
         await reportProgress(`Benchmarking PR head: ${dataset}`);
         const benchmarkStarted = performance.now();
-        comparisons.push(await this.runBenchmark(dataset, job.id));
+        comparisons.push(await this.runBenchmark(dataset, job.id, headSource));
         timings.headBenchmarks.push({
           dataset,
           durationMs: performance.now() - benchmarkStarted,
@@ -526,7 +526,11 @@ export class BenchmarkExecutor {
     );
   }
 
-  async runBenchmark(dataset: string, jobId: number): Promise<string> {
+  async runBenchmark(
+    dataset: string,
+    jobId: number,
+    sourceRoot: string,
+  ): Promise<string> {
     const result = await this.processes.run(
       "bash",
       [
@@ -547,6 +551,7 @@ export class BenchmarkExecutor {
           ),
           BENCHMARK_SERVICE_NAME: deploymentName(jobId),
           BENCHMARK_TESTDATA_ROOT: this.config.testdataRoot,
+          DATAFUSION_DISTRIBUTED_ROOT: sourceRoot,
           KUBECONFIG: this.config.kubeconfig,
           PULUMI_OUTPUTS_FILE: this.config.foundationOutputsFile,
         },
