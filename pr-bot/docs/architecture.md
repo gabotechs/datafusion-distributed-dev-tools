@@ -46,7 +46,8 @@ authentication is not managed by Pulumi.
 ## Job sequence
 
 1. Validate and persist the requested instance type and node count together with
-   the PR base SHA and head SHA.
+   the PR base SHA and head SHA. Create one GitHub status comment and persist
+   its ID for all subsequent progress updates.
 2. Create isolated worktrees for both immutable SHAs.
 3. Fetch the base revision's locked dependencies as the unprivileged build user,
    then compile offline in a network-disabled systemd sandbox using persistent
@@ -56,8 +57,8 @@ authentication is not managed by Pulumi.
 5. Run the requested dataset and retain its local results.
 6. Build, upload, and deploy the head artifact using the same process.
 7. Run the identical benchmark arguments against the head deployment.
-8. Render and post a comparison containing SHAs, configuration, per-query
-   medians, total time, and failures.
+8. Render the comparison containing SHAs, configuration, per-query medians,
+   total time, and failures, then update the existing status comment in place.
 9. Remove the job's DataFusion release and worktrees. Keep only bounded build
    caches for later compilations. On startup, remove stale job releases left by
    an interrupted controller process before retrying persisted work.

@@ -23,7 +23,7 @@ test("deduplicates comments while preserving immutable refs", () => {
     assert.equal(database.enqueue(JOB), 1);
     assert.equal(database.enqueue(JOB), null);
     assert.equal(database.isCommentSeen(JOB.commentId), true);
-    const queued = database.nextPending();
+    const queued = database.getJobForComment(JOB.commentId);
     assert.equal(queued?.dataset, "tpch/sf1");
     assert.equal(queued?.benchmarkInstanceType, "c7i.2xlarge");
     assert.equal(queued?.benchmarkNodeCount, 12);
@@ -37,7 +37,9 @@ test("deduplicates comments while preserving immutable refs", () => {
 test("claims a pending job atomically", () => {
   const database = new JobDatabase(":memory:");
   try {
-    database.enqueue(JOB);
+    const jobId = database.enqueue(JOB)!;
+    assert.equal(database.claimNextPending(), null);
+    database.setStatusCommentId(jobId, 77);
     assert.equal(database.claimNextPending()?.status, "running");
     assert.equal(database.claimNextPending(), null);
   } finally {
@@ -48,7 +50,8 @@ test("claims a pending job atomically", () => {
 test("recovers a job interrupted while running", () => {
   const database = new JobDatabase(":memory:");
   try {
-    database.enqueue(JOB);
+    const jobId = database.enqueue(JOB)!;
+    database.setStatusCommentId(jobId, 77);
     assert.equal(database.claimNextPending()?.status, "running");
     assert.deepEqual(database.recoverRunningJobs(), { retried: 1, failed: [] });
     assert.equal(database.claimNextPending()?.status, "running");
@@ -60,7 +63,8 @@ test("recovers a job interrupted while running", () => {
 test("fails a job after three interrupted attempts", () => {
   const database = new JobDatabase(":memory:");
   try {
-    database.enqueue(JOB);
+    const jobId = database.enqueue(JOB)!;
+    database.setStatusCommentId(jobId, 77);
     for (let attempt = 0; attempt < 3; attempt++) {
       assert.equal(database.claimNextPending()?.status, "running");
       const recovery = database.recoverRunningJobs();

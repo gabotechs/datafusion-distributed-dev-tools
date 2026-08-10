@@ -1,5 +1,5 @@
 import { parseComment } from "./command.js";
-import { JobDatabase, QueueLimitError } from "./database.js";
+import { JobDatabase, QueueLimitError, type Job } from "./database.js";
 import type { GitHubApi, IssueComment } from "./github.js";
 
 const INITIAL_LOOKBACK_MS = 60 * 60 * 1_000;
@@ -39,7 +39,13 @@ export class CommentPoller {
   }
 
   async processSafely(comment: IssueComment, now: Date): Promise<boolean> {
-    if (this.database.isCommentSeen(comment.id)) return true;
+    const existing = this.database.getJobForComment(comment.id);
+    if (
+      this.database.isCommentSeen(comment.id) &&
+      existing?.statusCommentId !== null
+    ) {
+      return true;
+    }
     if (!this.database.canAttemptComment(comment.id, now)) return false;
     try {
       await this.process(comment);
@@ -47,7 +53,13 @@ export class CommentPoller {
       return true;
     } catch (error) {
       console.error(`Failed to process GitHub comment ${comment.id}`, error);
-      if (this.database.isCommentSeen(comment.id)) return true;
+      const pendingStatus = this.database.getJobForComment(comment.id);
+      if (
+        this.database.isCommentSeen(comment.id) &&
+        pendingStatus?.statusCommentId !== null
+      ) {
+        return true;
+      }
       const message = error instanceof Error ? error.message : String(error);
       const attempts = this.database.recordCommentFailure(
         comment.id,
@@ -55,6 +67,13 @@ export class CommentPoller {
         now,
       );
       if (attempts < MAX_COMMENT_ATTEMPTS) return false;
+      if (pendingStatus) {
+        this.database.updateStatus(
+          pendingStatus.id,
+          "failed",
+          "Could not create the GitHub status comment",
+        );
+      }
       this.database.markCommentSeen(comment.id, now);
       console.error(
         `Dropping GitHub comment ${comment.id} after ${attempts} attempts`,
@@ -64,6 +83,13 @@ export class CommentPoller {
   }
 
   async process(comment: IssueComment): Promise<void> {
+    const existing = this.database.getJobForComment(comment.id);
+    if (existing) {
+      if (existing.statusCommentId === null) {
+        await this.createStatusComment(existing);
+      }
+      return;
+    }
     if (this.database.isCommentSeen(comment.id)) return;
 
     const parsed = parseComment(comment.body);
@@ -119,12 +145,19 @@ export class CommentPoller {
       return;
     }
     if (jobId !== null) {
-      await this.github.postComment(
-        this.repository,
-        pullRequestNumber,
-        `Queued benchmark job ${jobId}: \`${parsed.request.dataset}\` on ${parsed.request.nodeCount} \`${parsed.request.instanceType}\` nodes, comparing base \`${shortSha(pullRequest.base.sha)}\` with head \`${shortSha(pullRequest.head.sha)}\`.`,
-      );
+      const job = this.database.getJobForComment(comment.id);
+      if (!job) throw new Error(`Queued benchmark job ${jobId} was not found`);
+      await this.createStatusComment(job);
     }
+  }
+
+  async createStatusComment(job: Job): Promise<void> {
+    const commentId = await this.github.postComment(
+      job.repository,
+      job.pullRequestNumber,
+      `Benchmark job ${job.id} queued for \`${job.dataset}\` on ${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes, comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`.`,
+    );
+    this.database.setStatusCommentId(job.id, commentId);
   }
 
   advanceScanTime(timestamp: string): void {
