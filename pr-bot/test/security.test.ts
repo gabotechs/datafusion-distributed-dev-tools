@@ -40,6 +40,7 @@ test("hides controller state and cannot silently lose offline isolation", () => 
 
 test("cache preparation performs filesystem changes as the build user", () => {
   const prepare = controllerScript("prepare-cache");
+  assert.match(prepare, /umask 0007/);
   assert.match(
     prepare,
     /runuser --user benchmark-build --group benchmark-cache --.*mkdir/s,
