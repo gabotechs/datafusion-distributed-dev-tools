@@ -304,6 +304,31 @@ test("uses native cache, fetch, and offline build wrappers", async () => {
   assert.match(calls[0]!.arguments_[4]!, /cargo\/trusted-a{40}$/);
 });
 
+test("shares worktree sources read-only with the isolated build account", async () => {
+  const { config } = fixture();
+  const calls: Array<{ program: string; arguments_: readonly string[] }> = [];
+  const processes: ProcessRunner = {
+    async run(program, arguments_): Promise<RunResult> {
+      calls.push({ program, arguments_ });
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  };
+  const jobRoot = path.join(config.workRoot, "jobs", "7");
+  await new BenchmarkExecutor(config, processes).prepareSourcePermissions(
+    jobRoot,
+  );
+  assert.deepEqual(calls, [
+    {
+      program: "chgrp",
+      arguments_: ["--recursive", "benchmark-cache", "--", jobRoot],
+    },
+    {
+      program: "chmod",
+      arguments_: ["--recursive", "g+rX", "--", jobRoot],
+    },
+  ]);
+});
+
 test("rejects non-SHA Git operands", async () => {
   const { config } = fixture();
   await assert.rejects(
