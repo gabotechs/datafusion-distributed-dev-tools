@@ -1,62 +1,113 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { GhCliClient } from "../src/github.js";
-import type { ProcessRunner, RunOptions, RunResult } from "../src/process.js";
+import { GitHubClient } from "../src/github.js";
 
-class RecordingProcesses implements ProcessRunner {
-  calls: Array<{
-    program: string;
-    arguments_: readonly string[];
-    options: RunOptions | undefined;
-  }> = [];
-  outputs: string[] = [];
-
-  async run(
-    program: string,
-    arguments_: readonly string[],
-    options?: RunOptions,
-  ): Promise<RunResult> {
-    this.calls.push({ program, arguments_, options });
-    return {
-      exitCode: 0,
-      stdout: this.outputs.shift() ?? "{}",
-      stderr: "",
-    };
-  }
+interface RecordedRequest {
+  input: string | URL | Request;
+  init: RequestInit | undefined;
 }
 
-test("lists all comment pages through the authenticated gh CLI", async () => {
-  const processes = new RecordingProcesses();
-  processes.outputs.push(
-    JSON.stringify([[{ id: 1, body: "first" }], [{ id: 2, body: "second" }]]),
-  );
-  const comments = await new GhCliClient(processes).listIssueComments(
-    "owner/repository",
-    "2026-08-10T00:00:00.000Z",
-  );
+function recordingFetch(responses: Response[]) {
+  const requests: RecordedRequest[] = [];
+  const fetch_: typeof fetch = async (input, init) => {
+    requests.push({ input, init });
+    const response = responses.shift();
+    assert.ok(response, "unexpected GitHub API request");
+    return response;
+  };
+  return { fetch_, requests };
+}
+
+test("lists every page of issue comments with token authentication", async () => {
+  const next =
+    "https://api.github.com/repos/owner/repository/issues/comments?per_page=100&page=2";
+  const { fetch_, requests } = recordingFetch([
+    Response.json([{ id: 1, body: "first" }], {
+      headers: { link: `<${next}>; rel="next"` },
+    }),
+    Response.json([{ id: 2, body: "second" }]),
+  ]);
+
+  const comments = await new GitHubClient(
+    "secret-token",
+    fetch_,
+  ).listIssueComments("owner/repository", "2026-08-10T00:00:00.000Z");
+
   assert.deepEqual(
     comments.map((comment) => comment.id),
     [1, 2],
   );
-  assert.equal(processes.calls[0]?.program, "gh");
-  assert.deepEqual(processes.calls[0]?.arguments_.slice(0, 3), [
-    "api",
-    "--paginate",
-    "--slurp",
-  ]);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1]?.input, next);
+  assert.equal(
+    new Headers(requests[0]?.init?.headers).get("authorization"),
+    "Bearer secret-token",
+  );
 });
 
-test("posts comments without invoking a shell", async () => {
-  const processes = new RecordingProcesses();
+test("posts comments as JSON without invoking a subprocess", async () => {
+  const { fetch_, requests } = recordingFetch([Response.json({ id: 7 })]);
   const body = "result $(do-not-expand)";
-  await new GhCliClient(processes).postComment("owner/repository", 42, body);
-  assert.deepEqual(processes.calls[0]?.arguments_, [
-    "api",
-    "--method",
-    "POST",
-    "/repos/owner/repository/issues/42/comments",
-    "--field",
-    `body=${body}`,
+
+  await new GitHubClient("secret-token", fetch_).postComment(
+    "owner/repository",
+    42,
+    body,
+  );
+
+  assert.equal(
+    requests[0]?.input,
+    "https://api.github.com/repos/owner/repository/issues/42/comments",
+  );
+  assert.equal(requests[0]?.init?.method, "POST");
+  assert.equal(requests[0]?.init?.body, JSON.stringify({ body }));
+});
+
+test("checks repository write permission", async () => {
+  const { fetch_, requests } = recordingFetch([
+    Response.json({ permission: "write" }),
+    Response.json({ permission: "read" }),
+    new Response("not found", { status: 404 }),
   ]);
+  const github = new GitHubClient("secret-token", fetch_);
+
+  assert.equal(
+    await github.hasWritePermission("owner/repository", "maintainer"),
+    true,
+  );
+  assert.equal(
+    await github.hasWritePermission("owner/repository", "contributor"),
+    false,
+  );
+  assert.equal(
+    await github.hasWritePermission("owner/repository", "stranger"),
+    false,
+  );
+  assert.equal(
+    requests[0]?.input,
+    "https://api.github.com/repos/owner/repository/collaborators/maintainer/permission",
+  );
+  assert.equal(
+    new Headers(requests[0]?.init?.headers).get("x-github-api-version"),
+    "2026-03-10",
+  );
+});
+
+test("reports API failures without exposing the token", async () => {
+  const { fetch_ } = recordingFetch([
+    new Response("bad credentials", { status: 401 }),
+  ]);
+
+  await assert.rejects(
+    new GitHubClient("do-not-log-this", fetch_).getPullRequest(
+      "owner/repository",
+      42,
+    ),
+    (error: Error) => {
+      assert.match(error.message, /GitHub API GET .* failed: 401/);
+      assert.doesNotMatch(error.message, /do-not-log-this/);
+      return true;
+    },
+  );
 });
