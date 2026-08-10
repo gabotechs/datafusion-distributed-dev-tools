@@ -10,6 +10,7 @@ import {
   rmSync,
 } from "node:fs";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 
 import type { Job } from "./database.js";
 import type { ProcessRunner } from "./process.js";
@@ -37,6 +38,23 @@ export interface ExecutionResult {
   comparison: string;
   baseArtifact: string;
   headArtifact: string;
+  timings: ExecutionTimings;
+}
+
+export interface BenchmarkTiming {
+  dataset: string;
+  durationMs: number;
+}
+
+export interface ExecutionTimings {
+  validationMs: number;
+  baseCompileMs: number;
+  baseDeployMs: number;
+  baseBenchmarks: BenchmarkTiming[];
+  headCompileMs: number;
+  headDeployMs: number;
+  headBenchmarks: BenchmarkTiming[];
+  totalMs: number;
 }
 
 export class BenchmarkExecutor {
@@ -46,6 +64,17 @@ export class BenchmarkExecutor {
   ) {}
 
   async execute(job: Job): Promise<ExecutionResult> {
+    const executionStarted = performance.now();
+    const timings: ExecutionTimings = {
+      validationMs: 0,
+      baseCompileMs: 0,
+      baseDeployMs: 0,
+      baseBenchmarks: [],
+      headCompileMs: 0,
+      headDeployMs: 0,
+      headBenchmarks: [],
+      totalMs: 0,
+    };
     validateSha(job.baseSha);
     validateSha(job.headSha);
     if (job.datasets.length === 0) {
@@ -60,9 +89,11 @@ export class BenchmarkExecutor {
     mkdirSync(jobRoot, { recursive: true });
 
     try {
+      const validationStarted = performance.now();
       for (const dataset of job.datasets) {
         await this.prepareDatasetLayout(dataset, outputs.datasetBucketName);
       }
+      timings.validationMs = performance.now() - validationStarted;
       await this.prepareMirror(mirror);
       await this.removeWorktree(mirror, headSource);
       await this.removeWorktree(mirror, baseSource);
@@ -75,43 +106,61 @@ export class BenchmarkExecutor {
         this.resetResults(dataset, baseSource);
       }
 
+      const baseCompileStarted = performance.now();
       const baseBinary = await this.build(
         job.baseSha,
         baseSource,
         "trusted",
         undefined,
       );
+      timings.baseCompileMs = performance.now() - baseCompileStarted;
       const baseArtifact = await this.publish(
         baseBinary,
         outputs.artifactBucketName,
       );
       deploymentStarted = true;
+      const baseDeployStarted = performance.now();
       await this.deploy(baseArtifact, outputs, job);
+      timings.baseDeployMs = performance.now() - baseDeployStarted;
       for (const dataset of job.datasets) {
+        const benchmarkStarted = performance.now();
         await this.runBenchmark(dataset, job.id);
+        timings.baseBenchmarks.push({
+          dataset,
+          durationMs: performance.now() - benchmarkStarted,
+        });
       }
 
+      const headCompileStarted = performance.now();
       const headBinary = await this.build(
         job.headSha,
         headSource,
         "untrusted",
         job.baseSha,
       );
+      timings.headCompileMs = performance.now() - headCompileStarted;
       const headArtifact = await this.publish(
         headBinary,
         outputs.artifactBucketName,
       );
+      const headDeployStarted = performance.now();
       await this.deploy(headArtifact, outputs, job);
+      timings.headDeployMs = performance.now() - headDeployStarted;
       const comparisons: string[] = [];
       for (const dataset of job.datasets) {
+        const benchmarkStarted = performance.now();
         comparisons.push(await this.runBenchmark(dataset, job.id));
+        timings.headBenchmarks.push({
+          dataset,
+          durationMs: performance.now() - benchmarkStarted,
+        });
       }
       const comparison = comparisons
         .map((value) => value.trim())
         .filter(Boolean)
         .join("\n\n");
 
-      return { comparison, baseArtifact, headArtifact };
+      return { comparison, baseArtifact, headArtifact, timings };
     } finally {
       if (deploymentStarted) {
         await this.cleanupDeployment(outputs, job.id);
@@ -124,6 +173,7 @@ export class BenchmarkExecutor {
         this.config.buildCacheMaxBytes,
         new Set([`trusted-${job.baseSha}`, `untrusted-${job.headSha}`]),
       );
+      timings.totalMs = performance.now() - executionStarted;
     }
   }
 

@@ -16,7 +16,10 @@ the upstream benchmark settings of `c5n.2xlarge` and 12 nodes. Node counts are
 limited to 24.
 
 The bot creates one status comment for each accepted request and edits it in
-place as the job moves from queued to running and then completed or failed.
+place as the job moves from queued to running and then completed or failed. The
+comment links back to the request and includes a compact metadata section with
+queue, validation, compilation, Kubernetes provisioning, per-dataset benchmark,
+and total timings.
 
 ```text
 benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --instance-type c7i.2xlarge --nodes 6
