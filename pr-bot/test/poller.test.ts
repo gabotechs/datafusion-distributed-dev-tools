@@ -22,22 +22,24 @@ test("a failing comment does not prevent later comments from being queued", asyn
   const comments = [comment(1, "deleted-user"), comment(2, "maintainer")];
   const github = {
     listIssueComments: async () => comments,
-    hasWritePermission: async (_repository: string, login: string) => {
-      if (login === "deleted-user") throw new Error("temporary API failure");
-      return true;
+    getPullRequest: async (_repository: string, number: number) => {
+      if (number === 1) throw new Error("temporary API failure");
+      return {
+        number,
+        html_url: `https://github.com/owner/repository/pull/${number}`,
+        base: { sha: "a".repeat(40), ref: "main" },
+        head: { sha: "b".repeat(40), ref: "feature" },
+      };
     },
-    getPullRequest: async (_repository: string, number: number) => ({
-      number,
-      html_url: `https://github.com/owner/repository/pull/${number}`,
-      base: { sha: "a".repeat(40), ref: "main" },
-      head: { sha: "b".repeat(40), ref: "feature" },
-    }),
     postComment: async () => {},
   } as unknown as GitHubApi;
   try {
-    await new CommentPoller("owner/repository", database, github).poll(
-      new Date("2026-08-10T00:10:00.000Z"),
-    );
+    await new CommentPoller(
+      "owner/repository",
+      new Set(["deleted-user", "maintainer"]),
+      database,
+      github,
+    ).poll(new Date("2026-08-10T00:10:00.000Z"));
     assert.equal(database.nextPending()?.commentId, 2);
     assert.equal(database.isCommentSeen(1), false);
     assert.equal(
@@ -53,11 +55,16 @@ test("drops a permanently failing comment after three attempts", async () => {
   const database = new JobDatabase(":memory:");
   const failing = comment(1, "deleted-user");
   const github = {
-    hasWritePermission: async () => {
+    getPullRequest: async () => {
       throw new Error("permanent API failure");
     },
   } as unknown as GitHubApi;
-  const poller = new CommentPoller("owner/repository", database, github);
+  const poller = new CommentPoller(
+    "owner/repository",
+    new Set(["deleted-user"]),
+    database,
+    github,
+  );
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
       const minute = String(attempt * 10).padStart(2, "0");
@@ -68,6 +75,28 @@ test("drops a permanently failing comment after three attempts", async () => {
       assert.equal(terminal, attempt === 2);
     }
     assert.equal(database.isCommentSeen(1), true);
+  } finally {
+    database.close();
+  }
+});
+
+test("ignores benchmark commands from users outside the allowlist", async () => {
+  const database = new JobDatabase(":memory:");
+  const github = {
+    getPullRequest: async () => {
+      throw new Error("unauthorized comments must not load the pull request");
+    },
+  } as unknown as GitHubApi;
+  try {
+    const poller = new CommentPoller(
+      "owner/repository",
+      new Set(["maintainer"]),
+      database,
+      github,
+    );
+    await poller.process(comment(1, "stranger"));
+    assert.equal(database.isCommentSeen(1), true);
+    assert.equal(database.nextPending(), null);
   } finally {
     database.close();
   }

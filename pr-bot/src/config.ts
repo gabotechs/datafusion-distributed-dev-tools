@@ -2,6 +2,7 @@ export interface Config {
   repository: string;
   sourceRepositoryUrl: string;
   githubToken: string;
+  authorizedGithubLogins: ReadonlySet<string>;
   databasePath: string;
   pollIntervalMs: number;
   executor: {
@@ -38,6 +39,9 @@ export function loadConfig(): Config {
     repository: required("GITHUB_REPOSITORY"),
     sourceRepositoryUrl: required("SOURCE_REPOSITORY_URL"),
     githubToken: required("GH_TOKEN"),
+    authorizedGithubLogins: parseGithubLogins(
+      required("AUTHORIZED_GITHUB_LOGINS"),
+    ),
     databasePath: process.env.DATABASE_PATH ?? ".data/jobs.db",
     pollIntervalMs: pollIntervalSeconds * 1_000,
     executor: {
@@ -55,5 +59,23 @@ export function loadConfig(): Config {
       region: process.env.AWS_REGION ?? "us-east-1",
     },
   };
+}
+
+function parseGithubLogins(value: string): ReadonlySet<string> {
+  const logins = value
+    .split(",")
+    .map((login) => login.trim().toLowerCase())
+    .filter(Boolean);
+  if (
+    logins.length === 0 ||
+    logins.some(
+      (login) => !/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/.test(login),
+    )
+  ) {
+    throw new Error(
+      "AUTHORIZED_GITHUB_LOGINS must be a comma-separated list of GitHub logins",
+    );
+  }
+  return new Set(logins);
 }
 import path from "node:path";
