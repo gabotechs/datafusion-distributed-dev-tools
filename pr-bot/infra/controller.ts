@@ -169,6 +169,7 @@ sudo -u benchmark-build env HOME=/var/lib/datafusion-pr-build \
         `cat > /var/lib/datafusion-pr-bot/controller.env <<'ENVIRONMENT'
 AWS_REGION=${config.region}
 GITHUB_REPOSITORY=${config.githubRepository}
+AUTHORIZED_GITHUB_LOGINS=${config.authorizedGithubLogins.join(",")}
 SOURCE_REPOSITORY_URL=${config.sourceRepositoryUrl}
 DATABASE_PATH=/var/lib/datafusion-pr-bot/jobs.db
 STATE_ROOT=/var/lib/datafusion-pr-bot

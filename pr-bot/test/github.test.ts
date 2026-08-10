@@ -64,49 +64,6 @@ test("posts comments as JSON without invoking a subprocess", async () => {
   assert.equal(requests[0]?.init?.body, JSON.stringify({ body }));
 });
 
-test("checks repository write permission", async () => {
-  const { fetch_, requests } = recordingFetch([
-    Response.json({ permission: "write" }),
-    Response.json({ permission: "read" }),
-    new Response("not found", { status: 404 }),
-  ]);
-  const github = new GitHubClient("secret-token", fetch_);
-
-  assert.equal(
-    await github.hasWritePermission("owner/repository", "maintainer"),
-    true,
-  );
-  assert.equal(
-    await github.hasWritePermission("owner/repository", "contributor"),
-    false,
-  );
-  assert.equal(
-    await github.hasWritePermission("owner/repository", "stranger"),
-    false,
-  );
-  assert.equal(
-    requests[0]?.input,
-    "https://api.github.com/repos/owner/repository/collaborators/maintainer/permission",
-  );
-  assert.equal(
-    new Headers(requests[0]?.init?.headers).get("x-github-api-version"),
-    "2026-03-10",
-  );
-});
-
-test("treats a missing collaborator as lacking permission", async () => {
-  const { fetch_ } = recordingFetch([
-    new Response("not found", { status: 404 }),
-  ]);
-  assert.equal(
-    await new GitHubClient("secret-token", fetch_).hasWritePermission(
-      "owner/repository",
-      "former-collaborator",
-    ),
-    false,
-  );
-});
-
 test("reports API failures without exposing the token", async () => {
   const { fetch_ } = recordingFetch([
     new Response("bad credentials", { status: 401 }),
