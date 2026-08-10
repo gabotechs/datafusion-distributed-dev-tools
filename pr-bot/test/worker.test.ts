@@ -38,6 +38,11 @@ const TIMINGS = {
   totalMs: 420_000,
 };
 
+const COMPARISON = `=== Comparing tpch/sf1 results from engine 'base' [prev] with 'head' [new] ===
+      q1: prev= 100 ms, new= 120 ms, diff=1.20 slower ✖
+      q2: prev= 200 ms, new= 150 ms, diff=1.33 faster ✔
+   TOTAL: prev=300 ms, new=270 ms, diff=1.11 faster ✅`;
+
 test("reports a completed comparison and consumes the job", async () => {
   const database = new JobDatabase(":memory:");
   const comments: string[] = [];
@@ -59,7 +64,7 @@ test("reports a completed comparison and consumes the job", async () => {
           message: "Compiling the base revision",
         });
         return {
-          comparison: "TOTAL: 1.20 faster",
+          comparison: COMPARISON,
           timings: TIMINGS,
         };
       },
@@ -71,7 +76,11 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
     assert.match(comments[1]!, /Progress 3\/13/);
     assert.match(comments[1]!, /Compiling the base revision/);
-    assert.match(comments[2]!, /TOTAL: 1.20 faster/);
+    assert.match(comments[2]!, /TOTAL: prev=300 ms, new=270 ms/);
+    assert.match(comments[2]!, /Show full query output/);
+    assert.equal(comments[2]!.match(/=== Comparing/g)?.length, 1);
+    assert.equal(comments[2]!.match(/TOTAL:/g)?.length, 1);
+    assert.match(comments[2]!, /q1: prev= 100 ms/);
     assert.match(comments[2]!, /pull\/99#issuecomment-7/);
     assert.match(comments[2]!, /Run metadata/);
     assert.match(comments[2]!, /Compilation \| 1m 1s \| 1m 5s/);
@@ -129,13 +138,13 @@ test("continues the benchmark when a progress edit fails", async () => {
           totalSteps: 13,
           message: "Validating all requested datasets",
         });
-        return { comparison: "TOTAL: 1.20 faster", timings: TIMINGS };
+        return { comparison: COMPARISON, timings: TIMINGS };
       },
     });
 
     assert.equal(await worker.runOnce(), true);
     assert.equal(database.getJobForComment(JOB.commentId)?.status, "completed");
-    assert.match(comments.at(-1)!, /TOTAL: 1.20 faster/);
+    assert.match(comments.at(-1)!, /TOTAL: prev=300 ms/);
   } finally {
     database.close();
   }
