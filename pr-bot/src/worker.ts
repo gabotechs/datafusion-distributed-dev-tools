@@ -1,9 +1,16 @@
 import type { Job, JobDatabase } from "./database.js";
-import type { ExecutionTimings } from "./executor.js";
+import type {
+  ExecutionProgress,
+  ExecutionTimings,
+  ProgressReporter,
+} from "./executor.js";
 import type { GitHubApi } from "./github.js";
 
 export interface JobExecutor {
-  execute(job: Job): Promise<{
+  execute(
+    job: Job,
+    onProgress?: ProgressReporter,
+  ): Promise<{
     comparison: string;
     timings: ExecutionTimings;
   }>;
@@ -29,7 +36,9 @@ export class JobWorker {
         job.statusCommentId,
         `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.`,
       );
-      const result = await this.executor.execute(job);
+      const result = await this.executor.execute(job, async (progress) => {
+        await this.updateProgress(job, progress);
+      });
       await this.github.updateComment(
         job.repository,
         job.statusCommentId,
@@ -48,6 +57,29 @@ export class JobWorker {
     }
     return true;
   }
+
+  async updateProgress(job: Job, progress: ExecutionProgress): Promise<void> {
+    try {
+      await this.github.updateComment(
+        job.repository,
+        job.statusCommentId!,
+        renderProgress(job, progress),
+      );
+    } catch (error) {
+      console.error(
+        `Could not update progress for benchmark job ${job.id}`,
+        error,
+      );
+    }
+  }
+}
+
+function renderProgress(job: Job, progress: ExecutionProgress): string {
+  return `${requestLink(job)}
+
+Running ${formatDatasets(job.datasets)} on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.
+
+**Progress ${progress.step}/${progress.totalSteps}:** ${progress.message}.`;
 }
 
 function renderResult(
