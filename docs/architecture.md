@@ -29,11 +29,11 @@ that existing namespace.
 
 ### GitHub integration
 
-The controller polls PR comments through a manually authenticated `gh` CLI. It
-deduplicates comment IDs, validates the commenter's repository permission, and
-accepts only `benchmarks run <suite>/<variant>` commands. Polling keeps the EC2
-instance private with no inbound internet listener. GitHub authentication is not
-managed by Pulumi.
+The controller polls PR comments through the GitHub REST API using a manually
+provisioned `GH_TOKEN`. It deduplicates comment IDs, validates the commenter's
+repository permission, and accepts only `benchmarks run <suite>/<variant>`
+commands. Polling keeps the EC2 instance private with no inbound internet
+listener. GitHub authentication is not managed by Pulumi.
 
 ## Job sequence
 
@@ -57,7 +57,7 @@ Treat pull-request code as untrusted even when a maintainer requests the run.
 Cargo build scripts and the resulting worker can execute arbitrary code.
 
 - Run fetch and compilation as the separate `benchmark-build` account. It cannot
-  read the controller's `gh` configuration or environment file.
+  read the controller's environment file or `GH_TOKEN`.
 - Block EC2 metadata during dependency fetch. Run compilation with networking
   disabled, the source tree read-only, and only the revision-specific Cargo
   caches writable.
