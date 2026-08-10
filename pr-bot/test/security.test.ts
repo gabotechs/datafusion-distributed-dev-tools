@@ -39,6 +39,7 @@ test("hides controller state and cannot silently lose offline isolation", () => 
   assert.match(fetch, /IPAddressAllow="\$\{dns_server\}"/);
   assert.match(build, /PrivateNetwork=yes/);
   assert.match(build, /--offline/);
+  assert.match(build, /XDG_CACHE_HOME="\$\{cargo_home\}\/cache"/);
   assert.match(build, /benchmarks\/Cargo\.toml/);
   assert.doesNotMatch(build, /benchmarks-remote/);
 });
