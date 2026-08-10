@@ -421,8 +421,13 @@ export class BenchmarkExecutor {
 
   async runBenchmark(dataset: string, jobId: number): Promise<string> {
     const result = await this.processes.run(
-      "npm",
-      ["run", "datafusion-bench", "--", "--dataset", dataset],
+      "bash",
+      [
+        path.join(this.config.harnessRoot, "k8s", "run-benchmark.sh"),
+        "datafusion",
+        "--dataset",
+        dataset,
+      ],
       {
         cwd: this.config.harnessRoot,
         env: {
