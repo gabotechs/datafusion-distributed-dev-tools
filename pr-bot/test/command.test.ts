@@ -7,11 +7,22 @@ test("parses the requested dataset and capacity", () => {
   assert.deepEqual(parseComment("benchmarks run tpch/sf1"), {
     kind: "request",
     request: {
-      dataset: "tpch/sf1",
+      datasets: ["tpch/sf1"],
       instanceType: "c5n.2xlarge",
       nodeCount: 12,
     },
   });
+  assert.deepEqual(
+    parseComment("benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --nodes 6"),
+    {
+      kind: "request",
+      request: {
+        datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
+        instanceType: "c5n.2xlarge",
+        nodeCount: 6,
+      },
+    },
+  );
   assert.deepEqual(
     parseComment(
       "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 12",
@@ -19,7 +30,7 @@ test("parses the requested dataset and capacity", () => {
     {
       kind: "request",
       request: {
-        dataset: "tpch/sf1",
+        datasets: ["tpch/sf1"],
         instanceType: "c7i.2xlarge",
         nodeCount: 12,
       },
@@ -32,7 +43,7 @@ test("parses the requested dataset and capacity", () => {
     {
       kind: "request",
       request: {
-        dataset: "tpch/sf1",
+        datasets: ["tpch/sf1"],
         instanceType: "c7i.2xlarge",
         nodeCount: 12,
       },
@@ -41,7 +52,7 @@ test("parses the requested dataset and capacity", () => {
   assert.deepEqual(parseComment("benchmarks run tpch/sf1 --nodes 4"), {
     kind: "request",
     request: {
-      dataset: "tpch/sf1",
+      datasets: ["tpch/sf1"],
       instanceType: "c5n.2xlarge",
       nodeCount: 4,
     },
@@ -51,7 +62,7 @@ test("parses the requested dataset and capacity", () => {
     {
       kind: "request",
       request: {
-        dataset: "tpch/sf1",
+        datasets: ["tpch/sf1"],
         instanceType: "c7i.2xlarge",
         nodeCount: 12,
       },
@@ -111,7 +122,11 @@ test("rejects aliases and extra arguments", () => {
     {
       kind: "invalid",
       message:
-        "Expected `benchmarks run <suite>/<variant> [--instance-type <type>] [--nodes <count>]`.",
+        "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>]`.",
     },
   );
+  assert.deepEqual(parseComment("benchmarks run tpch/sf1 tpch/sf1"), {
+    kind: "invalid",
+    message: "Each dataset may be requested only once.",
+  });
 });
