@@ -11,7 +11,7 @@ export interface NewJob {
   pullRequestNumber: number;
   pullRequestUrl: string;
   requestedBy: string;
-  dataset: string;
+  datasets: string[];
   benchmarkInstanceType: string;
   benchmarkNodeCount: number;
   baseSha: string;
@@ -55,6 +55,7 @@ export class JobDatabase {
     this.ensureAttemptCountColumn();
     this.ensureBenchmarkCapacityColumns();
     this.ensureStatusCommentIdColumn();
+    this.ensureDatasetsJsonColumn();
     if (databasePath !== ":memory:") chmodSync(databasePath, 0o600);
   }
 
@@ -123,6 +124,10 @@ export class JobDatabase {
   }
 
   enqueue(job: NewJob, now = new Date()): number | null {
+    const primaryDataset = job.datasets[0];
+    if (!primaryDataset) {
+      throw new Error("A benchmark job must contain at least one dataset");
+    }
     const timestamp = now.toISOString();
     this.#database.exec("BEGIN IMMEDIATE");
     try {
@@ -146,9 +151,10 @@ export class JobDatabase {
         .prepare(
           `INSERT OR IGNORE INTO jobs(
              comment_id, repository, pull_request_number, pull_request_url,
-             requested_by, dataset, benchmark_instance_type, benchmark_node_count,
+             requested_by, dataset, datasets_json,
+             benchmark_instance_type, benchmark_node_count,
              base_sha, head_sha, status, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
         )
         .run(
           job.commentId,
@@ -156,7 +162,8 @@ export class JobDatabase {
           job.pullRequestNumber,
           job.pullRequestUrl,
           job.requestedBy,
-          job.dataset,
+          primaryDataset,
+          JSON.stringify(job.datasets),
           job.benchmarkInstanceType,
           job.benchmarkNodeCount,
           job.baseSha,
@@ -315,6 +322,15 @@ export class JobDatabase {
       );
     }
   }
+
+  private ensureDatasetsJsonColumn(): void {
+    const columns = this.#database.prepare("PRAGMA table_info(jobs)").all() as {
+      name: string;
+    }[];
+    if (!columns.some((column) => column.name === "datasets_json")) {
+      this.#database.exec("ALTER TABLE jobs ADD COLUMN datasets_json TEXT");
+    }
+  }
 }
 
 function jobFromRow(row: Record<string, unknown>): Job {
@@ -327,7 +343,7 @@ function jobFromRow(row: Record<string, unknown>): Job {
     pullRequestNumber: Number(row.pull_request_number),
     pullRequestUrl: String(row.pull_request_url),
     requestedBy: String(row.requested_by),
-    dataset: String(row.dataset),
+    datasets: parseDatasets(row.datasets_json, row.dataset),
     benchmarkInstanceType: String(row.benchmark_instance_type),
     benchmarkNodeCount: Number(row.benchmark_node_count),
     baseSha: String(row.base_sha),
@@ -338,4 +354,22 @@ function jobFromRow(row: Record<string, unknown>): Job {
     updatedAt: String(row.updated_at),
     attemptCount: Number(row.attempt_count),
   };
+}
+
+function parseDatasets(value: unknown, legacyDataset: unknown): string[] {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (
+        Array.isArray(parsed) &&
+        parsed.length > 0 &&
+        parsed.every((dataset) => typeof dataset === "string")
+      ) {
+        return parsed;
+      }
+    } catch {
+      // Fall back to the legacy single-dataset column.
+    }
+  }
+  return [String(legacyDataset)];
 }

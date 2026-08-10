@@ -6,18 +6,20 @@ This service listens for trusted pull-request comments in the form:
 benchmarks run tpch/sf1
 ```
 
-For each request it creates an isolated Kubernetes deployment with the requested
-capacity, benchmarks the pull request's immutable base SHA, deploys the pull
-request head SHA to the same deployment, repeats the same workload, posts the
-comparison, and removes the deployment. The optional `--instance-type` and
-`--nodes` arguments default to the upstream benchmark settings of `c5n.2xlarge`
-and 12 nodes. Node counts are limited to 24.
+Each request may contain one or more datasets. The bot validates that every
+dataset is available before building or deploying anything, creates an isolated
+Kubernetes deployment with the requested capacity, runs every dataset against
+the pull request's immutable base SHA, deploys the head SHA once, repeats the
+same datasets in the same order, posts the combined comparison, and removes the
+deployment. The optional `--instance-type` and `--nodes` arguments default to
+the upstream benchmark settings of `c5n.2xlarge` and 12 nodes. Node counts are
+limited to 24.
 
 The bot creates one status comment for each accepted request and edits it in
 place as the job moves from queued to running and then completed or failed.
 
 ```text
-benchmarks run tpch/sf10 --instance-type c7i.2xlarge --nodes 6
+benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --instance-type c7i.2xlarge --nodes 6
 ```
 
 ## Architecture
