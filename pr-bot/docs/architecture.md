@@ -19,9 +19,9 @@ that only one deployment owns the dedicated benchmark cluster.
 ### Human-managed benchmark foundation
 
 The dedicated EKS cluster, namespaces, service accounts, node configuration, and
-dataset bucket are provisioned from `datafusion-distributed/benchmarks-remote`.
-The bot is configured with their existing identifiers. It does not create,
-modify, or destroy foundation resources.
+dataset bucket are provisioned from the repository's `benchmarks-remote/`
+project. The bot is configured with their existing identifiers. It does not
+create, modify, or destroy foundation resources.
 
 The controller stack creates a separate private bucket for its root-owned
 application bundle and content-addressed untrusted worker artifacts. The EC2

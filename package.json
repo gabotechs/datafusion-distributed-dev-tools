@@ -1,32 +1,36 @@
 {
-  "name": "datafusion-distributed-pr-bot",
+  "name": "datafusion-distributed-dev-tools",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "build": "tsc --noEmit",
-    "application:build": "tsc --project tsconfig.controller.json",
-    "controller-deploy": "npm run application:build && npm run pulumi:build && pulumi up",
-    "controller-destroy": "pulumi destroy",
-    "controller-outputs": "pulumi stack output --json",
-    "controller-ssh": "aws ssm start-session --target $(pulumi stack output controllerInstanceId)",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "start": "node dist/application/src/main.js",
-    "test": "npm run application:build && node --import tsx --test test/*.test.ts",
-    "pulumi:build": "tsc --project tsconfig.pulumi.json"
-  },
-  "devDependencies": {
-    "@types/node": "26.2.0",
-    "prettier": "3.9.6",
-    "tsx": "4.23.12",
-    "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "@pulumi/aws": "^7.41.0",
-    "@pulumi/pulumi": "^3.256.0"
+    "install:all": "npm --prefix pr-bot install && npm --prefix benchmarks-remote install",
+    "build": "npm --prefix pr-bot run build && npm --prefix benchmarks-remote run build",
+    "test": "npm --prefix pr-bot test && npm --prefix benchmarks-remote test",
+    "format:check": "npm --prefix pr-bot run format:check && npm --prefix benchmarks-remote/pulumi run format",
+    "controller-deploy": "npm --prefix pr-bot run controller-deploy",
+    "controller-destroy": "npm --prefix pr-bot run controller-destroy",
+    "controller-outputs": "npm --prefix pr-bot run controller-outputs",
+    "controller-ssh": "npm --prefix pr-bot run controller-ssh",
+    "foundation-deploy": "npm --prefix benchmarks-remote run foundation-deploy",
+    "foundation-destroy": "npm --prefix benchmarks-remote run foundation-destroy",
+    "sync-bucket": "npm --prefix benchmarks-remote run sync-bucket --",
+    "dataset-destroy": "npm --prefix benchmarks-remote run dataset-destroy --",
+    "compare": "npm --prefix benchmarks-remote run compare --",
+    "datafusion-deploy": "npm --prefix benchmarks-remote run datafusion-deploy",
+    "datafusion-destroy": "npm --prefix benchmarks-remote run datafusion-destroy",
+    "datafusion-bench": "npm --prefix benchmarks-remote run datafusion-bench --",
+    "trino-deploy": "npm --prefix benchmarks-remote run trino-deploy",
+    "trino-destroy": "npm --prefix benchmarks-remote run trino-destroy",
+    "trino-bench": "npm --prefix benchmarks-remote run trino-bench --",
+    "spark-deploy": "npm --prefix benchmarks-remote run spark-deploy",
+    "spark-destroy": "npm --prefix benchmarks-remote run spark-destroy",
+    "spark-bench": "npm --prefix benchmarks-remote run spark-bench --",
+    "ballista-deploy": "npm --prefix benchmarks-remote run ballista-deploy",
+    "ballista-destroy": "npm --prefix benchmarks-remote run ballista-destroy",
+    "ballista-bench": "npm --prefix benchmarks-remote run ballista-bench --",
+    "command": "npm --prefix benchmarks-remote run command --"
   }
 }
