@@ -1,6 +1,6 @@
 import { parseComment } from "./command.js";
 import { JobDatabase } from "./database.js";
-import { GitHubClient, type IssueComment } from "./github.js";
+import type { GitHubApi, IssueComment } from "./github.js";
 
 const INITIAL_LOOKBACK_MS = 60 * 60 * 1_000;
 const SCAN_OVERLAP_MS = 2 * 60 * 1_000;
@@ -9,7 +9,7 @@ export class CommentPoller {
   constructor(
     readonly repository: string,
     readonly database: JobDatabase,
-    readonly github: GitHubClient,
+    readonly github: GitHubApi,
   ) {}
 
   async poll(now = new Date()): Promise<void> {

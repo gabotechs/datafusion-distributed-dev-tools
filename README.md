@@ -14,8 +14,10 @@ workload, and posts the comparison to the pull request.
 
 - A persistent EC2 controller serializes jobs and keeps its Git mirror, Cargo
   registry, and Rust build artifacts on an EBS volume.
-- Builds run in credential-free containers. The trusted controller uploads the
-  resulting worker binary and performs Kubernetes operations.
+- Rust, Zig, and Cargo build tooling is installed directly on EC2. Untrusted
+  compilation runs as a separate OS user in a systemd sandbox; the trusted
+  controller uploads the resulting worker binary and performs Kubernetes
+  operations.
 - A human provisions a dedicated remote-benchmark foundation from
   `datafusion-distributed/benchmarks-remote`. This repository consumes its
   cluster and dataset bucket but never creates, updates, or destroys them.
@@ -51,9 +53,6 @@ pulumi config set benchmarkInstanceType c5n.2xlarge
 pulumi config set benchmarkNodeCount 12
 pulumi config set githubRepository datafusion-contrib/datafusion-distributed
 pulumi config set sourceRepositoryUrl https://github.com/datafusion-contrib/datafusion-distributed.git
-pulumi config set githubAppId your-app-id
-pulumi config set githubInstallationId your-installation-id
-pulumi config set --secret githubPrivateKey
 npm run controller-deploy
 ```
 
@@ -82,6 +81,23 @@ aws eks associate-access-policy \
 These are foundation operations and intentionally remain outside this
 repository's Pulumi program. Destroying the controller leaves the EKS cluster,
 namespaces, datasets, and benchmark nodes untouched.
+
+## GitHub authentication
+
+This project does not create or configure a GitHub App. After connecting to the
+controller machine, install `gh` if necessary and authenticate it manually for
+the service account:
+
+```bash
+sudo -u benchmark-bot env HOME=/var/lib/datafusion-pr-bot gh auth login
+sudo -u benchmark-bot env HOME=/var/lib/datafusion-pr-bot gh auth status
+sudo systemctl restart datafusion-pr-bot
+```
+
+The selected GitHub account must be able to read pull requests and repository
+collaborator permissions, and to read and create issue comments. The service
+uses the persisted `gh` configuration directly; no GitHub token or private key
+is stored in Pulumi or AWS Secrets Manager.
 
 ## Development
 

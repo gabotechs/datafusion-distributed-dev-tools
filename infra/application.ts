@@ -9,7 +9,7 @@ function findRepositoryRoot(): string {
   while (true) {
     if (
       existsSync(path.join(current, "package.json")) &&
-      existsSync(path.join(current, "builder", "Dockerfile"))
+      existsSync(path.join(current, "controller", "cargo-build"))
     ) {
       return current;
     }
@@ -38,6 +38,8 @@ export function applicationArchive(): pulumi.asset.AssetArchive {
     migrations: new pulumi.asset.FileArchive(
       path.join(repositoryRoot, "migrations"),
     ),
-    builder: new pulumi.asset.FileArchive(path.join(repositoryRoot, "builder")),
+    controller: new pulumi.asset.FileArchive(
+      path.join(repositoryRoot, "controller"),
+    ),
   });
 }

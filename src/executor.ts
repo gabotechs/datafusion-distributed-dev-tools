@@ -22,11 +22,9 @@ interface FoundationOutputs {
 export interface ExecutorConfig {
   repositoryUrl: string;
   stateRoot: string;
-  builderImage: string;
   foundationOutputsFile: string;
   kubeconfig: string;
   testdataRoot: string;
-  containerRuntime: string;
   region: string;
 }
 
@@ -206,74 +204,26 @@ export class BenchmarkExecutor {
     const cacheRoot = path.join(this.config.stateRoot, "build-cache");
     const target = path.join(cacheRoot, "targets", sha);
     const cargoHome = path.join(cacheRoot, "cargo", sha);
-    if (!existsSync(target) && seedSha) {
-      await copyOnWrite(
-        this.processes,
-        path.join(cacheRoot, "targets", seedSha),
-        target,
-      );
-    }
-    if (!existsSync(cargoHome) && seedSha) {
-      await copyOnWrite(
-        this.processes,
-        path.join(cacheRoot, "cargo", seedSha),
-        cargoHome,
-      );
-    }
-    mkdirSync(target, { recursive: true });
-    mkdirSync(cargoHome, { recursive: true });
-
-    const mounts = [
-      "--mount",
-      `type=bind,src=${source},dst=/source,readonly`,
-      "--mount",
-      `type=bind,src=${target},dst=/target`,
-      "--mount",
-      `type=bind,src=${cargoHome},dst=/cargo`,
-    ];
-    const cargo = [
-      "cargo",
-      "zigbuild",
-      "--locked",
-      "--manifest-path",
-      "/source/benchmarks-remote/engines/datafusion/Cargo.toml",
-      "--package",
-      "datafusion-distributed-benchmark-worker",
-      "--release",
-      "--bin",
-      "worker",
-      "--target",
-      "x86_64-unknown-linux-gnu",
-    ];
-    const environment = [
-      "--env",
-      "CARGO_HOME=/cargo",
-      "--env",
-      "CARGO_TARGET_DIR=/target",
-      "--env",
-      "AWS_EC2_METADATA_DISABLED=true",
-    ];
-
-    await this.processes.run(this.config.containerRuntime, [
-      "run",
-      "--rm",
-      ...mounts,
-      ...environment,
-      this.config.builderImage,
-      "cargo",
-      "fetch",
-      "--locked",
-      "--manifest-path",
-      "/source/benchmarks-remote/engines/datafusion/Cargo.toml",
+    const seedTarget = seedSha ? path.join(cacheRoot, "targets", seedSha) : "";
+    const seedCargoHome = seedSha ? path.join(cacheRoot, "cargo", seedSha) : "";
+    await this.processes.run("sudo", [
+      "/usr/local/sbin/datafusion-pr-prepare-cache",
+      target,
+      cargoHome,
+      seedTarget,
+      seedCargoHome,
     ]);
-    await this.processes.run(this.config.containerRuntime, [
-      "run",
-      "--rm",
-      "--network=none",
-      ...mounts,
-      ...environment,
-      this.config.builderImage,
-      ...cargo,
+    await this.processes.run("sudo", [
+      "/usr/local/sbin/datafusion-pr-cargo-fetch",
+      source,
+      target,
+      cargoHome,
+    ]);
+    await this.processes.run("sudo", [
+      "/usr/local/sbin/datafusion-pr-cargo-build",
+      source,
+      target,
+      cargoHome,
     ]);
 
     const binary = path.join(
@@ -405,21 +355,6 @@ export function safeDatasetPath(root: string, dataset: string): string {
     throw new Error(`Dataset escapes testdata root: ${dataset}`);
   }
   return resolved;
-}
-
-export async function copyOnWrite(
-  processes: ProcessRunner,
-  source: string,
-  destination: string,
-): Promise<void> {
-  if (!existsSync(source)) return;
-  mkdirSync(destination, { recursive: true });
-  await processes.run("cp", [
-    "--archive",
-    "--reflink=auto",
-    `${source}${path.sep}.`,
-    `${destination}${path.sep}`,
-  ]);
 }
 
 async function sha256(file: string): Promise<string> {
