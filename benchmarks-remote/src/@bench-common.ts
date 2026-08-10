@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs/promises";
 import * as fsSync from "fs";
+import {performance} from "node:perf_hooks";
 import {BenchmarkRun, BenchResult} from "./@results";
 import {datasetParts, datasetPath, DEV_TOOLS_ROOT, testdataRoots} from "./@paths";
 
@@ -135,12 +136,21 @@ export async function runBenchmark(
         dataset: string
         engine: string,
         iterations: number;
+        timeSecs: number;
         queries: string[];
         debug: boolean;
         warmup: boolean;
+        now?: () => number;
     }
 ) {
-    const { dataset, engine, iterations, queries, warmup, debug } = options;
+    const { dataset, engine, iterations, timeSecs, queries, warmup, debug } = options;
+    if (!Number.isSafeInteger(iterations) || iterations <= 0) {
+        throw new Error(`Iterations must be a positive integer, got ${iterations}`);
+    }
+    if (!Number.isFinite(timeSecs) || timeSecs < 0) {
+        throw new Error(`Time must be a non-negative number of seconds, got ${timeSecs}`);
+    }
+    const now = options.now ?? (() => performance.now());
 
     const benchmarkRun = new BenchmarkRun(dataset, engine)
 
@@ -172,7 +182,9 @@ export async function runBenchmark(
             }
         }
 
-        for (let i = 0; i < iterations; i++) {
+        const queryStarted = now();
+        let i = 0;
+        while (i < iterations || now() - queryStarted < timeSecs * 1000) {
             let response
             try {
                 response = await runner.executeQuery(sql);
@@ -209,6 +221,7 @@ export async function runBenchmark(
                     `Query ${id} iteration ${i} took ${Math.round(response.elapsed)} ms and returned ${response.rowCount} rows`
                 );
             }
+            i += 1;
         }
 
         console.error(`Query ${id} p50 time: ${result.p50()} ms`);
@@ -217,6 +230,8 @@ export async function runBenchmark(
     }
 
     // Write results and compare
-    benchmarkRun.compareWithPrevious()
+    if (process.env.BENCHMARK_COMPARE !== "false") {
+        benchmarkRun.compareWithPrevious()
+    }
     benchmarkRun.store()
 }

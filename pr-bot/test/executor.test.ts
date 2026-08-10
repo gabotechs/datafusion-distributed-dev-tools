@@ -126,8 +126,11 @@ test("executes base before head with the bundled trusted harness", async () => {
       dataset: string,
       jobId: number,
       sourceRoot: string,
-    ): Promise<string> {
+    ): Promise<void> {
       events.push(`run:${jobId}:${dataset}:${path.basename(sourceRoot)}`);
+    }
+    override async compareResults(dataset: string): Promise<string> {
+      events.push(`compare:${dataset}`);
       return `comparison:${dataset}`;
     }
     override async cleanupDeployment(
@@ -201,8 +204,11 @@ test("executes base before head with the bundled trusted harness", async () => {
     "publish:b",
     "deploy:b:c7i.2xlarge:12",
     "run:7:tpch/sf1:head",
+    "compare:tpch/sf1",
     "run:7:tpch/sf10:head",
+    "compare:tpch/sf10",
     "run:7:tpch/sf100:head",
+    "compare:tpch/sf100",
     "cleanup-deployment:7",
     "remove:head",
     "remove:base",
@@ -273,24 +279,67 @@ test("uses request capacity in an isolated per-job Helm release", async () => {
   ]);
 });
 
-test("runs benchmarks against the selected source worktree", async () => {
+test("runs benchmarks against the selected source worktree without comparing stdout", async () => {
   const { config } = fixture();
   let options: RunOptions | undefined;
   const processes: ProcessRunner = {
     async run(_program, _arguments, runOptions): Promise<RunResult> {
       options = runOptions;
-      return { exitCode: 0, stdout: "comparison", stderr: "" };
+      return { exitCode: 0, stdout: "ignored output", stderr: "" };
     },
   };
   const sourceRoot = path.join(config.workRoot, "jobs", "7", "head");
 
+  await new BenchmarkExecutor(config, processes).runBenchmark(
+    "tpch/sf1",
+    JOB.id,
+    sourceRoot,
+  );
+
+  assert.equal(options?.env?.DATAFUSION_DISTRIBUTED_ROOT, sourceRoot);
+  assert.equal(options?.env?.BENCHMARK_COMPARE, "false");
+});
+
+test("reads comparisons generated from stored result files", async () => {
+  const { config, root } = fixture();
+  let program: string | undefined;
+  let arguments_: readonly string[] | undefined;
+  let options: RunOptions | undefined;
+  const processes: ProcessRunner = {
+    async run(runProgram, runArguments, runOptions): Promise<RunResult> {
+      program = runProgram;
+      arguments_ = runArguments;
+      options = runOptions;
+      const output = runArguments[runArguments.indexOf("--output") + 1]!;
+      mkdirSync(path.dirname(output), { recursive: true });
+      writeFileSync(output, "comparison from files\n");
+      return { exitCode: 0, stdout: "ignored", stderr: "" };
+    },
+  };
+  const output = path.join(root, "reports", "tpch-sf1.txt");
+
   const comparison = await new BenchmarkExecutor(
     config,
     processes,
-  ).runBenchmark("tpch/sf1", JOB.id, sourceRoot);
+  ).compareResults(
+    "tpch/sf1",
+    "datafusion-distributed-aaaaaaaaaaaa",
+    "datafusion-distributed-bbbbbbbbbbbb",
+    output,
+  );
 
-  assert.equal(comparison, "comparison");
-  assert.equal(options?.env?.DATAFUSION_DISTRIBUTED_ROOT, sourceRoot);
+  assert.equal(comparison, "comparison from files\n");
+  assert.equal(program, "node");
+  assert.ok(arguments_?.[0]?.endsWith("/dist/compare.cjs"));
+  assert.deepEqual(arguments_?.slice(1), [
+    "--dataset",
+    "tpch/sf1",
+    "--output",
+    output,
+    "datafusion-distributed-aaaaaaaaaaaa",
+    "datafusion-distributed-bbbbbbbbbbbb",
+  ]);
+  assert.equal(options?.env?.BENCHMARK_TESTDATA_ROOT, config.testdataRoot);
 });
 
 test("removes stale per-job releases when the controller starts", async () => {

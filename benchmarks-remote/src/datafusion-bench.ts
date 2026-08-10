@@ -9,6 +9,7 @@ async function main() {
     program
         .requiredOption('--dataset <string>', 'Dataset to run queries on')
         .option('-i, --iterations <number>', 'Number of iterations', '5')
+        .option('--time-secs <number>', 'Minimum measured time per query in seconds', '0')
         .option('--file-scan-config-bytes-per-partition <number>', 'Bytes each partition scans', '16777216')
         .option('--cardinality-task-sf <number>', 'Cardinality task scale factor', '1')
         .option('--batch-size <number>', 'Standard Batch coalescing size (number of rows)', '32768')
@@ -32,6 +33,7 @@ async function main() {
 
     const dataset: string = options.dataset
     const iterations = parseInt(options.iterations);
+    const timeSecs = parseFloat(options.timeSecs);
     const fileScanConfigBytesPerPartition = parseInt(options.fileScanConfigBytesPerPartition);
     const cardinalityTaskSf = parseInt(options.cardinalityTaskSf);
     const batchSize = parseInt(options.batchSize);
@@ -71,6 +73,7 @@ async function main() {
         dataset,
         engine: `datafusion-distributed-${datafusionDistributedGitReference()}`,
         iterations,
+        timeSecs,
         queries,
         debug,
         warmup

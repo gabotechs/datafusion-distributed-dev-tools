@@ -8,6 +8,7 @@ async function main() {
     program
         .requiredOption('--dataset <string>', 'Dataset to run queries on')
         .option('-i, --iterations <number>', 'Number of iterations', '5')
+        .option('--time-secs <number>', 'Minimum measured time per query in seconds', '0')
         .option('--queries <string>', 'Specific queries to run', undefined)
         .option('--debug <boolean>', 'Print the generated plans to stdout')
         .option('--warmup <boolean>', 'Perform a warmup query before the benchmarks', 'true')
@@ -17,6 +18,7 @@ async function main() {
 
     const dataset: string = options.dataset
     const iterations = parseInt(options.iterations);
+    const timeSecs = parseFloat(options.timeSecs);
     const queries = options.queries?.split(",") ?? []
     const debug = options.debug === true || options.debug === 'true' || options.debug === 1
     const warmup = options.warmup === true || options.warmup === 'true' || options.warmup === 1
@@ -27,6 +29,7 @@ async function main() {
         dataset,
         engine: 'ballista',
         iterations,
+        timeSecs,
         queries,
         debug,
         warmup
