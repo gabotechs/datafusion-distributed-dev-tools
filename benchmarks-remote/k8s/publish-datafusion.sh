@@ -22,7 +22,7 @@ ZIG_LOCAL_CACHE_DIR=${ZIG_LOCAL_CACHE_DIR:-${TMPDIR:-/tmp}/datafusion-distribute
   --bin worker \
   --target x86_64-unknown-linux-gnu
 
-worker_binary="${root}/target/x86_64-unknown-linux-gnu/release/worker"
+worker_binary="${root}/benchmarks-remote/engines/datafusion/target/x86_64-unknown-linux-gnu/release/worker"
 binary_sha=$(shasum -a 256 "${worker_binary}" | awk '{print $1}')
 artifact="s3://${dataset_bucket}/.benchmark-artifacts/datafusion/${binary_sha}/worker"
 if ! aws_cli s3api head-object \
