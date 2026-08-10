@@ -9,6 +9,7 @@ const MAX_COMMENT_ATTEMPTS = 3;
 export class CommentPoller {
   constructor(
     readonly repository: string,
+    readonly authorizedGithubLogins: ReadonlySet<string>,
     readonly database: JobDatabase,
     readonly github: GitHubApi,
   ) {}
@@ -75,11 +76,7 @@ export class CommentPoller {
       this.database.markCommentSeen(comment.id);
       return;
     }
-    const allowed = await this.github.hasWritePermission(
-      this.repository,
-      comment.user.login,
-    );
-    if (!allowed) {
+    if (!this.authorizedGithubLogins.has(comment.user.login.toLowerCase())) {
       this.database.markCommentSeen(comment.id);
       return;
     }

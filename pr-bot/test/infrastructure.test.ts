@@ -26,6 +26,7 @@ function testConfig(): ControllerConfig {
     benchmarkWorkloadRoleArn:
       "arn:aws:iam::123456789012:role/benchmark-workload-role",
     githubRepository: "owner/repository",
+    authorizedGithubLogins: ["maintainer"],
     sourceRepositoryUrl: "https://example.invalid/repository.git",
     nodeVersion: "24.18.1",
     nodeSha256:
