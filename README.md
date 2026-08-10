@@ -31,6 +31,9 @@ remote benchmark commands read datasets and queries from the source checkout's
   datafusion-distributed-dev-tools/
 ```
 
+Set `DATAFUSION_DISTRIBUTED_ROOT` when running commands against a source
+worktree outside this default layout.
+
 ## Development
 
 Install each component's dependencies:
