@@ -2,6 +2,7 @@ import { loadConfig } from "./config.js";
 import { JobDatabase } from "./database.js";
 import { BenchmarkExecutor } from "./executor.js";
 import { GitHubClient } from "./github.js";
+import { waitForNextPoll } from "./poll-wait.js";
 import { CommentPoller } from "./poller.js";
 import { LocalProcessRunner } from "./process.js";
 import { JobWorker } from "./worker.js";
@@ -46,28 +47,28 @@ for (const job of recovery.failed) {
   }
 }
 
-let stopping = false;
+const shutdown = new AbortController();
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
-    stopping = true;
+    shutdown.abort();
   });
 }
 
-while (!stopping) {
+while (!shutdown.signal.aborted) {
   try {
     await poller.poll();
   } catch (error) {
     console.error("GitHub comment poll failed", error);
   }
   try {
-    while (!stopping && (await worker.runOnce())) {
+    while (!shutdown.signal.aborted && (await worker.runOnce())) {
       // Drain the serialized queue before waiting for the next poll.
     }
   } catch (error) {
     console.error("Benchmark queue processing failed", error);
   }
-  if (!stopping) {
-    await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
+  if (!shutdown.signal.aborted) {
+    await waitForNextPoll(config.pollIntervalMs, shutdown.signal);
   }
 }
 database.close();
