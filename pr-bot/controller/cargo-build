@@ -34,6 +34,7 @@ exec systemd-run --quiet --wait --pipe --collect \
   --setenv=PATH=/var/lib/datafusion-pr-build/.cargo/bin:/usr/local/bin:/usr/bin \
   --setenv=CARGO_HOME="${cargo_home}" \
   --setenv=CARGO_TARGET_DIR="${target}" \
+  --setenv=XDG_CACHE_HOME="${cargo_home}/cache" \
   --setenv=AWS_EC2_METADATA_DISABLED=true \
   /var/lib/datafusion-pr-build/.cargo/bin/cargo zigbuild \
   --locked \
