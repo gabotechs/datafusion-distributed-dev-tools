@@ -50,17 +50,36 @@ test("posts comments as JSON without invoking a subprocess", async () => {
   const { fetch_, requests } = recordingFetch([Response.json({ id: 7 })]);
   const body = "result $(do-not-expand)";
 
-  await new GitHubClient("secret-token", fetch_).postComment(
+  const commentId = await new GitHubClient("secret-token", fetch_).postComment(
     "owner/repository",
     42,
     body,
   );
 
+  assert.equal(commentId, 7);
   assert.equal(
     requests[0]?.input,
     "https://api.github.com/repos/owner/repository/issues/42/comments",
   );
   assert.equal(requests[0]?.init?.method, "POST");
+  assert.equal(requests[0]?.init?.body, JSON.stringify({ body }));
+});
+
+test("updates an existing comment as JSON", async () => {
+  const { fetch_, requests } = recordingFetch([Response.json({ id: 7 })]);
+  const body = "benchmark completed";
+
+  await new GitHubClient("secret-token", fetch_).updateComment(
+    "owner/repository",
+    7,
+    body,
+  );
+
+  assert.equal(
+    requests[0]?.input,
+    "https://api.github.com/repos/owner/repository/issues/comments/7",
+  );
+  assert.equal(requests[0]?.init?.method, "PATCH");
   assert.equal(requests[0]?.init?.body, JSON.stringify({ body }));
 });
 

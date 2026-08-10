@@ -15,17 +15,20 @@ export class JobWorker {
   async runOnce(): Promise<boolean> {
     const job = this.database.claimNextPending();
     if (!job) return false;
+    if (job.statusCommentId === null) {
+      throw new Error(`Benchmark job ${job.id} has no GitHub status comment`);
+    }
 
     try {
-      await this.github.postComment(
+      await this.github.updateComment(
         job.repository,
-        job.pullRequestNumber,
+        job.statusCommentId,
         `Running \`${job.dataset}\` on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.`,
       );
       const result = await this.executor.execute(job);
-      await this.github.postComment(
+      await this.github.updateComment(
         job.repository,
-        job.pullRequestNumber,
+        job.statusCommentId,
         renderResult(job, result.comparison),
       );
       this.database.updateStatus(job.id, "completed");
@@ -33,9 +36,9 @@ export class JobWorker {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`Benchmark job ${job.id} failed`, error);
       this.database.updateStatus(job.id, "failed", message);
-      await this.github.postComment(
+      await this.github.updateComment(
         job.repository,
-        job.pullRequestNumber,
+        job.statusCommentId,
         `Benchmark job ${job.id} failed for \`${job.dataset}\` while comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`. Full details are available in the controller journal.`,
       );
     }

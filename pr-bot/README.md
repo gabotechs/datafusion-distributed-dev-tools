@@ -13,6 +13,9 @@ comparison, and removes the deployment. The optional `--instance-type` and
 `--nodes` arguments default to the upstream benchmark settings of `c5n.2xlarge`
 and 12 nodes. Node counts are limited to 24.
 
+The bot creates one status comment for each accepted request and edits it in
+place as the job moves from queued to running and then completed or failed.
+
 ```text
 benchmarks run tpch/sf10 --instance-type c7i.2xlarge --nodes 6
 ```

@@ -26,6 +26,7 @@ import {
 
 const JOB: Job = {
   id: 7,
+  statusCommentId: 99,
   commentId: 10,
   repository: "owner/repository",
   pullRequestNumber: 12,
