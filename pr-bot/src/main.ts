@@ -12,7 +12,12 @@ process.umask(0o077);
 const database = new JobDatabase(config.databasePath);
 const processes = new LocalProcessRunner();
 const github = new GitHubClient(config.githubToken);
-const poller = new CommentPoller(config.repository, database, github);
+const poller = new CommentPoller(
+  config.repository,
+  config.authorizedGithubLogins,
+  database,
+  github,
+);
 const executor = new BenchmarkExecutor(
   {
     repositoryUrl: config.sourceRepositoryUrl,
