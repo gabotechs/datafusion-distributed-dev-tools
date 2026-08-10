@@ -3,13 +3,19 @@
 This service listens for trusted pull-request comments in the form:
 
 ```text
-benchmarks run tpch/sf1 --instance-type c5n.2xlarge --nodes 12
+benchmarks run tpch/sf1
 ```
 
 For each request it creates an isolated Kubernetes deployment with the requested
 capacity, benchmarks the pull request's immutable base SHA, deploys the pull
 request head SHA to the same deployment, repeats the same workload, posts the
-comparison, and removes the deployment. Node counts are limited to 24.
+comparison, and removes the deployment. The optional `--instance-type` and
+`--nodes` arguments default to the upstream benchmark settings of `c5n.2xlarge`
+and 12 nodes. Node counts are limited to 24.
+
+```text
+benchmarks run tpch/sf10 --instance-type c7i.2xlarge --nodes 6
+```
 
 ## Architecture
 
