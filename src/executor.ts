@@ -18,8 +18,6 @@ interface FoundationOutputs {
   clusterName: string;
   datasetBucketName: string;
   artifactBucketName: string;
-  benchmarkInstanceType: string;
-  benchmarkNodeCount: number;
 }
 
 export interface ExecutorConfig {
@@ -76,7 +74,7 @@ export class BenchmarkExecutor {
         baseBinary,
         outputs.artifactBucketName,
       );
-      await this.deploy(baseSource, baseArtifact, outputs);
+      await this.deploy(baseSource, baseArtifact, outputs, job);
       await this.runBenchmark(baseSource, job.dataset);
 
       const headBinary = await this.build(
@@ -89,12 +87,12 @@ export class BenchmarkExecutor {
         headBinary,
         outputs.artifactBucketName,
       );
-      await this.deploy(baseSource, headArtifact, outputs);
+      await this.deploy(baseSource, headArtifact, outputs, job);
       const comparison = await this.runBenchmark(baseSource, job.dataset);
 
       return { comparison, baseArtifact, headArtifact };
     } finally {
-      await this.cleanupDeployment(outputs);
+      await this.cleanupDeployment(outputs, job.id);
       await this.removeWorktree(mirror, headSource);
       await this.removeWorktree(mirror, baseSource);
       rmSync(jobRoot, { recursive: true, force: true });
@@ -107,9 +105,32 @@ export class BenchmarkExecutor {
   }
 
   async cleanup(): Promise<void> {
-    await this.cleanupDeployment(
-      loadOutputs(this.config.foundationOutputsFile),
+    const outputs = loadOutputs(this.config.foundationOutputsFile);
+    const result = await this.processes.run(
+      "helm",
+      [
+        "list",
+        "--namespace",
+        "benchmark-datafusion",
+        "--kube-context",
+        outputs.clusterName,
+        "--filter",
+        "^datafusion-job-[0-9]+$",
+        "--short",
+      ],
+      {
+        allowFailure: true,
+        env: { ...process.env, KUBECONFIG: this.config.kubeconfig },
+      },
     );
+    if (result.exitCode !== 0) return;
+    for (const release of result.stdout
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean)) {
+      const match = /^datafusion-job-([0-9]+)$/.exec(release);
+      if (match) await this.cleanupDeployment(outputs, Number(match[1]));
+    }
   }
 
   async prepareMirror(mirror: string): Promise<void> {
@@ -313,13 +334,14 @@ export class BenchmarkExecutor {
     baseSource: string,
     artifact: string,
     outputs: FoundationOutputs,
+    job: Job,
   ): Promise<void> {
     await this.processes.run(
       "helm",
       [
         "upgrade",
         "--install",
-        "datafusion",
+        deploymentName(job.id),
         path.join(baseSource, "benchmarks-remote", "k8s", "datafusion"),
         "--namespace",
         "benchmark-datafusion",
@@ -337,9 +359,9 @@ export class BenchmarkExecutor {
         "--set-string",
         `worker.datasetBucket=${outputs.datasetBucketName}`,
         "--set-string",
-        `worker.replicas=${outputs.benchmarkNodeCount}`,
+        `worker.replicas=${job.benchmarkNodeCount}`,
         "--set-string",
-        `worker.instanceType=${outputs.benchmarkInstanceType}`,
+        `worker.instanceType=${job.benchmarkInstanceType}`,
         "--rollback-on-failure",
         "--cleanup-on-fail",
         "--wait",
@@ -350,12 +372,15 @@ export class BenchmarkExecutor {
     );
   }
 
-  async cleanupDeployment(outputs: FoundationOutputs): Promise<void> {
+  async cleanupDeployment(
+    outputs: FoundationOutputs,
+    jobId: number,
+  ): Promise<void> {
     await this.processes.run(
       "helm",
       [
         "uninstall",
-        "datafusion",
+        deploymentName(jobId),
         "--namespace",
         "benchmark-datafusion",
         "--kube-context",
@@ -398,13 +423,18 @@ function loadOutputs(file: string): FoundationOutputs {
   if (
     !value.clusterName ||
     !value.datasetBucketName ||
-    !value.artifactBucketName ||
-    !value.benchmarkInstanceType ||
-    !Number.isInteger(value.benchmarkNodeCount)
+    !value.artifactBucketName
   ) {
     throw new Error(`Invalid foundation outputs in ${file}`);
   }
   return value as FoundationOutputs;
+}
+
+function deploymentName(jobId: number): string {
+  if (!Number.isSafeInteger(jobId) || jobId <= 0) {
+    throw new Error(`Invalid benchmark job ID ${jobId}`);
+  }
+  return `datafusion-job-${jobId}`;
 }
 
 export function safeDatasetPath(root: string, dataset: string): string {

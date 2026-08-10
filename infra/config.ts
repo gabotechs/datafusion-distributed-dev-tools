@@ -8,8 +8,6 @@ export interface ControllerConfig {
   controllerVolumeSizeGiB: number;
   clusterName: string;
   datasetBucketName: string;
-  benchmarkInstanceType: string;
-  benchmarkNodeCount: number;
   benchmarkWorkloadRoleArn: string;
   githubRepository: string;
   sourceRepositoryUrl: string;
@@ -33,7 +31,6 @@ export function validateControllerConfig(
     );
   }
   positiveInteger("controllerVolumeSizeGiB", config.controllerVolumeSizeGiB);
-  positiveInteger("benchmarkNodeCount", config.benchmarkNodeCount);
   if (!/^[0-9a-f]{64}$/.test(config.nodeSha256)) {
     throw new Error("nodeSha256 must be a lowercase SHA-256 digest");
   }
@@ -57,8 +54,6 @@ export function loadControllerConfig(): ControllerConfig {
     controllerVolumeSizeGiB: config.getNumber("controllerVolumeSizeGiB") ?? 500,
     clusterName: config.require("clusterName"),
     datasetBucketName: config.require("datasetBucketName"),
-    benchmarkInstanceType: config.require("benchmarkInstanceType"),
-    benchmarkNodeCount: config.requireNumber("benchmarkNodeCount"),
     benchmarkWorkloadRoleArn: config.require("benchmarkWorkloadRoleArn"),
     githubRepository: config.require("githubRepository"),
     sourceRepositoryUrl: config.require("sourceRepositoryUrl"),

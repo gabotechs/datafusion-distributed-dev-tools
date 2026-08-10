@@ -49,7 +49,7 @@ export function createControllerInfrastructure(config: ControllerConfig) {
   });
   const application = new aws.s3.BucketObjectv2("bot-controller-application", {
     bucket: artifactBucket.id,
-    key: "controller/application.tar.gz",
+    key: "controller/application.zip",
     source: applicationArchive(),
   });
   const identity = createControllerRole(config, cluster, artifactBucket);

@@ -23,8 +23,6 @@ function testConfig(): ControllerConfig {
     controllerVolumeSizeGiB: 500,
     clusterName: "human-managed-benchmark-cluster",
     datasetBucketName: "human-managed-datasets",
-    benchmarkInstanceType: "c5n.2xlarge",
-    benchmarkNodeCount: 12,
     benchmarkWorkloadRoleArn:
       "arn:aws:iam::123456789012:role/benchmark-workload-role",
     githubRepository: "owner/repository",
@@ -181,7 +179,7 @@ test("separates private bot artifacts from the dataset bucket", () => {
     "aws:s3/bucketObjectv2:BucketObjectv2",
     "bot-controller-application",
   );
-  assert.equal(application.inputs.key, "controller/application.tar.gz");
+  assert.equal(application.inputs.key, "controller/application.zip");
   assert.notEqual(application.inputs.bucket, "human-managed-datasets");
   const bucketPolicy = resource(
     "aws:s3/bucketPolicy:BucketPolicy",
@@ -199,6 +197,15 @@ test("installs protected controller state and verified native toolchains", () =>
   assert.match(userData, /--mode 0700 \/var\/lib\/datafusion-pr-bot/);
   assert.match(userData, /\/var\/cache\/datafusion-pr-build/);
   assert.match(userData, /sha256sum --check --strict/);
+  assert.match(
+    userData,
+    /rustup_temporary=\$\(mktemp -d\)\nchmod 0755 \$\{rustup_temporary\}/,
+  );
+  assert.match(userData, /rustup-init -y --profile minimal/);
+  assert.match(userData, /kubectl_version=1\.36\.1/);
+  assert.match(userData, /helm_version=4\.2\.3/);
+  assert.match(userData, /install .*\/usr\/local\/bin\/kubectl/);
+  assert.match(userData, /install .*\/usr\/local\/bin\/helm/);
   assert.match(userData, /chown --recursive root:root \$\{release\}/);
   assert.match(
     userData,
@@ -206,6 +213,16 @@ test("installs protected controller state and verified native toolchains", () =>
   );
   assert.doesNotMatch(userData, /npm --prefix .* ci/);
   assert.match(userData, /amazon-cloudwatch-agent/);
+  assert.match(
+    userData,
+    /aws s3 cp s3:\/\/bot-artifacts_id\/controller\/application\.zip/,
+  );
+  assert.match(userData, /"artifactBucketName":"bot-artifacts_id"/);
+  assert.doesNotMatch(userData, /benchmarkInstanceType|benchmarkNodeCount/);
+  assert.doesNotMatch(
+    userData,
+    /\$\{artifactBucketName\}|\$\{applicationKey\}/,
+  );
   const diskAlarm = resource(
     "aws:cloudwatch/metricAlarm:MetricAlarm",
     "bot-controller-disk",
