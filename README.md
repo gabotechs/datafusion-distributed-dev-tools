@@ -1,126 +1,51 @@
-# DataFusion Distributed PR benchmark bot
+# DataFusion Distributed development tools
 
-This service listens for trusted pull-request comments in the form:
+This repository contains the remote benchmark platform and pull-request
+benchmark automation for
+[DataFusion Distributed](https://github.com/datafusion-contrib/datafusion-distributed).
 
-```text
-benchmarks run tpch/sf1
-```
+It has two independently operated components:
 
-For each request it creates an isolated Kubernetes deployment with the requested
-capacity, benchmarks the pull request's immutable base SHA, deploys the pull
-request head SHA to the same deployment, repeats the same workload, posts the
-comparison, and removes the deployment. The optional `--instance-type` and
-`--nodes` arguments default to the upstream benchmark settings of `c5n.2xlarge`
-and 12 nodes. Node counts are limited to 24.
+- [`benchmarks-remote/`](benchmarks-remote/README.md) provisions the shared EKS
+  foundation, manages datasets and engine deployments, and runs benchmarks
+  from a developer machine.
+- [`pr-bot/`](pr-bot/README.md) provisions a persistent EC2 controller that
+  accepts trusted GitHub PR comments, builds immutable base and head revisions,
+  runs isolated benchmark deployments on the existing EKS foundation, and
+  reports the comparison.
 
-```text
-benchmarks run tpch/sf10 --instance-type c7i.2xlarge --nodes 6
-```
-
-## Architecture
-
-- A persistent EC2 controller serializes jobs and keeps its Git mirror, Cargo
-  registry, and Rust build artifacts on an EBS volume.
-- Rust, Zig, and Cargo build tooling is installed directly on EC2. Untrusted
-  compilation runs as a separate OS user in a systemd sandbox; the trusted
-  controller uploads the resulting worker binary and performs Kubernetes
-  operations.
-- A human provisions a dedicated remote-benchmark foundation from
-  `datafusion-distributed/benchmarks-remote`. This repository consumes its
-  cluster and dataset bucket but never creates, updates, or destroys them.
-- SQLite on EBS stores seen comments and job state. GitHub remains the
-  user-facing source of requests and results.
-- Only trusted repository users can enqueue work.
-- A dedicated private S3 bucket separates controller and worker artifacts from
-  the human-managed dataset bucket.
-
-The persistent machine may be stopped when idle without losing its EBS cache.
-Benchmark worker nodes remain managed by EKS Auto Mode and scale independently.
-
-See [docs/architecture.md](docs/architecture.md) for the execution and security
-boundaries.
-
-## Controller infrastructure
-
-Provision a dedicated benchmark foundation from `datafusion-distributed` before
-deploying the controller. Copy these values from that foundation's Pulumi
-outputs:
-
-- `clusterName`
-- `datasetBucketName`
-- the ARN of the foundation's benchmark workload IAM role
-
-Configure the controller stack without storing credentials in the repository:
-
-```bash
-pulumi stack init controller
-pulumi config set aws:region us-east-1
-pulumi config set clusterName your-benchmark-cluster
-pulumi config set datasetBucketName your-dataset-bucket
-pulumi config set benchmarkWorkloadRoleArn arn:aws:iam::YOUR_ACCOUNT:role/YOUR_BENCHMARK_WORKLOAD_ROLE
-pulumi config set githubRepository datafusion-contrib/datafusion-distributed
-pulumi config set sourceRepositoryUrl https://github.com/datafusion-contrib/datafusion-distributed.git
-npm run controller-deploy
-```
-
-By default the controller uses a subnet from the account's default VPC. Set
-`controllerSubnetId` when it should use another public subnet. The security
-group has no inbound rules; administration uses AWS Systems Manager Session
-Manager.
-
-The deployment outputs `controllerPublicIp`, `controllerRoleArn`, and
-`artifactBucketName`. A human must add the public IP as a `/32` to the benchmark
-foundation's `kubernetesApiAllowedCidrs` and grant the role access to the
-existing `benchmark-datafusion` namespace:
-
-```bash
-aws eks create-access-entry \
-  --cluster-name your-benchmark-cluster \
-  --principal-arn arn:aws:iam::YOUR_ACCOUNT:role/YOUR_CONTROLLER_ROLE
-
-aws eks associate-access-policy \
-  --cluster-name your-benchmark-cluster \
-  --principal-arn arn:aws:iam::YOUR_ACCOUNT:role/YOUR_CONTROLLER_ROLE \
-  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy \
-  --access-scope type=namespace,namespaces=benchmark-datafusion
-```
-
-These are foundation operations and intentionally remain outside this
-repository's Pulumi program. Destroying the controller leaves the EKS cluster,
-namespaces, datasets, and benchmark nodes untouched.
-
-## GitHub authentication
-
-The controller calls the GitHub REST API directly with a manually provisioned
-`GH_TOKEN`. This project does not create a GitHub App or store the token in
-Pulumi or AWS Secrets Manager.
-
-After connecting to the controller through Session Manager, edit the protected
-service environment file without placing the token in shell history:
-
-```bash
-sudoedit /var/lib/datafusion-pr-bot/controller.env
-sudo systemctl restart datafusion-pr-bot
-sudo systemctl status datafusion-pr-bot
-```
-
-Add `GH_TOKEN=...` on its own line. Use a fine-grained personal access token
-restricted to the configured repository, with read access to pull requests and
-repository metadata and read/write access to issues. The environment file is
-mode `0600`; the token is available only to the trusted controller process and
-is never forwarded to pull-request builds or benchmark pods.
-
-Replacing the EC2 instance creates a fresh environment file, so the token must
-be configured again after replacement.
-
-The controller bundle is compiled before deployment and installed root-owned;
-the service does not install development dependencies or transpile TypeScript at
-runtime.
+The PR bot does not own the EKS foundation. A human provisions the foundation
+from `benchmarks-remote/` and gives the controller narrowly scoped access to
+use it. Both components live in this repository so the trusted benchmark
+harness can evolve independently of DataFusion Distributed source revisions.
 
 ## Development
 
+Install each component's dependencies:
+
 ```bash
-npm install
+npm run install:all
+```
+
+Validate both components from the repository root:
+
+```bash
 npm run build
 npm test
 ```
+
+Root npm commands forward operational commands to the owning component. For
+example:
+
+```bash
+npm run foundation-deploy
+npm run sync-bucket -- --dataset tpch/sf1
+npm run datafusion-deploy
+npm run datafusion-bench -- --dataset tpch/sf1 --iterations 1
+npm run controller-deploy
+npm run controller-ssh
+```
+
+Foundation, dataset, engine, benchmark, and controller teardown remain
+explicit operations. See each component's README before operating live
+infrastructure.

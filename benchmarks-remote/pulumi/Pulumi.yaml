@@ -1,0 +1,7 @@
+name: datafusion-distributed-benchmarks
+description: Pulumi-managed EKS Auto Mode infrastructure for distributed benchmarks
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+main: src/index.ts
