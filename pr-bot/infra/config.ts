@@ -10,6 +10,7 @@ export interface ControllerConfig {
   datasetBucketName: string;
   benchmarkWorkloadRoleArn: string;
   githubRepository: string;
+  authorizedGithubLogins: string[];
   sourceRepositoryUrl: string;
   nodeVersion: string;
   nodeSha256: string;
@@ -39,6 +40,16 @@ export function validateControllerConfig(
   ) {
     throw new Error("benchmarkWorkloadRoleArn must be an IAM role ARN");
   }
+  if (
+    config.authorizedGithubLogins.length === 0 ||
+    config.authorizedGithubLogins.some(
+      (login) => !/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/.test(login),
+    )
+  ) {
+    throw new Error(
+      "authorizedGithubLogins must contain valid lowercase GitHub logins",
+    );
+  }
   return config;
 }
 
@@ -56,6 +67,9 @@ export function loadControllerConfig(): ControllerConfig {
     datasetBucketName: config.require("datasetBucketName"),
     benchmarkWorkloadRoleArn: config.require("benchmarkWorkloadRoleArn"),
     githubRepository: config.require("githubRepository"),
+    authorizedGithubLogins: config.requireObject<string[]>(
+      "authorizedGithubLogins",
+    ),
     sourceRepositoryUrl: config.require("sourceRepositoryUrl"),
     nodeVersion: config.get("nodeVersion") ?? "24.18.1",
     nodeSha256:

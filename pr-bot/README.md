@@ -60,6 +60,7 @@ pulumi config set clusterName your-benchmark-cluster
 pulumi config set datasetBucketName your-dataset-bucket
 pulumi config set benchmarkWorkloadRoleArn arn:aws:iam::YOUR_ACCOUNT:role/YOUR_BENCHMARK_WORKLOAD_ROLE
 pulumi config set githubRepository datafusion-contrib/datafusion-distributed
+pulumi config set --path 'authorizedGithubLogins[0]' your-github-login
 pulumi config set sourceRepositoryUrl https://github.com/datafusion-contrib/datafusion-distributed.git
 npm run controller-deploy
 ```
@@ -110,6 +111,10 @@ restricted to the configured repository, with read access to pull requests and
 repository metadata and read/write access to issues. The environment file is
 mode `0600`; the token is available only to the trusted controller process and
 is never forwarded to pull-request builds or benchmark pods.
+
+Only users in the Pulumi `authorizedGithubLogins` list can enqueue benchmark
+jobs. Authorization does not require the controller token to have repository
+contents write access.
 
 Replacing the EC2 instance creates a fresh environment file, so the token must
 be configured again after replacement.
