@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   createReadStream,
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -27,6 +28,7 @@ export interface ExecutorConfig {
   buildCacheRoot: string;
   buildCacheMaxBytes: number;
   foundationOutputsFile: string;
+  harnessRoot: string;
   kubeconfig: string;
   testdataRoot: string;
   region: string;
@@ -60,7 +62,8 @@ export class BenchmarkExecutor {
       await this.removeWorktree(mirror, baseSource);
       await this.addWorktree(mirror, baseSource, job.baseSha);
       await this.addWorktree(mirror, headSource, job.headSha);
-      await this.installHarness(baseSource);
+      this.prepareWorker(baseSource);
+      this.prepareWorker(headSource);
       this.resetResults(job.dataset, baseSource);
       await this.prepareDatasetLayout(job.dataset, outputs.datasetBucketName);
 
@@ -74,8 +77,8 @@ export class BenchmarkExecutor {
         baseBinary,
         outputs.artifactBucketName,
       );
-      await this.deploy(baseSource, baseArtifact, outputs, job);
-      await this.runBenchmark(baseSource, job.dataset);
+      await this.deploy(baseArtifact, outputs, job);
+      await this.runBenchmark(job.dataset, job.id);
 
       const headBinary = await this.build(
         job.headSha,
@@ -87,8 +90,8 @@ export class BenchmarkExecutor {
         headBinary,
         outputs.artifactBucketName,
       );
-      await this.deploy(baseSource, headArtifact, outputs, job);
-      const comparison = await this.runBenchmark(baseSource, job.dataset);
+      await this.deploy(headArtifact, outputs, job);
+      const comparison = await this.runBenchmark(job.dataset, job.id);
 
       return { comparison, baseArtifact, headArtifact };
     } finally {
@@ -178,14 +181,30 @@ export class BenchmarkExecutor {
     );
   }
 
-  async installHarness(baseSource: string): Promise<void> {
-    await this.processes.run("npm", ["ci", "--ignore-scripts"], {
-      cwd: path.join(baseSource, "benchmarks-remote"),
-      env: {
-        ...process.env,
-        npm_config_cache: path.join(this.config.stateRoot, "npm"),
-      },
-    });
+  prepareWorker(source: string): void {
+    const trustedWorker = path.join(
+      this.config.harnessRoot,
+      "engines",
+      "datafusion",
+      "src",
+      "main.rs",
+    );
+    const targetWorker = path.join(
+      source,
+      "benchmarks",
+      "cdk",
+      "bin",
+      "worker.rs",
+    );
+    if (!existsSync(trustedWorker)) {
+      throw new Error(`Trusted worker source is missing: ${trustedWorker}`);
+    }
+    if (!existsSync(targetWorker)) {
+      throw new Error(
+        `Source revision does not provide the compatible benchmark worker target: ${targetWorker}`,
+      );
+    }
+    cpSync(trustedWorker, targetWorker);
   }
 
   resetResults(dataset: string, baseSource: string): void {
@@ -198,15 +217,22 @@ export class BenchmarkExecutor {
       force: true,
     });
 
-    const queries = path.join(
+    const sourceQueries = path.join(
       baseSource,
       "testdata",
       dataset.split("/")[0]!,
       "queries",
     );
-    if (!existsSync(queries)) {
+    if (!existsSync(sourceQueries)) {
       throw new Error(`Trusted base does not contain queries for ${dataset}`);
     }
+    const targetQueries = path.join(
+      this.config.testdataRoot,
+      dataset.split("/")[0]!,
+      "queries",
+    );
+    rmSync(targetQueries, { recursive: true, force: true });
+    cpSync(sourceQueries, targetQueries, { recursive: true });
   }
 
   async prepareDatasetLayout(dataset: string, bucket: string): Promise<void> {
@@ -331,7 +357,6 @@ export class BenchmarkExecutor {
   }
 
   async deploy(
-    baseSource: string,
     artifact: string,
     outputs: FoundationOutputs,
     job: Job,
@@ -342,18 +367,13 @@ export class BenchmarkExecutor {
         "upgrade",
         "--install",
         deploymentName(job.id),
-        path.join(baseSource, "benchmarks-remote", "k8s", "datafusion"),
+        path.join(this.config.harnessRoot, "k8s", "datafusion"),
         "--namespace",
         "benchmark-datafusion",
         "--kube-context",
         outputs.clusterName,
         "--values",
-        path.join(
-          baseSource,
-          "benchmarks-remote",
-          "k8s",
-          "worker-resources.yaml",
-        ),
+        path.join(this.config.harnessRoot, "k8s", "worker-resources.yaml"),
         "--set-string",
         `worker.artifact=${artifact}`,
         "--set-string",
@@ -362,6 +382,8 @@ export class BenchmarkExecutor {
         `worker.replicas=${job.benchmarkNodeCount}`,
         "--set-string",
         `worker.instanceType=${job.benchmarkInstanceType}`,
+        "--set-string",
+        `name=${deploymentName(job.id)}`,
         "--rollback-on-failure",
         "--cleanup-on-fail",
         "--wait",
@@ -397,15 +419,21 @@ export class BenchmarkExecutor {
     );
   }
 
-  async runBenchmark(baseSource: string, dataset: string): Promise<string> {
+  async runBenchmark(dataset: string, jobId: number): Promise<string> {
     const result = await this.processes.run(
       "npm",
       ["run", "datafusion-bench", "--", "--dataset", dataset],
       {
-        cwd: path.join(baseSource, "benchmarks-remote"),
+        cwd: this.config.harnessRoot,
         env: {
           ...process.env,
           AWS_REGION: this.config.region,
+          BENCHMARK_RUNNER: path.join(
+            this.config.harnessRoot,
+            "dist",
+            "datafusion-bench.cjs",
+          ),
+          BENCHMARK_SERVICE_NAME: deploymentName(jobId),
           BENCHMARK_TESTDATA_ROOT: this.config.testdataRoot,
           KUBECONFIG: this.config.kubeconfig,
           PULUMI_OUTPUTS_FILE: this.config.foundationOutputsFile,

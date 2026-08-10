@@ -37,8 +37,8 @@ exec systemd-run --quiet --wait --pipe --collect \
   /var/lib/datafusion-pr-build/.cargo/bin/cargo zigbuild \
   --locked \
   --offline \
-  --manifest-path "${source_root}/benchmarks-remote/engines/datafusion/Cargo.toml" \
-  --package datafusion-distributed-benchmark-worker \
+  --manifest-path "${source_root}/benchmarks/Cargo.toml" \
+  --package datafusion-distributed-benchmarks \
   --release \
   --bin worker \
   --target x86_64-unknown-linux-gnu

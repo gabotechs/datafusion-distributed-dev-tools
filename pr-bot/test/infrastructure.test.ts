@@ -218,6 +218,10 @@ test("installs protected controller state and verified native toolchains", () =>
     /aws s3 cp s3:\/\/bot-artifacts_id\/controller\/application\.zip/,
   );
   assert.match(userData, /"artifactBucketName":"bot-artifacts_id"/);
+  assert.match(
+    userData,
+    /BENCHMARK_HARNESS_ROOT=\/opt\/datafusion-pr-bot\/current\/benchmarks-remote/,
+  );
   assert.doesNotMatch(userData, /benchmarkInstanceType|benchmarkNodeCount/);
   assert.doesNotMatch(
     userData,

@@ -10,6 +10,7 @@ export interface Config {
     buildCacheRoot: string;
     buildCacheMaxBytes: number;
     foundationOutputsFile: string;
+    harnessRoot: string;
     kubeconfig: string;
     testdataRoot: string;
     region: string;
@@ -46,6 +47,9 @@ export function loadConfig(): Config {
       buildCacheMaxBytes: buildCacheMaxGiB * 1024 ** 3,
       foundationOutputsFile:
         process.env.FOUNDATION_OUTPUTS_FILE ?? ".data/foundation-outputs.json",
+      harnessRoot:
+        process.env.BENCHMARK_HARNESS_ROOT ??
+        new URL("../benchmarks-remote", import.meta.url).pathname,
       kubeconfig: process.env.KUBECONFIG ?? ".data/kubeconfig",
       testdataRoot: process.env.BENCHMARK_TESTDATA_ROOT ?? ".data/testdata",
       region: process.env.AWS_REGION ?? "us-east-1",
