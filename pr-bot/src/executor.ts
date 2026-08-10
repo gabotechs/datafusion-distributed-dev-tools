@@ -174,6 +174,7 @@ export class BenchmarkExecutor {
   }
 
   async removeWorktree(mirror: string, destination: string): Promise<void> {
+    if (!existsSync(destination)) return;
     await this.processes.run(
       "git",
       ["--git-dir", mirror, "worktree", "remove", "--force", destination],
