@@ -1,5 +1,5 @@
 export interface BenchmarkRequest {
-  dataset: string;
+  datasets: string[];
   instanceType: string;
   nodeCount: number;
 }
@@ -16,7 +16,7 @@ export const DEFAULT_BENCHMARK_INSTANCE_TYPE = "c5n.2xlarge";
 export const DEFAULT_BENCHMARK_NODE_COUNT = 12;
 
 const USAGE =
-  "Expected `benchmarks run <suite>/<variant> [--instance-type <type>] [--nodes <count>]`.";
+  "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>]`.";
 
 export function parseComment(body: string): ParseResult {
   const line = body
@@ -31,24 +31,33 @@ export function parseComment(body: string): ParseResult {
   if (words[0] !== "benchmarks" || words[1] !== "run") {
     return { kind: "none" };
   }
-  if (
-    words.length < 3 ||
-    words.length > 7 ||
-    (words.length - 3) % 2 !== 0 ||
-    !words[2]
-  ) {
+  const firstOption = words.findIndex(
+    (word, index) => index >= 2 && word.startsWith("--"),
+  );
+  const datasetEnd = firstOption === -1 ? words.length : firstOption;
+  const datasets = words.slice(2, datasetEnd);
+  const optionWords = words.slice(datasetEnd);
+  if (datasets.length === 0 || optionWords.length % 2 !== 0) {
     return { kind: "invalid", message: USAGE };
   }
-  if (!DATASET.test(words[2])) {
+  for (const dataset of datasets) {
+    if (!DATASET.test(dataset)) {
+      return {
+        kind: "invalid",
+        message: `Invalid dataset \`${dataset}\`; expected a path such as \`tpch/sf1\`.`,
+      };
+    }
+  }
+  if (new Set(datasets).size !== datasets.length) {
     return {
       kind: "invalid",
-      message: `Invalid dataset \`${words[2]}\`; expected a path such as \`tpch/sf1\`.`,
+      message: "Each dataset may be requested only once.",
     };
   }
   const options = new Map<string, string>();
-  for (let index = 3; index < words.length; index += 2) {
-    const option = words[index]!;
-    const value = words[index + 1]!;
+  for (let index = 0; index < optionWords.length; index += 2) {
+    const option = optionWords[index]!;
+    const value = optionWords[index + 1]!;
     if (
       !["--instance-type", "--nodes"].includes(option) ||
       options.has(option)
@@ -80,6 +89,6 @@ export function parseComment(body: string): ParseResult {
   }
   return {
     kind: "request",
-    request: { dataset: words[2], instanceType, nodeCount },
+    request: { datasets, instanceType, nodeCount },
   };
 }

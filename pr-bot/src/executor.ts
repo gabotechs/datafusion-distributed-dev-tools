@@ -48,14 +48,21 @@ export class BenchmarkExecutor {
   async execute(job: Job): Promise<ExecutionResult> {
     validateSha(job.baseSha);
     validateSha(job.headSha);
+    if (job.datasets.length === 0) {
+      throw new Error(`Benchmark job ${job.id} has no datasets`);
+    }
     const outputs = loadOutputs(this.config.foundationOutputsFile);
     const mirror = path.join(this.config.stateRoot, "repository.git");
     const jobRoot = path.join(this.config.workRoot, "jobs", String(job.id));
     const baseSource = path.join(jobRoot, "base");
     const headSource = path.join(jobRoot, "head");
+    let deploymentStarted = false;
     mkdirSync(jobRoot, { recursive: true });
 
     try {
+      for (const dataset of job.datasets) {
+        await this.prepareDatasetLayout(dataset, outputs.datasetBucketName);
+      }
       await this.prepareMirror(mirror);
       await this.removeWorktree(mirror, headSource);
       await this.removeWorktree(mirror, baseSource);
@@ -64,8 +71,9 @@ export class BenchmarkExecutor {
       this.prepareWorker(baseSource);
       this.prepareWorker(headSource);
       await this.prepareSourcePermissions(jobRoot);
-      this.resetResults(job.dataset, baseSource);
-      await this.prepareDatasetLayout(job.dataset, outputs.datasetBucketName);
+      for (const dataset of job.datasets) {
+        this.resetResults(dataset, baseSource);
+      }
 
       const baseBinary = await this.build(
         job.baseSha,
@@ -77,8 +85,11 @@ export class BenchmarkExecutor {
         baseBinary,
         outputs.artifactBucketName,
       );
+      deploymentStarted = true;
       await this.deploy(baseArtifact, outputs, job);
-      await this.runBenchmark(job.dataset, job.id);
+      for (const dataset of job.datasets) {
+        await this.runBenchmark(dataset, job.id);
+      }
 
       const headBinary = await this.build(
         job.headSha,
@@ -91,11 +102,20 @@ export class BenchmarkExecutor {
         outputs.artifactBucketName,
       );
       await this.deploy(headArtifact, outputs, job);
-      const comparison = await this.runBenchmark(job.dataset, job.id);
+      const comparisons: string[] = [];
+      for (const dataset of job.datasets) {
+        comparisons.push(await this.runBenchmark(dataset, job.id));
+      }
+      const comparison = comparisons
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .join("\n\n");
 
       return { comparison, baseArtifact, headArtifact };
     } finally {
-      await this.cleanupDeployment(outputs, job.id);
+      if (deploymentStarted) {
+        await this.cleanupDeployment(outputs, job.id);
+      }
       await this.removeWorktree(mirror, headSource);
       await this.removeWorktree(mirror, baseSource);
       rmSync(jobRoot, { recursive: true, force: true });

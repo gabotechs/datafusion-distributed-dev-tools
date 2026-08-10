@@ -12,7 +12,7 @@ const JOB: NewJob = {
   pullRequestUrl:
     "https://github.com/datafusion-contrib/datafusion-distributed/pull/99",
   requestedBy: "maintainer",
-  dataset: "tpch/sf1",
+  datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
   benchmarkInstanceType: "c7i.2xlarge",
   benchmarkNodeCount: 12,
   baseSha: "a".repeat(40),
@@ -38,6 +38,7 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.equal(await worker.runOnce(), true);
     assert.equal(await worker.runOnce(), false);
     assert.match(comments[0]!, /Running/);
+    assert.match(comments[0]!, /`tpch\/sf1`, `tpch\/sf10`, `tpch\/sf100`/);
     assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
     assert.match(comments[1]!, /TOTAL: 1.20 faster/);
     assert.doesNotMatch(comments[1]!, /Benchmark completed|Base:|Head:/);
