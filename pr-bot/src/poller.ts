@@ -128,7 +128,7 @@ export class CommentPoller {
         pullRequestNumber,
         pullRequestUrl: pullRequest.html_url,
         requestedBy: comment.user.login,
-        dataset: parsed.request.dataset,
+        datasets: parsed.request.datasets,
         benchmarkInstanceType: parsed.request.instanceType,
         benchmarkNodeCount: parsed.request.nodeCount,
         baseSha: pullRequest.base.sha,
@@ -155,7 +155,7 @@ export class CommentPoller {
     const commentId = await this.github.postComment(
       job.repository,
       job.pullRequestNumber,
-      `Benchmark job ${job.id} queued for \`${job.dataset}\` on ${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes, comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`.`,
+      `Benchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes, comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`.`,
     );
     this.database.setStatusCommentId(job.id, commentId);
   }
@@ -168,6 +168,10 @@ export class CommentPoller {
       new Date(parsed.getTime() - SCAN_OVERLAP_MS).toISOString(),
     );
   }
+}
+
+function formatDatasets(datasets: readonly string[]): string {
+  return datasets.map((dataset) => `\`${dataset}\``).join(", ");
 }
 
 function issueNumber(issueUrl: string): number | null {

@@ -23,7 +23,7 @@ export class JobWorker {
       await this.github.updateComment(
         job.repository,
         job.statusCommentId,
-        `Running \`${job.dataset}\` on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.`,
+        `Running ${formatDatasets(job.datasets)} on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.`,
       );
       const result = await this.executor.execute(job);
       await this.github.updateComment(
@@ -39,7 +39,7 @@ export class JobWorker {
       await this.github.updateComment(
         job.repository,
         job.statusCommentId,
-        `Benchmark job ${job.id} failed for \`${job.dataset}\` while comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`. Full details are available in the controller journal.`,
+        `Benchmark job ${job.id} failed for ${formatDatasets(job.datasets)} while comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`. Full details are available in the controller journal.`,
       );
     }
     return true;
@@ -52,6 +52,10 @@ function renderResult(comparison: string): string {
 
 function capacity(job: Job): string {
   return `${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes`;
+}
+
+function formatDatasets(datasets: readonly string[]): string {
+  return datasets.map((dataset) => `\`${dataset}\``).join(", ");
 }
 
 function truncate(value: string): string {

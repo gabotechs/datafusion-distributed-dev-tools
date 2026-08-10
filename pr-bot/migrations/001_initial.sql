@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     pull_request_url TEXT NOT NULL,
     requested_by TEXT NOT NULL,
     dataset TEXT NOT NULL,
+    datasets_json TEXT NOT NULL,
     benchmark_instance_type TEXT NOT NULL,
     benchmark_node_count INTEGER NOT NULL,
     base_sha TEXT NOT NULL,

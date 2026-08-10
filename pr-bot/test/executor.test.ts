@@ -32,7 +32,7 @@ const JOB: Job = {
   pullRequestNumber: 12,
   pullRequestUrl: "https://example.invalid/pull/12",
   requestedBy: "maintainer",
-  dataset: "tpch/sf1",
+  datasets: ["tpch/sf1"],
   benchmarkInstanceType: "c7i.2xlarge",
   benchmarkNodeCount: 12,
   baseSha: "a".repeat(40),
@@ -98,11 +98,11 @@ test("executes base before head with the bundled trusted harness", async () => {
     override prepareWorker(source: string): void {
       events.push(`prepare-worker:${path.basename(source)}`);
     }
-    override resetResults(): void {
-      events.push("reset-results");
+    override resetResults(dataset: string): void {
+      events.push(`reset-results:${dataset}`);
     }
-    override async prepareDatasetLayout(): Promise<void> {
-      events.push("prepare-dataset");
+    override async prepareDatasetLayout(dataset: string): Promise<void> {
+      events.push(`prepare-dataset:${dataset}`);
     }
     override async build(sha: string): Promise<string> {
       events.push(`build:${sha[0]}`);
@@ -126,7 +126,7 @@ test("executes base before head with the bundled trusted harness", async () => {
       jobId: number,
     ): Promise<string> {
       events.push(`run:${jobId}:${dataset}`);
-      return "comparison";
+      return `comparison:${dataset}`;
     }
     override async cleanupDeployment(
       _outputs: Parameters<BenchmarkExecutor["cleanupDeployment"]>[0],
@@ -136,11 +136,19 @@ test("executes base before head with the bundled trusted harness", async () => {
     }
   }
 
-  const result = await new RecordingExecutor(config, NOOP_PROCESSES).execute(
-    JOB,
+  const datasets = ["tpch/sf1", "tpch/sf10", "tpch/sf100"];
+  const result = await new RecordingExecutor(config, NOOP_PROCESSES).execute({
+    ...JOB,
+    datasets,
+  });
+  assert.equal(
+    result.comparison,
+    datasets.map((dataset) => `comparison:${dataset}`).join("\n\n"),
   );
-  assert.equal(result.comparison, "comparison");
   assert.deepEqual(events, [
+    "prepare-dataset:tpch/sf1",
+    "prepare-dataset:tpch/sf10",
+    "prepare-dataset:tpch/sf100",
     "mirror",
     "remove:head",
     "remove:base",
@@ -148,20 +156,58 @@ test("executes base before head with the bundled trusted harness", async () => {
     "add:head:b",
     "prepare-worker:base",
     "prepare-worker:head",
-    "reset-results",
-    "prepare-dataset",
+    "reset-results:tpch/sf1",
+    "reset-results:tpch/sf10",
+    "reset-results:tpch/sf100",
     "build:a",
     "publish:a",
     "deploy:a:c7i.2xlarge:12",
     "run:7:tpch/sf1",
+    "run:7:tpch/sf10",
+    "run:7:tpch/sf100",
     "build:b",
     "publish:b",
     "deploy:b:c7i.2xlarge:12",
     "run:7:tpch/sf1",
+    "run:7:tpch/sf10",
+    "run:7:tpch/sf100",
     "cleanup-deployment:7",
     "remove:head",
     "remove:base",
   ]);
+});
+
+test("validates every dataset before build or deployment", async () => {
+  const { config } = fixture();
+  const events: string[] = [];
+  class ValidationExecutor extends BenchmarkExecutor {
+    override async prepareDatasetLayout(dataset: string): Promise<void> {
+      events.push(`validate:${dataset}`);
+      if (dataset === "tpch/sf10") throw new Error("dataset unavailable");
+    }
+    override async prepareMirror(): Promise<void> {
+      events.push("mirror");
+    }
+    override async build(): Promise<string> {
+      events.push("build");
+      return "/binary";
+    }
+    override async deploy(): Promise<void> {
+      events.push("deploy");
+    }
+    override async cleanupDeployment(): Promise<void> {
+      events.push("cleanup-deployment");
+    }
+  }
+
+  await assert.rejects(
+    new ValidationExecutor(config, NOOP_PROCESSES).execute({
+      ...JOB,
+      datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
+    }),
+    /dataset unavailable/,
+  );
+  assert.deepEqual(events, ["validate:tpch/sf1", "validate:tpch/sf10"]);
 });
 
 test("uses request capacity in an isolated per-job Helm release", async () => {
