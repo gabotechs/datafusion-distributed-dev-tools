@@ -119,7 +119,44 @@ Base: \`${shortSha(job.baseSha)}\` · PR head: \`${shortSha(job.headSha)}\` · C
 
 </details>
 
-<pre>${htmlEscape(truncate(comparison.trim()))}</pre>`;
+${renderComparison(comparison)}`;
+}
+
+function renderComparison(comparison: string): string {
+  const blocks = comparison
+    .trim()
+    .split(/(?=^=== Comparing )/m)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  if (blocks.length === 0) return "";
+  const detailLimit = Math.floor(49_000 / blocks.length);
+  return blocks
+    .map((block) => renderComparisonBlock(block, detailLimit))
+    .join("\n\n");
+}
+
+function renderComparisonBlock(block: string, detailLimit: number): string {
+  const lines = block.split("\n");
+  const totalIndex = lines.findLastIndex((line) =>
+    line.trimStart().startsWith("TOTAL:"),
+  );
+  if (!lines[0]?.startsWith("=== Comparing ") || totalIndex <= 0) {
+    return `<pre>${htmlEscape(truncate(block, detailLimit))}</pre>`;
+  }
+
+  const summary = `${lines[0]}\n${lines[totalIndex]!.trimStart()}`;
+  const details = lines
+    .filter((_line, index) => index !== 0 && index !== totalIndex)
+    .join("\n");
+  return `<pre>${htmlEscape(summary)}</pre>
+
+<details>
+<summary>Show full query output</summary>
+
+<pre>${htmlEscape(truncate(details, detailLimit))}</pre>
+
+</details>`;
 }
 
 function requestLink(job: Job): string {
@@ -151,10 +188,10 @@ function formatDatasets(datasets: readonly string[]): string {
   return datasets.map((dataset) => `\`${dataset}\``).join(", ");
 }
 
-function truncate(value: string): string {
-  return value.length <= 50_000
+function truncate(value: string, maxLength = 50_000): string {
+  return value.length <= maxLength
     ? value
-    : `... earlier output truncated\n${value.slice(-49_900)}`;
+    : `... earlier output truncated\n${value.slice(-(maxLength - 100))}`;
 }
 
 function htmlEscape(value: string): string {
