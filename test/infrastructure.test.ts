@@ -128,7 +128,7 @@ test("creates only a passive controller with stable outbound identity", () => {
   );
 });
 
-test("leaves GitHub authentication to manual gh configuration", () => {
+test("leaves GH_TOKEN provisioning outside Pulumi", () => {
   assert.equal(
     resources.filter((candidate) =>
       candidate.type.startsWith("aws:secretsmanager/"),
