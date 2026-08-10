@@ -21,7 +21,15 @@ if [[ -z ${KUBERNETES_API_ALLOWED_CIDRS:-} ]]; then
   export KUBERNETES_API_ALLOWED_CIDRS
   KUBERNETES_API_ALLOWED_CIDRS=$(jq -r \
     --arg current "${public_ip}/32" \
-    '(. + [$current] | unique) | join(",")' <<<"${configured_cidrs}")
+    '
+      if type == "array" then .
+      elif type == "object" and (.value | type) == "array" then .value
+      elif type == "object" and (.value | type) == "string" then (.value | fromjson)
+      elif type == "string" then fromjson
+      else []
+      end
+      | . + [$current] | unique | join(",")
+    ' <<<"${configured_cidrs}")
 fi
 "${pulumi_bin}" up --stack "${stack}" --yes
 if [[ ${stack} == benchmark ]]; then
