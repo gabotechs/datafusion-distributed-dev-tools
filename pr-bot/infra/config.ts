@@ -1,6 +1,12 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import * as pulumi from "@pulumi/pulumi";
 
+import { repositoryRoot } from "./paths.js";
 import { controllerToolVersions } from "./versions.js";
+
+const authorizedGithubLoginsFile = "authorized-github-logins.txt";
 
 export interface ControllerConfig {
   namePrefix: string;
@@ -23,6 +29,22 @@ function positiveInteger(name: string, value: number): number {
     throw new Error(`${name} must be a positive integer`);
   }
   return value;
+}
+
+export function parseAuthorizedGithubLogins(contents: string): string[] {
+  return contents
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+export function loadAuthorizedGithubLogins(): string[] {
+  return parseAuthorizedGithubLogins(
+    readFileSync(
+      path.join(repositoryRoot(), authorizedGithubLoginsFile),
+      "utf8",
+    ),
+  );
 }
 
 export function validateControllerConfig(
@@ -69,9 +91,7 @@ export function loadControllerConfig(): ControllerConfig {
     datasetBucketName: config.require("datasetBucketName"),
     benchmarkWorkloadRoleArn: config.require("benchmarkWorkloadRoleArn"),
     githubRepository: config.require("githubRepository"),
-    authorizedGithubLogins: config.requireObject<string[]>(
-      "authorizedGithubLogins",
-    ),
+    authorizedGithubLogins: loadAuthorizedGithubLogins(),
     sourceRepositoryUrl: config.require("sourceRepositoryUrl"),
     nodeVersion:
       config.get("nodeVersion") ?? controllerToolVersions.node.version,
