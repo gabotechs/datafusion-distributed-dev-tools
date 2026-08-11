@@ -346,8 +346,8 @@ test("runs benchmarks with the selected result name without comparing results", 
   assert.equal(argument("--result-name"), resultName);
   assert.ok(!arguments_?.includes("--deployment"));
   assert.equal(argument("--bucket"), "s3://bucket");
-  assert.equal(argument("--cluster-name"), "cluster");
-  assert.equal(argument("--service"), "datafusion-job-7");
+  assert.equal(argument("--k8s-cluster"), "cluster");
+  assert.equal(argument("--k8s-service"), "datafusion-job-7");
   assert.equal(argument("--kubeconfig"), config.kubeconfig);
   assert.equal(argument("--region"), config.region);
   assert.equal(argument("--testdata-root"), config.testdataRoot);

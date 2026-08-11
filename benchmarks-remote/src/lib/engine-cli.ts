@@ -54,14 +54,14 @@ export const CommonOptions = object({
     },
   ),
   clusterName: withDefault(
-    option("--cluster-name", string({ metavar: "NAME" }), {
+    option("--k8s-cluster", string({ metavar: "NAME" }), {
       description: message`Benchmark Kubernetes cluster`,
     }),
     () => {
       const clusterName = getLocalFoundationConfiguration()?.clusterName;
       if (clusterName === undefined) {
         throw new WithDefaultError(
-          message`Could not resolve --cluster-name. Run npm run foundation-deploy to generate the local Pulumi outputs, or pass --cluster-name manually.`,
+          message`Could not resolve --k8s-cluster. Run npm run foundation-deploy to generate the local Pulumi outputs, or pass --k8s-cluster manually.`,
         );
       }
       return clusterName;
@@ -88,9 +88,11 @@ export const CommonOptions = object({
     }),
     "us-east-1",
   ),
-  service: option("--service", string({ metavar: "NAME" }), {
-    description: message`Kubernetes service to port-forward`,
-  }),
+  service: optional(
+    option("--k8s-service", string({ metavar: "NAME" }), {
+      description: message`Kubernetes service to port-forward`,
+    }),
+  ),
   testdataRoot: withDefault(
     option("--testdata-root", string({ metavar: "PATH" }), {
       description: message`Benchmark testdata directory`,
@@ -293,6 +295,7 @@ export async function runEngineBenchmark(
     const portForwardConfiguration = {
       ...options,
       deployment: runner.deployment,
+      service: options.service ?? runner.deployment,
     };
     await withKubectlPortForward(portForwardConfiguration, async () => {
       const availableQueries = await queriesForDataset(

@@ -119,13 +119,13 @@ An engine and the requested dataset must already be deployed. Benchmark commands
 only open a local Kubernetes port-forward and execute the local client:
 
 ```bash
-npm run datafusion-bench -- tpch/sf1 --service datafusion --iterations 1
+npm run datafusion-bench -- tpch/sf1 --iterations 1
 npm run trino-bench -- tpch/sf1 --iterations 1
 npm run spark-bench -- tpch/sf1 --iterations 1
 npm run ballista-bench -- tpch/sf1 --iterations 1
 ```
 
-`--bucket` and `--cluster-name` default to the values in
+`--bucket` and `--k8s-cluster` default to the values in
 `pulumi/.pulumi-outputs.json`. If that file is absent, run
 `npm run foundation-deploy` to generate it or pass both options explicitly.
 
