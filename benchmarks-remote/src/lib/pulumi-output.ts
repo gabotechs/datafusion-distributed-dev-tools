@@ -11,12 +11,18 @@ const PULUMI_OUTPUT_FILE = path.join(
   ".pulumi-outputs.json",
 );
 
+export interface LocalFoundationConfiguration {
+  bucket?: string;
+  clusterName?: string;
+}
+
 function normalizeBucketUri(bucket: string): string {
   const withoutProtocol = bucket.replace(/^s3:\/\//, "").replace(/\/+$/, "");
   return `s3://${withoutProtocol}`;
 }
 
-function getBucketFromLocalOutputs(): string | undefined {
+export function getLocalFoundationConfiguration():
+  LocalFoundationConfiguration | undefined {
   let raw: string;
   try {
     raw = fs.readFileSync(PULUMI_OUTPUT_FILE, "utf8");
@@ -45,13 +51,21 @@ function getBucketFromLocalOutputs(): string | undefined {
       `Pulumi outputs at ${PULUMI_OUTPUT_FILE} must be a JSON object`,
     );
   }
-  const value = (outputs as Record<string, unknown>).datasetBucketName;
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(
-      `Pulumi outputs at ${PULUMI_OUTPUT_FILE} do not contain a valid datasetBucketName`,
-    );
+  const values = outputs as Record<string, unknown>;
+  const configuration: LocalFoundationConfiguration = {};
+  if (
+    typeof values.datasetBucketName === "string" &&
+    values.datasetBucketName.trim() !== ""
+  ) {
+    configuration.bucket = normalizeBucketUri(values.datasetBucketName);
   }
-  return normalizeBucketUri(value);
+  if (
+    typeof values.clusterName === "string" &&
+    values.clusterName.trim() !== ""
+  ) {
+    configuration.clusterName = values.clusterName;
+  }
+  return configuration;
 }
 
 export function getBucketUri(): string {
@@ -60,7 +74,7 @@ export function getBucketUri(): string {
     return normalizeBucketUri(fromEnvironment);
   }
 
-  const fromLocalOutputs = getBucketFromLocalOutputs();
+  const fromLocalOutputs = getLocalFoundationConfiguration()?.bucket;
   if (fromLocalOutputs) {
     return fromLocalOutputs;
   }

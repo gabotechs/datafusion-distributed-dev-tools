@@ -351,6 +351,7 @@ test("runs benchmarks with the selected engine name without comparing results", 
   assert.equal(argument("--kubeconfig"), config.kubeconfig);
   assert.equal(argument("--region"), config.region);
   assert.equal(argument("--testdata-root"), config.testdataRoot);
+  assert.equal(arguments_?.[1], "tpch/sf1");
   assert.ok(arguments_?.includes("--no-compare"));
   assert.equal(options?.env, undefined);
 });
@@ -387,7 +388,6 @@ test("reads comparisons generated from stored result files", async () => {
   assert.equal(program, "node");
   assert.ok(arguments_?.[0]?.endsWith("/dist/compare.cjs"));
   assert.deepEqual(arguments_?.slice(1), [
-    "--dataset",
     "tpch/sf1",
     "--output",
     output,

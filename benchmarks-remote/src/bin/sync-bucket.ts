@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
 
-import { flag, message, object, option, string } from "@optique/core";
+import { argument, flag, message, object, string } from "@optique/core";
 import { runSync } from "@optique/run";
 
-import { getBucketUri } from "../lib/bucket";
+import { getBucketUri } from "../lib/pulumi-output";
 import {
   containsParquetFiles,
   discoverDatasets,
@@ -16,7 +16,7 @@ const Options = object({
   list: flag("--list", {
     description: message`List locally available datasets without syncing`,
   }).withDefault(false),
-  dataset: option("-d", "--dataset", string({ metavar: "DATASET" }), {
+  dataset: argument(string({ metavar: "DATASET" }), {
     description: message`Sync only the selected dataset`,
   }).multiple(),
 });

@@ -15,7 +15,7 @@ import { compareStoredResults } from "../lib/compare";
 import { errorMessage } from "../lib/filesystem";
 
 const Options = object({
-  dataset: option("--dataset", string({ metavar: "DATASET" }), {
+  dataset: argument(string({ metavar: "DATASET" }), {
     description: message`Dataset to compare`,
   }),
   output: optional(

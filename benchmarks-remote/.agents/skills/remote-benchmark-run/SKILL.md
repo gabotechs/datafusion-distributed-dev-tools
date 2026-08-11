@@ -18,10 +18,10 @@ Operate from `benchmarks-remote`. Benchmark execution is local and connects to t
 Select one supported engine:
 
 ```bash
-npm run datafusion-bench -- --dataset tpch/sf10 --engine datafusion-distributed-local
-npm run trino-bench -- --dataset tpch/sf10
-npm run spark-bench -- --dataset tpch/sf10
-npm run ballista-bench -- --dataset tpch/sf10
+npm run datafusion-bench -- tpch/sf10 --engine datafusion-distributed-local
+npm run trino-bench -- tpch/sf10
+npm run spark-bench -- tpch/sf10
+npm run ballista-bench -- tpch/sf10
 ```
 
 Common options are:

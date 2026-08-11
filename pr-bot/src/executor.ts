@@ -714,12 +714,11 @@ export class BenchmarkExecutor {
       "node",
       [
         path.join(this.config.harnessRoot, "dist", "datafusion-bench.cjs"),
+        dataset,
         "--bucket",
         `s3://${outputs.datasetBucketName}`,
         "--cluster-name",
         outputs.clusterName,
-        "--dataset",
-        dataset,
         "--deployment",
         "datafusion",
         "--engine",
@@ -750,7 +749,6 @@ export class BenchmarkExecutor {
       "node",
       [
         path.join(this.config.harnessRoot, "dist", "compare.cjs"),
-        "--dataset",
         dataset,
         "--output",
         output,

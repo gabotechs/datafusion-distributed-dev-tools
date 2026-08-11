@@ -1,14 +1,14 @@
 import { execFileSync } from "node:child_process";
 
-import { flag, message, object, option, string } from "@optique/core";
+import { argument, flag, message, object, string } from "@optique/core";
 import { runSync } from "@optique/run";
 
-import { getBucketUri } from "../lib/bucket";
+import { getBucketUri } from "../lib/pulumi-output";
 import { validateDatasetNames } from "../lib/datasets";
 import { errorMessage } from "../lib/filesystem";
 
 const Options = object({
-  dataset: option("-d", "--dataset", string({ metavar: "DATASET" }), {
+  dataset: argument(string({ metavar: "DATASET" }), {
     description: message`Delete the selected dataset`,
   })
     .multiple()

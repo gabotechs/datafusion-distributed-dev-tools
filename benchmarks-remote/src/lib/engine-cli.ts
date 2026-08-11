@@ -3,6 +3,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 
 import {
+  argument,
   choice,
   float,
   integer,
@@ -14,10 +15,12 @@ import {
   string,
   transform,
   withDefault,
+  WithDefaultError,
   type InferValue,
   type ValueParser,
 } from "@optique/core";
 
+import { getLocalFoundationConfiguration } from "./pulumi-output";
 import { errorMessage, isNotFoundError } from "./filesystem";
 import { datasetParts, datasetPath, DEV_TOOLS_ROOT } from "./paths";
 import { withKubectlPortForward } from "./port-forward";
@@ -34,90 +37,98 @@ export const booleanValue: ValueParser<"sync", boolean> = transform(
     unmap: (value) => (value ? "true" : "false"),
   },
 );
+
 export const CommonOptions = object({
-  /** S3 bucket containing the benchmark datasets. */
-  bucket: option("--bucket", string({ metavar: "URI" }), {
-    description: message`S3 bucket containing benchmark data`,
-  }),
-  /** Kubernetes context and EKS cluster name. */
-  clusterName: option("--cluster-name", string({ metavar: "NAME" }), {
-    description: message`Benchmark Kubernetes cluster`,
-  }),
-  /** Dataset identifier, such as tpch/sf1. */
-  dataset: option("--dataset", string({ metavar: "DATASET" }), {
+  bucket: withDefault(
+    option("--bucket", string({ metavar: "URI" }), {
+      description: message`S3 bucket containing benchmark data`,
+    }),
+    () => {
+      const bucket = getLocalFoundationConfiguration()?.bucket;
+      if (bucket === undefined) {
+        throw new WithDefaultError(
+          message`Could not resolve --bucket. Run npm run foundation-deploy to generate the local Pulumi outputs, or pass --bucket manually.`,
+        );
+      }
+      return bucket;
+    },
+  ),
+  clusterName: withDefault(
+    option("--cluster-name", string({ metavar: "NAME" }), {
+      description: message`Benchmark Kubernetes cluster`,
+    }),
+    () => {
+      const clusterName = getLocalFoundationConfiguration()?.clusterName;
+      if (clusterName === undefined) {
+        throw new WithDefaultError(
+          message`Could not resolve --cluster-name. Run npm run foundation-deploy to generate the local Pulumi outputs, or pass --cluster-name manually.`,
+        );
+      }
+      return clusterName;
+    },
+  ),
+  dataset: argument(string({ metavar: "DATASET" }), {
     description: message`Dataset to run queries on`,
   }),
-  /** Engine deployment whose namespace contains the service. */
   deployment: option("--deployment", string({ metavar: "NAME" }), {
     description: message`Benchmark engine deployment`,
   }),
-  /** Minimum number of measured executions per query. */
   iterations: withDefault(
     option("-i", "--iterations", integerValue, {
       description: message`Number of iterations`,
     }),
     5,
   ),
-  /** Path to the kubeconfig containing the benchmark cluster context. */
   kubeconfig: withDefault(
     option("--kubeconfig", string({ metavar: "PATH" }), {
       description: message`Path to the Kubernetes configuration`,
     }),
     path.join(DEV_TOOLS_ROOT, "benchmarks-remote", "k8s", ".kubeconfig"),
   ),
-  /** AWS region containing the benchmark cluster. */
   region: withDefault(
     option("--region", string({ metavar: "REGION" }), {
       description: message`AWS region containing the cluster`,
     }),
     "us-east-1",
   ),
-  /** Kubernetes service exposed through the local port-forward. */
   service: option("--service", string({ metavar: "NAME" }), {
     description: message`Kubernetes service to port-forward`,
   }),
-  /** Local directory containing benchmark queries and result files. */
   testdataRoot: withDefault(
     option("--testdata-root", string({ metavar: "PATH" }), {
       description: message`Benchmark testdata directory`,
     }),
     path.resolve(DEV_TOOLS_ROOT, "../datafusion-distributed/testdata"),
   ),
-  /** Minimum measured duration per query. */
   timeSecs: withDefault(
     option("--time-secs", numberValue, {
       description: message`Minimum measured time per query in seconds`,
     }),
     0,
   ),
-  /** Engine endpoint reached through the port-forward. */
   url: withDefault(
     option("--url", string({ metavar: "URL" }), {
       description: message`Benchmark engine URL`,
     }),
     "http://localhost:9000",
   ),
-  /** Optional comma-separated query selection. */
   queries: optional(
     option("--queries", string({ metavar: "QUERIES" }), {
       description: message`Comma-separated query IDs to run`,
     }),
   ),
-  /** Whether to print query plans. */
   debug: withDefault(
     option("--debug", booleanValue, {
       description: message`Print generated plans to stderr`,
     }),
     false,
   ),
-  /** Whether to execute a warmup query. */
   warmup: withDefault(
     option("--warmup", booleanValue, {
       description: message`Perform a warmup query before the benchmarks`,
     }),
     true,
   ),
-  /** Whether to compare against the previous stored run. */
   compare: map(
     option("--no-compare", {
       description: message`Do not compare against the previous stored run`,
@@ -305,13 +316,12 @@ export async function runEngineBenchmark(
       );
 
       console.error("Creating tables...");
-      await runner.createTables(
-        await tablePathsForDataset(
-          dataset,
-          options.testdataRoot,
-          options.bucket,
-        ),
+      const tableSpecs = await tablePathsForDataset(
+        dataset,
+        options.testdataRoot,
+        options.bucket,
       );
+      await runner.createTables(tableSpecs);
 
       for (const { id, sql } of availableQueries) {
         if (selectedQueries.length > 0 && !selectedQueries.includes(id)) {
