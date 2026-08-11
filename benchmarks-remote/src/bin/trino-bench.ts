@@ -709,7 +709,8 @@ export const trinoStatementResponseSchema = z
   .passthrough();
 
 export class TrinoRunner implements BenchmarkRunner {
-  readonly engine = "trino";
+  readonly deployment = "trino";
+  readonly resultName = "trino";
   private schema?: string;
 
   constructor(public readonly options: CommonOptionValues) {}

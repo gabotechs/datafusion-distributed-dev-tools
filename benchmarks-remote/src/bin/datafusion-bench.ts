@@ -18,13 +18,17 @@ import {
   numberValue,
   runEngineBenchmark,
 } from "../lib/engine-cli";
+import { datafusionDistributedGitReference } from "../lib/git-reference";
 import type { ExecuteQueryResult, TableSpec } from "../lib/runner";
 import { splitViewQuery, type BenchmarkRunner } from "../lib/runner";
 
 const Options = object({
-  engine: option("--engine", string({ metavar: "NAME" }), {
-    description: message`Engine name used to store benchmark results`,
-  }),
+  resultName: withDefault(
+    option("--result-name", string({ metavar: "NAME" }), {
+      description: message`Name used to store benchmark results`,
+    }),
+    () => `datafusion-distributed-${datafusionDistributedGitReference()}`,
+  ),
   fileScanConfigBytesPerPartition: withDefault(
     option("--file-scan-config-bytes-per-partition", integerValue, {
       description: message`Bytes each partition scans`,
@@ -126,10 +130,11 @@ const queryResponseSchema = z.object({
 type QueryResponse = z.infer<typeof queryResponseSchema>;
 
 export class DataFusionRunner implements BenchmarkRunner {
-  readonly engine: string;
+  readonly deployment = "datafusion";
+  readonly resultName: string;
 
   constructor(public readonly options: DataFusionOptions) {
-    this.engine = options.engine;
+    this.resultName = options.resultName;
   }
 
   async executeQuery(sql: string): Promise<ExecuteQueryResult> {

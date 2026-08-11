@@ -2,23 +2,33 @@ import { BenchmarkRun } from "./results";
 
 export function compareStoredResults(
   dataset: string,
-  baseEngine: string,
-  newEngine: string,
+  baseResultName: string,
+  newResultName: string,
   testdataRoot?: string,
 ): string {
-  const base = new BenchmarkRun(dataset, baseEngine, undefined, testdataRoot);
+  const base = new BenchmarkRun(
+    dataset,
+    baseResultName,
+    undefined,
+    testdataRoot,
+  );
   base.loadResults();
-  const next = new BenchmarkRun(dataset, newEngine, undefined, testdataRoot);
+  const next = new BenchmarkRun(
+    dataset,
+    newResultName,
+    undefined,
+    testdataRoot,
+  );
   next.loadResults();
 
   if (base.results.length === 0) {
     throw new Error(
-      `No stored results found for engine '${baseEngine}' and dataset '${dataset}'`,
+      `No stored results found for '${baseResultName}' and dataset '${dataset}'`,
     );
   }
   if (next.results.length === 0) {
     throw new Error(
-      `No stored results found for engine '${newEngine}' and dataset '${dataset}'`,
+      `No stored results found for '${newResultName}' and dataset '${dataset}'`,
     );
   }
   const baseQueries = base.results.map((result) => result.id);

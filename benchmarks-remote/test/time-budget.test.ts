@@ -16,7 +16,6 @@ function options(
     bucket: "s3://bucket",
     clusterName: "cluster",
     dataset: "tpch/sf1",
-    deployment: "deployment",
     iterations: 1,
     kubeconfig: path.join(root, "kubeconfig"),
     region: "us-east-1",
@@ -70,7 +69,8 @@ test("runs each query until both its iteration and time minimums are met", async
   let calls = 0;
   context.mock.method(performance, "now", () => elapsedMs);
   const runner: BenchmarkRunner = {
-    engine: "test",
+    deployment: "deployment",
+    resultName: "test",
     options: options(root, { iterations: 2, timeSecs: 10 }),
     async createTables(): Promise<void> {},
     async executeQuery(): Promise<ExecuteQueryResult> {
@@ -104,7 +104,8 @@ test("rejects datasets whose table directories contain no Parquet files", async 
 
   try {
     const runner: BenchmarkRunner = {
-      engine: "test",
+      deployment: "deployment",
+      resultName: "test",
       options: options(root),
       async createTables(): Promise<void> {},
       async executeQuery(): Promise<ExecuteQueryResult> {

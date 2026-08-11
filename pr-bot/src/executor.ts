@@ -319,13 +319,13 @@ export class BenchmarkExecutor {
     progressMessages: readonly string[],
     reportProgress: (message: string) => Promise<void>,
     jobId: number,
-    engine: string,
+    resultName: string,
   ): Promise<BenchmarkTiming[]> {
     const timings: BenchmarkTiming[] = [];
     for (const [index, dataset] of datasets.entries()) {
       await reportProgress(progressMessages[index]!);
       const started = performance.now();
-      await this.runBenchmark(dataset, jobId, engine);
+      await this.runBenchmark(dataset, jobId, resultName);
       timings.push({ dataset, durationMs: performance.now() - started });
     }
     return timings;
@@ -707,7 +707,7 @@ export class BenchmarkExecutor {
   async runBenchmark(
     dataset: string,
     jobId: number,
-    engine: string,
+    resultName: string,
   ): Promise<void> {
     const outputs = loadOutputs(this.config.foundationOutputsFile);
     await this.processes.run(
@@ -719,10 +719,8 @@ export class BenchmarkExecutor {
         `s3://${outputs.datasetBucketName}`,
         "--cluster-name",
         outputs.clusterName,
-        "--deployment",
-        "datafusion",
-        "--engine",
-        engine,
+        "--result-name",
+        resultName,
         "--kubeconfig",
         this.config.kubeconfig,
         "--no-compare",
@@ -741,8 +739,8 @@ export class BenchmarkExecutor {
 
   async compareResults(
     dataset: string,
-    baseEngine: string,
-    headEngine: string,
+    baseResultName: string,
+    headResultName: string,
     output: string,
   ): Promise<string> {
     await this.processes.run(
@@ -754,8 +752,8 @@ export class BenchmarkExecutor {
         output,
         "--testdata-root",
         this.config.testdataRoot,
-        baseEngine,
-        headEngine,
+        baseResultName,
+        headResultName,
       ],
       {
         cwd: this.config.harnessRoot,

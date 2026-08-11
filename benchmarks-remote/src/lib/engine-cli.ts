@@ -70,9 +70,6 @@ export const CommonOptions = object({
   dataset: argument(string({ metavar: "DATASET" }), {
     description: message`Dataset to run queries on`,
   }),
-  deployment: option("--deployment", string({ metavar: "NAME" }), {
-    description: message`Benchmark engine deployment`,
-  }),
   iterations: withDefault(
     option("-i", "--iterations", integerValue, {
       description: message`Number of iterations`,
@@ -293,7 +290,11 @@ export async function runEngineBenchmark(
       );
     }
 
-    await withKubectlPortForward(options, async () => {
+    const portForwardConfiguration = {
+      ...options,
+      deployment: runner.deployment,
+    };
+    await withKubectlPortForward(portForwardConfiguration, async () => {
       const availableQueries = await queriesForDataset(
         dataset,
         options.testdataRoot,
@@ -310,7 +311,7 @@ export async function runEngineBenchmark(
 
       const benchmarkRun = new BenchmarkRun(
         dataset,
-        runner.engine,
+        runner.resultName,
         undefined,
         options.testdataRoot,
       );
@@ -330,7 +331,7 @@ export async function runEngineBenchmark(
 
         const result = new BenchResult(
           dataset,
-          runner.engine,
+          runner.resultName,
           id,
           options.testdataRoot,
         );

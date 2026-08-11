@@ -3,8 +3,8 @@ import test from "node:test";
 
 import { BenchmarkRun, BenchResult } from "../src/lib/results";
 
-function result(engine: string, elapsed: number): BenchResult {
-  const value = new BenchResult("tpch/sf1", engine, "q1");
+function result(resultName: string, elapsed: number): BenchResult {
+  const value = new BenchResult("tpch/sf1", resultName, "q1");
   value.iterations.push({
     elapsed,
     plan: "",

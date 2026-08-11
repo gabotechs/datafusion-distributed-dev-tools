@@ -18,7 +18,7 @@ Operate from `benchmarks-remote`. Benchmark execution is local and connects to t
 Select one supported engine:
 
 ```bash
-npm run datafusion-bench -- tpch/sf10 --engine datafusion-distributed-local
+npm run datafusion-bench -- tpch/sf10 --service datafusion
 npm run trino-bench -- tpch/sf10
 npm run spark-bench -- tpch/sf10
 npm run ballista-bench -- tpch/sf10

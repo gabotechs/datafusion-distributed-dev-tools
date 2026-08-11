@@ -38,7 +38,7 @@ const TIMINGS = {
   totalMs: 420_000,
 };
 
-const COMPARISON = `=== Comparing tpch/sf1 results from engine 'base' [prev] with 'head' [new] ===
+const COMPARISON = `=== Comparing tpch/sf1 results 'base' [prev] with 'head' [new] ===
       q1: prev= 100 ms, new= 120 ms, diff=1.20 slower ✖
       q2: prev= 200 ms, new= 150 ms, diff=1.33 faster ✔
    TOTAL: prev=300 ms, new=270 ms, diff=1.11 faster ✅`;
@@ -187,7 +187,7 @@ test("keeps escaped multi-dataset output within GitHub's comment limit", async (
     .map(
       (
         dataset,
-      ) => `=== Comparing ${dataset} results from engine 'base' [prev] with 'head' [new] ===
+      ) => `=== Comparing ${dataset} results 'base' [prev] with 'head' [new] ===
       q1: ${"&<>".repeat(30_000)}
    TOTAL: prev=300 ms, new=270 ms, diff=1.11 faster`,
     )

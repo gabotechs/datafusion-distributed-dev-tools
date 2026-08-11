@@ -17,7 +17,8 @@ const queryResponseSchema = z.object({
 type QueryResponse = z.infer<typeof queryResponseSchema>;
 
 export class BallistaRunner implements BenchmarkRunner {
-  readonly engine = "ballista";
+  readonly deployment = "ballista";
+  readonly resultName = "ballista";
 
   constructor(public readonly options: CommonOptionValues) {}
 

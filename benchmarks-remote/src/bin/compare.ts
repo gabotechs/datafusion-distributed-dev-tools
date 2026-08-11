@@ -26,8 +26,8 @@ const Options = object({
   testdataRoot: option("--testdata-root", string({ metavar: "PATH" }), {
     description: message`Benchmark testdata directory`,
   }),
-  baseEngine: argument(string({ metavar: "BASE_ENGINE" })),
-  compareEngine: argument(string({ metavar: "COMPARE_ENGINE" })),
+  baseResultName: argument(string({ metavar: "BASE_RESULT_NAME" })),
+  compareResultName: argument(string({ metavar: "COMPARE_RESULT_NAME" })),
 });
 
 async function main(): Promise<void> {
@@ -35,8 +35,8 @@ async function main(): Promise<void> {
 
   const comparison = compareStoredResults(
     options.dataset,
-    options.baseEngine,
-    options.compareEngine,
+    options.baseResultName,
+    options.compareResultName,
     options.testdataRoot,
   );
   if (options.output) {

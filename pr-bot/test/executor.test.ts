@@ -125,9 +125,9 @@ test("executes base before head with the bundled trusted harness", async () => {
     override async runBenchmark(
       dataset: string,
       jobId: number,
-      engine: string,
+      resultName: string,
     ): Promise<void> {
-      events.push(`run:${jobId}:${dataset}:${engine}`);
+      events.push(`run:${jobId}:${dataset}:${resultName}`);
     }
     override async compareResults(dataset: string): Promise<string> {
       events.push(`compare:${dataset}`);
@@ -319,7 +319,7 @@ test("uses request capacity in an isolated per-job Helm release", async () => {
   ]);
 });
 
-test("runs benchmarks with the selected engine name without comparing results", async () => {
+test("runs benchmarks with the selected result name without comparing results", async () => {
   const { config } = fixture();
   let program: string | undefined;
   let arguments_: readonly string[] | undefined;
@@ -332,19 +332,19 @@ test("runs benchmarks with the selected engine name without comparing results", 
       return { exitCode: 0, stdout: "ignored output", stderr: "" };
     },
   };
-  const engine = "datafusion-distributed-deadbeef1234";
+  const resultName = "datafusion-distributed-deadbeef1234";
 
   await new BenchmarkExecutor(config, processes).runBenchmark(
     "tpch/sf1",
     JOB.id,
-    engine,
+    resultName,
   );
 
   assert.equal(program, "node");
   const argument = (name: string): string | undefined =>
     arguments_?.[arguments_.indexOf(name) + 1];
-  assert.equal(argument("--engine"), engine);
-  assert.equal(argument("--deployment"), "datafusion");
+  assert.equal(argument("--result-name"), resultName);
+  assert.ok(!arguments_?.includes("--deployment"));
   assert.equal(argument("--bucket"), "s3://bucket");
   assert.equal(argument("--cluster-name"), "cluster");
   assert.equal(argument("--service"), "datafusion-job-7");
