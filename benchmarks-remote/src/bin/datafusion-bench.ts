@@ -13,7 +13,7 @@ import { runSync } from "@optique/run";
 
 import {
   booleanValue,
-  CommonOptions,
+  commonOptions,
   integerValue,
   numberValue,
   runEngineBenchmark,
@@ -22,9 +22,12 @@ import type { ExecuteQueryResult, TableSpec } from "../lib/runner";
 import { splitViewQuery, type BenchmarkRunner } from "../lib/runner";
 
 const Options = object({
-  engine: option("--engine", string({ metavar: "NAME" }), {
-    description: message`Engine name used to store benchmark results`,
-  }),
+  engine: withDefault(
+    option("--engine", string({ metavar: "NAME" }), {
+      description: message`Engine name used to store benchmark results`,
+    }),
+    "datafusion-distributed-local",
+  ),
   fileScanConfigBytesPerPartition: withDefault(
     option("--file-scan-config-bytes-per-partition", integerValue, {
       description: message`Bytes each partition scans`,
@@ -111,7 +114,7 @@ const Options = object({
   ),
 });
 
-const DataFusionOptions = merge(CommonOptions, Options);
+const DataFusionOptions = merge(commonOptions("datafusion"), Options);
 
 type DataFusionOptions = InferValue<typeof DataFusionOptions>;
 

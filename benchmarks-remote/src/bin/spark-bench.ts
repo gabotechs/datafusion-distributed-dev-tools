@@ -2,7 +2,7 @@ import { z } from "zod";
 import { runSync } from "@optique/run";
 
 import {
-  CommonOptions,
+  commonOptions,
   runEngineBenchmark,
   type CommonOptions as CommonOptionValues,
 } from "../lib/engine-cli";
@@ -73,7 +73,7 @@ export class SparkRunner implements BenchmarkRunner {
 }
 
 if (require.main === module) {
-  const options = runSync(CommonOptions, {
+  const options = runSync(commonOptions("spark"), {
     help: "option",
     showDefault: true,
   });

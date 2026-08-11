@@ -2,7 +2,7 @@ import { z } from "zod";
 import { runSync } from "@optique/run";
 
 import {
-  CommonOptions,
+  commonOptions,
   runEngineBenchmark,
   type CommonOptions as CommonOptionValues,
 } from "../lib/engine-cli";
@@ -826,7 +826,7 @@ export class TrinoRunner implements BenchmarkRunner {
 }
 
 if (require.main === module) {
-  const options = runSync(CommonOptions, {
+  const options = runSync(commonOptions("trino"), {
     help: "option",
     showDefault: true,
   });
