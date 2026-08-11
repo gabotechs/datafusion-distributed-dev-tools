@@ -7,7 +7,7 @@ import test from "node:test";
 import { runSync } from "@optique/run";
 
 import {
-  CommonOptions,
+  commonOptions,
   runEngineBenchmark,
   type CommonOptions as CommonOptionValues,
 } from "../src/lib/engine-cli";
@@ -32,13 +32,34 @@ class FakeRunner implements BenchmarkRunner {
 }
 
 function parseOptions(argv: readonly string[]): CommonOptionValues {
-  return runSync<typeof CommonOptions>(CommonOptions, {
+  const parser = commonOptions("test");
+  return runSync<typeof parser>(parser, {
     args: argv.slice(2),
     help: "option",
     programName: argv[1] ?? "benchmark",
     showDefault: true,
   });
 }
+
+test("uses the local foundation and engine for omitted connection options", () => {
+  const parser = commonOptions("datafusion", () => ({
+    bucket: "s3://datasets",
+    clusterName: "benchmark-cluster",
+    region: "eu-west-1",
+  }));
+  const options = runSync<typeof parser>(parser, {
+    args: ["--dataset", "tpch/sf1"],
+    help: "option",
+    programName: "datafusion-bench",
+    showDefault: true,
+  });
+
+  assert.equal(options.bucket, "s3://datasets");
+  assert.equal(options.clusterName, "benchmark-cluster");
+  assert.equal(options.deployment, "datafusion");
+  assert.equal(options.region, "eu-west-1");
+  assert.equal(options.service, "datafusion");
+});
 
 test("rejects explicitly empty query selections", async () => {
   const stderr: string[] = [];
