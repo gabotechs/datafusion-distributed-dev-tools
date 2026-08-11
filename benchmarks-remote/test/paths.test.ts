@@ -47,18 +47,8 @@ test("allows a source worktree to override the sibling checkout", () => {
 });
 
 test("reports every searched location when a dataset is absent", () => {
-  const previous = process.env.BENCHMARK_TESTDATA_ROOT;
-  process.env.BENCHMARK_TESTDATA_ROOT = "/missing-benchmark-testdata";
-  try {
-    assert.throws(
-      () => datasetPath("tpch/sf1"),
-      /Dataset 'tpch\/sf1' was not found\. Looked in: \/missing-benchmark-testdata\/tpch\/sf1/,
-    );
-  } finally {
-    if (previous === undefined) {
-      delete process.env.BENCHMARK_TESTDATA_ROOT;
-    } else {
-      process.env.BENCHMARK_TESTDATA_ROOT = previous;
-    }
-  }
+  assert.throws(
+    () => datasetPath("tpch/sf1", "/missing-benchmark-testdata"),
+    /Dataset 'tpch\/sf1' was not found\. Looked in: \/missing-benchmark-testdata\/tpch\/sf1/,
+  );
 });

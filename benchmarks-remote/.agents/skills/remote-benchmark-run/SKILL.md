@@ -18,7 +18,7 @@ Operate from `benchmarks-remote`. Benchmark execution is local and connects to t
 Select one supported engine:
 
 ```bash
-npm run datafusion-bench -- --dataset tpch/sf10
+npm run datafusion-bench -- --dataset tpch/sf10 --engine datafusion-distributed-local
 npm run trino-bench -- --dataset tpch/sf10
 npm run spark-bench -- --dataset tpch/sf10
 npm run ballista-bench -- --dataset tpch/sf10
@@ -35,9 +35,9 @@ Common options are:
 
 Pass engine-specific DataFusion options only to `datafusion-bench`; inspect `src/datafusion-bench.ts --help` behavior before changing defaults.
 
-The wrapper acquires the global benchmark lock, opens `localhost:9000`, runs the local TypeScript client, and cleans up the tunnel and lock on exit. It does not upload results. Abrupt interruption may leave the previous completed local results, which is acceptable.
-
-If another active run owns the lock, wait for it. Never delete or overwrite an active lock. A stale lock becomes recoverable after its heartbeat timeout.
+The TypeScript engine CLI opens `localhost:9000`, runs the local client, and
+cleans up the tunnel on exit. It does not upload results. Abrupt interruption
+may leave the previous completed local results, which is acceptable.
 
 ## Assess results
 
@@ -59,7 +59,6 @@ Run:
 ```bash
 npm run build
 npm test
-bash -n k8s/run-benchmark.sh
 ```
 
 Then run at least one live query with one iteration and no warmup against each affected engine. Confirm the command exits successfully and leaves no listener on local port 9000.

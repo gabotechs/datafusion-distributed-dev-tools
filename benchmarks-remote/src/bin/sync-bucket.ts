@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 
-import { Command } from "commander";
+import { flag, message, object, option, string } from "@optique/core";
+import { runSync } from "@optique/run";
 
 import { getBucketUri } from "../lib/bucket";
 import {
@@ -11,12 +12,17 @@ import {
 import { errorMessage } from "../lib/filesystem";
 import { testdataRoots } from "../lib/paths";
 
+const Options = object({
+  list: flag("--list", {
+    description: message`List locally available datasets without syncing`,
+  }).withDefault(false),
+  dataset: option("-d", "--dataset", string({ metavar: "DATASET" }), {
+    description: message`Sync only the selected dataset`,
+  }).multiple(),
+});
+
 function main(): void {
-  const program = new Command()
-    .option("--list", "List locally available datasets without syncing")
-    .option("-d, --dataset <dataset...>", "Sync only the selected dataset(s)")
-    .parse(process.argv);
-  const options = program.opts<{ list?: boolean; dataset?: string[] }>();
+  const options = runSync<typeof Options>(Options, { help: "option" });
   const datasets = discoverDatasets(testdataRoots());
 
   if (options.list) {
@@ -26,7 +32,7 @@ function main(): void {
     return;
   }
 
-  const selected = selectDatasets(datasets, options.dataset ?? []);
+  const selected = selectDatasets(datasets, options.dataset);
   const empty = selected.filter(
     (dataset) => !containsParquetFiles(dataset.source),
   );

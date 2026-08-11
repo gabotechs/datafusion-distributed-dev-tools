@@ -1,20 +1,25 @@
 import { execFileSync } from "node:child_process";
 
-import { Command } from "commander";
+import { flag, message, object, option, string } from "@optique/core";
+import { runSync } from "@optique/run";
 
 import { getBucketUri } from "../lib/bucket";
 import { validateDatasetNames } from "../lib/datasets";
 import { errorMessage } from "../lib/filesystem";
 
+const Options = object({
+  dataset: option("-d", "--dataset", string({ metavar: "DATASET" }), {
+    description: message`Delete the selected dataset`,
+  })
+    .multiple()
+    .nonEmpty(),
+  yes: flag("--yes", {
+    description: message`Confirm permanent deletion from S3`,
+  }).withDefault(false),
+});
+
 function main(): void {
-  const program = new Command()
-    .requiredOption(
-      "-d, --dataset <dataset...>",
-      "Delete the selected dataset(s)",
-    )
-    .option("--yes", "Confirm permanent deletion from S3")
-    .parse(process.argv);
-  const options = program.opts<{ dataset: string[]; yes?: boolean }>();
+  const options = runSync<typeof Options>(Options, { help: "option" });
   if (!options.yes) {
     throw new Error("Pass --yes to confirm permanent dataset deletion");
   }

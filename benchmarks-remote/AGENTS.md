@@ -46,14 +46,14 @@ generic benchmark wrapper:
    list in `pulumi/src/config.ts` and the tenancy chart.
 5. Add content-addressed publishing only when required. Keep publishing in the
    engine deployment path, not benchmark execution.
-6. Add `<engine>-deploy`, `<engine>-destroy`, `<engine>-bench`, and
-   `runner:<engine>-bench` npm commands following the existing naming scheme.
+6. Add `<engine>-deploy`, `<engine>-destroy`, and `<engine>-bench` npm commands
+   following the existing naming scheme.
 7. Implement the local client under `src/bin/` and reusable support under
    `src/lib/`; keep results local and use literal dataset paths.
 8. Add the engine and its worker selector to the shared validation in
-   `k8s/lib.sh`, then extend the focused tests. Do not add per-engine port
-   selection or lazy readiness, dataset, or deployment logic to
-   `k8s/run-benchmark.sh`.
+   `k8s/lib.sh`, declare its deployment in `src/lib/engine-cli.ts`, then extend
+   the focused tests. Do not add per-engine port selection or lazy readiness,
+   dataset, or deployment logic to the generic benchmark connection path.
 
 ## Validation
 

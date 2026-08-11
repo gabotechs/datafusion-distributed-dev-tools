@@ -1,6 +1,11 @@
 import { z } from "zod";
+import { runSync } from "@optique/run";
 
-import { runEngineBenchmark } from "../lib/engine-cli";
+import {
+  CommonOptions,
+  runEngineBenchmark,
+  type CommonOptions as CommonOptionValues,
+} from "../lib/engine-cli";
 import type { ExecuteQueryResult, TableSpec } from "../lib/runner";
 import { splitViewQuery, type BenchmarkRunner } from "../lib/runner";
 
@@ -12,7 +17,9 @@ const queryResponseSchema = z.object({
 type QueryResponse = z.infer<typeof queryResponseSchema>;
 
 export class BallistaRunner implements BenchmarkRunner {
-  private readonly url = process.env.BALLISTA_URL ?? "http://localhost:9000";
+  readonly engine = "ballista";
+
+  constructor(public readonly options: CommonOptionValues) {}
 
   async executeQuery(sql: string): Promise<ExecuteQueryResult> {
     const viewQuery = splitViewQuery(sql);
@@ -35,7 +42,7 @@ export class BallistaRunner implements BenchmarkRunner {
   }
 
   private async query(sql: string): Promise<QueryResponse> {
-    const url = new URL(this.url);
+    const url = new URL(this.options.url);
     url.searchParams.set("sql", sql);
     const response = await fetch(url);
     if (!response.ok) {
@@ -56,8 +63,9 @@ export class BallistaRunner implements BenchmarkRunner {
 }
 
 if (require.main === module) {
-  runEngineBenchmark({
-    engine: "ballista",
-    createRunner: () => new BallistaRunner(),
+  const options = runSync(CommonOptions, {
+    help: "option",
+    showDefault: true,
   });
+  void runEngineBenchmark(new BallistaRunner(options));
 }

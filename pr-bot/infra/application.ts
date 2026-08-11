@@ -40,12 +40,6 @@ export function applicationArchive(): pulumi.asset.AssetArchive {
         datafusion: new pulumi.asset.FileArchive(
           path.join(benchmarkRoot, "k8s", "datafusion"),
         ),
-        "lib.sh": new pulumi.asset.FileAsset(
-          path.join(benchmarkRoot, "k8s", "lib.sh"),
-        ),
-        "run-benchmark.sh": new pulumi.asset.FileAsset(
-          path.join(benchmarkRoot, "k8s", "run-benchmark.sh"),
-        ),
         "worker-resources.yaml": new pulumi.asset.FileAsset(
           path.join(benchmarkRoot, "k8s", "worker-resources.yaml"),
         ),

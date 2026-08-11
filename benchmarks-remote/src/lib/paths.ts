@@ -66,9 +66,12 @@ export function testdataRoots(): string[] {
   return [path.join(datafusionDistributedRoot(), "testdata")];
 }
 
-export function datasetPath(dataset: string): string {
+export function datasetPath(
+  dataset: string,
+  testdataRoot = path.join(datafusionDistributedRoot(), "testdata"),
+): string {
   const relative = path.join(...datasetParts(dataset));
-  const candidates = testdataRoots().map((root) => path.join(root, relative));
+  const candidates = [path.join(testdataRoot, relative)];
   for (const candidate of candidates) {
     try {
       if (!fs.statSync(candidate).isDirectory()) {

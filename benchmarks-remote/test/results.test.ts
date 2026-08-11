@@ -16,27 +16,23 @@ import {
 
 function withDataset(t: TestContext): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-results-"));
-  const previousRoot = process.env.BENCHMARK_TESTDATA_ROOT;
-  process.env.BENCHMARK_TESTDATA_ROOT = root;
   fs.mkdirSync(path.join(root, "tpch", "sf1"), { recursive: true });
   t.after(() => {
-    if (previousRoot === undefined) delete process.env.BENCHMARK_TESTDATA_ROOT;
-    else process.env.BENCHMARK_TESTDATA_ROOT = previousRoot;
     fs.rmSync(root, { recursive: true, force: true });
   });
   return root;
 }
 
-function result(engine: string, queryId: string): BenchResult {
-  const value = new BenchResult("tpch/sf1", engine, queryId);
+function result(root: string, engine: string, queryId: string): BenchResult {
+  const value = new BenchResult("tpch/sf1", engine, queryId, root);
   value.iterations.push({ elapsed: 10, plan: "", rowCount: 1, tasks: 1 });
   return value;
 }
 
 test("stores previous and per-engine manifests with the exact query IDs", (t) => {
   const root = withDataset(t);
-  const run = new BenchmarkRun("tpch/sf1", "base", 123);
-  run.results.push(result("base", "q1"), result("base", "custom"));
+  const run = new BenchmarkRun("tpch/sf1", "base", 123, root);
+  run.results.push(result(root, "base", "q1"), result(root, "base", "custom"));
   run.store();
 
   const manifestPath = path.join(
@@ -73,7 +69,12 @@ test("stores previous and per-engine manifests with the exact query IDs", (t) =>
     expectedManifest,
   );
 
-  const previous = new BenchmarkRun("tpch/sf1", "head").loadPrevious();
+  const previous = new BenchmarkRun(
+    "tpch/sf1",
+    "head",
+    undefined,
+    root,
+  ).loadPrevious();
   assert.equal(previous?.engine, "base");
   assert.deepEqual(
     previous?.results.map((value) => value.id),
@@ -83,7 +84,7 @@ test("stores previous and per-engine manifests with the exact query IDs", (t) =>
 
 test("distinguishes missing result files from malformed result files", (t) => {
   const root = withDataset(t);
-  assert.equal(BenchResult.load("tpch/sf1", "base", "q1"), null);
+  assert.equal(BenchResult.load("tpch/sf1", "base", "q1", root), null);
 
   const resultPath = path.join(
     root,
@@ -96,7 +97,7 @@ test("distinguishes missing result files from malformed result files", (t) => {
   fs.mkdirSync(path.dirname(resultPath), { recursive: true });
   fs.writeFileSync(resultPath, "not JSON");
   assert.throws(
-    () => BenchResult.load("tpch/sf1", "base", "q1"),
+    () => BenchResult.load("tpch/sf1", "base", "q1", root),
     /Invalid benchmark result.*Invalid JSON/,
   );
 });
@@ -113,7 +114,7 @@ test("reports malformed previous-run manifests instead of treating them as absen
   fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
   fs.writeFileSync(manifestPath, JSON.stringify({ engine: "base" }));
   assert.throws(
-    () => new BenchmarkRun("tpch/sf1", "head").loadPrevious(),
+    () => new BenchmarkRun("tpch/sf1", "head", undefined, root).loadPrevious(),
     /Invalid previous run manifest/,
   );
 });

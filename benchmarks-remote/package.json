@@ -16,10 +16,10 @@
     "sync-bucket": "tsx src/bin/sync-bucket.ts",
     "dataset-destroy": "tsx src/bin/destroy-dataset.ts",
     "compare": "tsx src/bin/compare.ts",
-    "datafusion-bench": "./k8s/run-benchmark.sh datafusion",
-    "trino-bench": "./k8s/run-benchmark.sh trino",
-    "spark-bench": "./k8s/run-benchmark.sh spark",
-    "ballista-bench": "./k8s/run-benchmark.sh ballista",
+    "datafusion-bench": "tsx src/bin/datafusion-bench.ts",
+    "trino-bench": "tsx src/bin/trino-bench.ts",
+    "spark-bench": "tsx src/bin/spark-bench.ts",
+    "ballista-bench": "tsx src/bin/ballista-bench.ts",
     "datafusion-deploy": "./k8s/deploy-engine.sh datafusion",
     "datafusion-destroy": "./k8s/destroy-engine.sh datafusion",
     "trino-deploy": "./k8s/deploy-engine.sh trino",
@@ -28,14 +28,11 @@
     "spark-destroy": "./k8s/destroy-engine.sh spark",
     "ballista-deploy": "./k8s/deploy-engine.sh ballista",
     "ballista-destroy": "./k8s/destroy-engine.sh ballista",
-    "command": "./k8s/command.sh",
-    "runner:datafusion-bench": "tsx src/bin/datafusion-bench.ts",
-    "runner:trino-bench": "tsx src/bin/trino-bench.ts",
-    "runner:spark-bench": "tsx src/bin/spark-bench.ts",
-    "runner:ballista-bench": "tsx src/bin/ballista-bench.ts"
+    "command": "./k8s/command.sh"
   },
   "dependencies": {
-    "commander": "^14.0.2",
+    "@optique/core": "^1.2.0",
+    "@optique/run": "^1.2.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
