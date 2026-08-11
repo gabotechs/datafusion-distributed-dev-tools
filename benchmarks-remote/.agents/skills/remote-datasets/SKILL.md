@@ -28,11 +28,11 @@ Treat dataset names as literal paths relative to `testdata/`, for example `tpch/
 Prefer explicit selection because datasets can be large:
 
 ```bash
-npm run sync-bucket -- --dataset tpch/sf10
-npm run sync-bucket -- --dataset tpch/sf10 clickbench/0-100
+npm run sync-bucket -- tpch/sf10
+npm run sync-bucket -- tpch/sf10 clickbench/0-100
 ```
 
-Run `npm run sync-bucket` without `--dataset` only when the user explicitly wants every discovered dataset uploaded. Sync requires at least one Parquet file and mirrors only Parquet files with `aws s3 sync --delete`. It is safe to rerun after interruption.
+Run `npm run sync-bucket` without a dataset only when the user explicitly wants every discovered dataset uploaded. Sync requires at least one Parquet file and mirrors only Parquet files with `aws s3 sync --delete`. It is safe to rerun after interruption.
 
 Do not create readiness markers. Benchmark execution intentionally assumes the requested S3 data exists.
 
@@ -41,7 +41,7 @@ Do not create readiness markers. Benchmark execution intentionally assumes the r
 Dataset removal is destructive. Resolve the exact dataset name and obtain explicit authorization before running:
 
 ```bash
-npm run dataset-destroy -- --dataset tpch/sf10 --yes
+npm run dataset-destroy -- tpch/sf10 --yes
 ```
 
 This removes only the selected S3 prefix. It does not remove local `testdata/`, engine deployments, or the foundation.

@@ -16,7 +16,8 @@ const queryResponseSchema = z.object({
 type QueryResponse = z.infer<typeof queryResponseSchema>;
 
 export class SparkRunner implements BenchmarkRunner {
-  readonly engine = "spark";
+  readonly deployment = "spark";
+  readonly resultName = "spark";
 
   constructor(public readonly options: CommonOptionValues) {}
 

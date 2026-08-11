@@ -14,7 +14,7 @@ release, and wait for it to become ready. For example:
 
 ```bash
 npm run datafusion-deploy
-npm run datafusion-bench -- --dataset tpch/sf1 --iterations 1
+npm run datafusion-bench -- tpch/sf1 --iterations 1
 npm run datafusion-destroy
 ```
 

@@ -14,8 +14,10 @@ import {
 import type { BenchmarkRunner, ExecuteQueryResult } from "../src/lib/runner";
 
 class FakeRunner implements BenchmarkRunner {
+  readonly deployment = "test";
+
   constructor(
-    readonly engine: string,
+    readonly resultName: string,
     readonly options: CommonOptionValues,
   ) {}
 
@@ -54,16 +56,11 @@ test("rejects explicitly empty query selections", async () => {
           "benchmark",
           "--bucket",
           "s3://bucket",
-          "--cluster-name",
+          "--k8s-cluster",
           "cluster",
-          "--dataset",
           "tpch/sf1",
-          "--deployment",
-          "test",
           "--queries",
           " , ",
-          "--service",
-          "test",
         ]),
       ),
     );
@@ -117,16 +114,11 @@ setInterval(() => {}, 1_000);
       "benchmark",
       "--bucket",
       "s3://bucket",
-      "--cluster-name",
+      "--k8s-cluster",
       "cluster",
-      "--dataset",
       "tpch/sf1",
-      "--deployment",
-      "test",
       "--kubeconfig",
       kubeconfig,
-      "--service",
-      "test",
       "--testdata-root",
       root,
       "--iterations",

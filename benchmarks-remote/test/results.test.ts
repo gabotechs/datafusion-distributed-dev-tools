@@ -23,13 +23,17 @@ function withDataset(t: TestContext): string {
   return root;
 }
 
-function result(root: string, engine: string, queryId: string): BenchResult {
-  const value = new BenchResult("tpch/sf1", engine, queryId, root);
+function result(
+  root: string,
+  resultName: string,
+  queryId: string,
+): BenchResult {
+  const value = new BenchResult("tpch/sf1", resultName, queryId, root);
   value.iterations.push({ elapsed: 10, plan: "", rowCount: 1, tasks: 1 });
   return value;
 }
 
-test("stores previous and per-engine manifests with the exact query IDs", (t) => {
+test("stores previous and per-result manifests with the exact query IDs", (t) => {
   const root = withDataset(t);
   const run = new BenchmarkRun("tpch/sf1", "base", 123, root);
   run.results.push(result(root, "base", "q1"), result(root, "base", "custom"));
@@ -75,7 +79,7 @@ test("stores previous and per-engine manifests with the exact query IDs", (t) =>
     undefined,
     root,
   ).loadPrevious();
-  assert.equal(previous?.engine, "base");
+  assert.equal(previous?.resultName, "base");
   assert.deepEqual(
     previous?.results.map((value) => value.id),
     ["q1", "custom"],

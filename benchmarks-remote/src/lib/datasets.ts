@@ -110,7 +110,7 @@ export function selectDatasets(
 
 export function validateDatasetNames(datasets: string[]): string[] {
   if (datasets.length === 0) {
-    throw new Error("Select at least one dataset with --dataset");
+    throw new Error("Select at least one dataset");
   }
   for (const dataset of datasets) {
     datasetParts(dataset);

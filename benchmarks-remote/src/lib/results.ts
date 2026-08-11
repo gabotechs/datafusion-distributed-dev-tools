@@ -36,6 +36,7 @@ const queryIterationSchema = z.object({
 
 const benchResultSchema = z.object({
   dataset: z.string(),
+  // Preserve the version 1 on-disk key for existing benchmark results.
   engine: z.string(),
   id: z.string(),
   iterations: z.array(queryIterationSchema),
@@ -54,6 +55,7 @@ export const runManifestSchema = z
     version: z.literal(1),
     startTime: z.number().int().nonnegative(),
     dataset: z.string(),
+    // Preserve the version 1 on-disk key for existing benchmark results.
     engine: z.string(),
     queryIds: z
       .array(queryIdSchema)
@@ -68,27 +70,27 @@ export type RunManifest = z.infer<typeof runManifestSchema>;
 
 function resultFilePath(
   dataset: string,
-  engine: string,
+  resultName: string,
   id: string,
   testdataRoot?: string,
 ): string {
   return path.join(
     datasetPath(dataset, testdataRoot),
     RESULTS_DIR,
-    engine,
+    resultName,
     `${id}.json`,
   );
 }
 
 function runManifestPath(
   dataset: string,
-  engine: string,
+  resultName: string,
   testdataRoot?: string,
 ): string {
   return path.join(
     datasetPath(dataset, testdataRoot),
     RESULTS_DIR,
-    engine,
+    resultName,
     RUN_MANIFEST_DIR,
     RUN_MANIFEST_FILE,
   );
@@ -147,17 +149,17 @@ function writeRunManifest(manifestPath: string, manifest: RunManifest): void {
 export class BenchmarkRun {
   readonly startTime: number;
   readonly dataset: string;
-  readonly engine: string;
+  readonly resultName: string;
   readonly results: BenchResult[] = [];
 
   constructor(
     dataset: string,
-    engine: string,
+    resultName: string,
     startTime = Math.floor(Date.now() / 1000),
     private readonly testdataRoot?: string,
   ) {
     this.dataset = dataset;
-    this.engine = engine;
+    this.resultName = resultName;
     this.startTime = startTime;
   }
 
@@ -188,7 +190,7 @@ export class BenchmarkRun {
       );
       if (!result) {
         throw new Error(
-          `Previous run manifest ${manifestPath} references missing result '${queryId}' for engine '${manifest.engine}'`,
+          `Previous run manifest ${manifestPath} references missing result '${queryId}' for result name '${manifest.engine}'`,
         );
       }
       previous.results.push(result);
@@ -199,28 +201,35 @@ export class BenchmarkRun {
   loadResults(): void {
     const manifestPath = runManifestPath(
       this.dataset,
-      this.engine,
+      this.resultName,
       this.testdataRoot,
     );
-    const manifest = readRunManifest(manifestPath, "engine run");
+    const manifest = readRunManifest(manifestPath, "result");
     if (!manifest) {
       this.results.splice(
         0,
         this.results.length,
-        ...BenchResult.loadMany(this.dataset, this.engine, this.testdataRoot),
+        ...BenchResult.loadMany(
+          this.dataset,
+          this.resultName,
+          this.testdataRoot,
+        ),
       );
       return;
     }
-    if (manifest.dataset !== this.dataset || manifest.engine !== this.engine) {
+    if (
+      manifest.dataset !== this.dataset ||
+      manifest.engine !== this.resultName
+    ) {
       throw new Error(
-        `Engine run manifest ${manifestPath} identifies ${manifest.dataset}/${manifest.engine}, expected ${this.dataset}/${this.engine}`,
+        `Result manifest ${manifestPath} identifies ${manifest.dataset}/${manifest.engine}, expected ${this.dataset}/${this.resultName}`,
       );
     }
 
     const results = manifest.queryIds.map((queryId) => {
       const result = BenchResult.load(
         this.dataset,
-        this.engine,
+        this.resultName,
         queryId,
         this.testdataRoot,
       );
@@ -239,14 +248,14 @@ export class BenchmarkRun {
       version: 1,
       startTime: this.startTime,
       dataset: this.dataset,
-      engine: this.engine,
+      engine: this.resultName,
       queryIds: this.results.map((result) => result.id),
     });
     for (const result of this.results) {
       result.store();
     }
     writeRunManifest(
-      runManifestPath(this.dataset, this.engine, this.testdataRoot),
+      runManifestPath(this.dataset, this.resultName, this.testdataRoot),
       manifest,
     );
     writeRunManifest(
@@ -257,7 +266,7 @@ export class BenchmarkRun {
 
   comparison(other: BenchmarkRun): string {
     const lines = [
-      `=== Comparing ${this.dataset} results from engine '${other.engine}' [prev] with '${this.engine}' [new] ===`,
+      `=== Comparing ${this.dataset} results '${other.resultName}' [prev] with '${this.resultName}' [new] ===`,
     ];
     let totalTimePrev = 0;
     let totalTimeNew = 0;
@@ -343,17 +352,17 @@ export class BenchmarkRun {
 export class BenchResult {
   readonly id: string;
   readonly dataset: string;
-  readonly engine: string;
+  readonly resultName: string;
   iterations: QueryIter[] = [];
 
   constructor(
     dataset: string,
-    engine: string,
+    resultName: string,
     id: string,
     private readonly testdataRoot?: string,
   ) {
     this.dataset = dataset;
-    this.engine = engine;
+    this.resultName = resultName;
     this.id = id;
   }
 
@@ -423,7 +432,7 @@ export class BenchResult {
   store(): void {
     const filePath = resultFilePath(
       this.dataset,
-      this.engine,
+      this.resultName,
       this.id,
       this.testdataRoot,
     );
@@ -433,7 +442,7 @@ export class BenchResult {
       `${JSON.stringify(
         {
           dataset: this.dataset,
-          engine: this.engine,
+          engine: this.resultName,
           id: this.id,
           iterations: this.iterations,
         },
@@ -445,11 +454,11 @@ export class BenchResult {
 
   static load(
     dataset: string,
-    engine: string,
+    resultName: string,
     id: string,
     testdataRoot?: string,
   ): BenchResult | null {
-    const filePath = resultFilePath(dataset, engine, id, testdataRoot);
+    const filePath = resultFilePath(dataset, resultName, id, testdataRoot);
     let contents: string;
     try {
       contents = fs.readFileSync(filePath, "utf8");
@@ -474,11 +483,11 @@ export class BenchResult {
     }
     if (
       parsed.dataset !== dataset ||
-      parsed.engine !== engine ||
+      parsed.engine !== resultName ||
       parsed.id !== id
     ) {
       throw new Error(
-        `Benchmark result ${filePath} identifies ${parsed.dataset}/${parsed.engine}/${parsed.id}, expected ${dataset}/${engine}/${id}`,
+        `Benchmark result ${filePath} identifies ${parsed.dataset}/${parsed.engine}/${parsed.id}, expected ${dataset}/${resultName}/${id}`,
       );
     }
 
@@ -511,13 +520,13 @@ export class BenchResult {
 
   static loadMany(
     dataset: string,
-    engine: string,
+    resultName: string,
     testdataRoot?: string,
   ): BenchResult[] {
     const resultsDir = path.join(
       datasetPath(dataset, testdataRoot),
       RESULTS_DIR,
-      engine,
+      resultName,
     );
     let files: string[];
     try {
@@ -538,7 +547,7 @@ export class BenchResult {
         continue;
       }
       const id = fileName.slice(0, -5);
-      const result = BenchResult.load(dataset, engine, id, testdataRoot);
+      const result = BenchResult.load(dataset, resultName, id, testdataRoot);
       if (!result) {
         throw new Error(
           `Benchmark result disappeared while reading ${resultsDir}`,

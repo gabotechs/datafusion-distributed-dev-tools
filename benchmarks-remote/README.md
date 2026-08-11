@@ -21,7 +21,7 @@ testdata directory. Relative source-checkout paths are resolved from the
 
 ```bash
 DATAFUSION_DISTRIBUTED_ROOT=../datafusion-distributed-pr \
-  npm run sync-bucket -- --dataset tpch/sf1
+  npm run sync-bucket -- tpch/sf1
 ```
 
 The foundation, engine workloads, datasets, and benchmark runs have independent
@@ -69,15 +69,15 @@ List and upload local datasets independently from engines and benchmark runs:
 
 ```bash
 npm run sync-bucket -- --list
-npm run sync-bucket -- --dataset tpch/sf1
-npm run sync-bucket -- --dataset tpch/sf1 --dataset tpcds/sf10
+npm run sync-bucket -- tpch/sf1
+npm run sync-bucket -- tpch/sf1 tpcds/sf10
 ```
 
-Running `npm run sync-bucket` without `--dataset` uploads every locally
+Running `npm run sync-bucket` without a dataset uploads every locally
 available benchmark dataset. Delete selected datasets explicitly with:
 
 ```bash
-npm run dataset-destroy -- --dataset tpch/sf1 --yes
+npm run dataset-destroy -- tpch/sf1 --yes
 ```
 
 Dataset names are paths relative to the sibling source checkout's `testdata/`,
@@ -119,11 +119,15 @@ An engine and the requested dataset must already be deployed. Benchmark commands
 only open a local Kubernetes port-forward and execute the local client:
 
 ```bash
-npm run datafusion-bench -- --dataset tpch/sf1 --engine datafusion-distributed-local --iterations 1
-npm run trino-bench -- --dataset tpch/sf1 --iterations 1
-npm run spark-bench -- --dataset tpch/sf1 --iterations 1
-npm run ballista-bench -- --dataset tpch/sf1 --iterations 1
+npm run datafusion-bench -- tpch/sf1 --iterations 1
+npm run trino-bench -- tpch/sf1 --iterations 1
+npm run spark-bench -- tpch/sf1 --iterations 1
+npm run ballista-bench -- tpch/sf1 --iterations 1
 ```
+
+`--bucket` and `--k8s-cluster` default to the values in
+`pulumi/.pulumi-outputs.json`. If that file is absent, run
+`npm run foundation-deploy` to generate it or pass both options explicitly.
 
 `--iterations` and `--time-secs` are both minimums. For example,
 `--iterations 5 --time-secs 10` runs each query until it has completed at least

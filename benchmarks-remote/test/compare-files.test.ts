@@ -10,11 +10,11 @@ import { BenchmarkRun, BenchResult, RESULTS_DIR } from "../src/lib/results";
 function result(
   root: string,
   dataset: string,
-  engine: string,
+  resultName: string,
   query: string,
   elapsed: number,
 ): BenchResult {
-  const value = new BenchResult(dataset, engine, query, root);
+  const value = new BenchResult(dataset, resultName, query, root);
   value.iterations.push({ elapsed, plan: "", rowCount: 1, tasks: 1 });
   return value;
 }
@@ -22,10 +22,10 @@ function result(
 function storeRun(
   root: string,
   dataset: string,
-  engine: string,
+  resultName: string,
   results: BenchResult[],
 ): void {
-  const run = new BenchmarkRun(dataset, engine, undefined, root);
+  const run = new BenchmarkRun(dataset, resultName, undefined, root);
   run.results.push(...results);
   run.store();
 }
@@ -100,17 +100,35 @@ test("ignores stale query files left by a smaller completed run", () => {
   fs.mkdirSync(path.join(root, "tpch", "sf1"), { recursive: true });
 
   try {
-    for (const engine of ["base", "head"]) {
-      storeRun(root, "tpch/sf1", engine, [
-        result(root, "tpch/sf1", engine, "q1", engine === "base" ? 100 : 90),
-        result(root, "tpch/sf1", engine, "q2", engine === "base" ? 200 : 180),
+    for (const resultName of ["base", "head"]) {
+      storeRun(root, "tpch/sf1", resultName, [
+        result(
+          root,
+          "tpch/sf1",
+          resultName,
+          "q1",
+          resultName === "base" ? 100 : 90,
+        ),
+        result(
+          root,
+          "tpch/sf1",
+          resultName,
+          "q2",
+          resultName === "base" ? 200 : 180,
+        ),
       ]);
-      storeRun(root, "tpch/sf1", engine, [
-        result(root, "tpch/sf1", engine, "q1", engine === "base" ? 80 : 70),
+      storeRun(root, "tpch/sf1", resultName, [
+        result(
+          root,
+          "tpch/sf1",
+          resultName,
+          "q1",
+          resultName === "base" ? 80 : 70,
+        ),
       ]);
       assert.equal(
         fs.existsSync(
-          path.join(root, "tpch", "sf1", RESULTS_DIR, engine, "q2.json"),
+          path.join(root, "tpch", "sf1", RESULTS_DIR, resultName, "q2.json"),
         ),
         true,
       );
