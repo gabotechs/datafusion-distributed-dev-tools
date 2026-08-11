@@ -282,119 +282,116 @@ export async function runEngineBenchmark(
       );
     }
 
-    await withKubectlPortForward(
-      options,
-      async () => {
-        const availableQueries = await queriesForDataset(
+    await withKubectlPortForward(options, async () => {
+      const availableQueries = await queriesForDataset(
+        dataset,
+        options.testdataRoot,
+      );
+      const availableIds = new Set(availableQueries.map((query) => query.id));
+      const unknownQueries = selectedQueries.filter(
+        (query) => !availableIds.has(query),
+      );
+      if (unknownQueries.length > 0) {
+        throw new Error(
+          `Unknown query ID(s) for '${dataset}': ${unknownQueries.join(", ")}`,
+        );
+      }
+
+      const benchmarkRun = new BenchmarkRun(
+        dataset,
+        runner.engine,
+        undefined,
+        options.testdataRoot,
+      );
+
+      console.error("Creating tables...");
+      await runner.createTables(
+        await tablePathsForDataset(
           dataset,
           options.testdataRoot,
-        );
-        const availableIds = new Set(availableQueries.map((query) => query.id));
-        const unknownQueries = selectedQueries.filter(
-          (query) => !availableIds.has(query),
-        );
-        if (unknownQueries.length > 0) {
-          throw new Error(
-            `Unknown query ID(s) for '${dataset}': ${unknownQueries.join(", ")}`,
-          );
+          options.bucket,
+        ),
+      );
+
+      for (const { id, sql } of availableQueries) {
+        if (selectedQueries.length > 0 && !selectedQueries.includes(id)) {
+          continue;
         }
 
-        const benchmarkRun = new BenchmarkRun(
+        const result = new BenchResult(
           dataset,
           runner.engine,
-          undefined,
+          id,
           options.testdataRoot,
         );
 
-        console.error("Creating tables...");
-        await runner.createTables(
-          await tablePathsForDataset(
-            dataset,
-            options.testdataRoot,
-            options.bucket,
-          ),
-        );
-
-        for (const { id, sql } of availableQueries) {
-          if (selectedQueries.length > 0 && !selectedQueries.includes(id)) {
+        if (warmup) {
+          console.error(`Warming up query ${id}...`);
+          try {
+            await runner.executeQuery(sql);
+          } catch (error: unknown) {
+            result.iterations.push(failedIteration(error));
+            console.error(`Query ${id} failed: ${errorMessage(error)}`);
+            benchmarkRun.results.push(result);
             continue;
           }
-
-          const result = new BenchResult(
-            dataset,
-            runner.engine,
-            id,
-            options.testdataRoot,
-          );
-
-          if (warmup) {
-            console.error(`Warming up query ${id}...`);
-            try {
-              await runner.executeQuery(sql);
-            } catch (error: unknown) {
-              result.iterations.push(failedIteration(error));
-              console.error(`Query ${id} failed: ${errorMessage(error)}`);
-              benchmarkRun.results.push(result);
-              continue;
-            }
-          }
-
-          const queryStarted = performance.now();
-          let iteration = 0;
-          while (
-            iteration < iterations ||
-            performance.now() - queryStarted < timeSecs * 1000
-          ) {
-            let response;
-            try {
-              response = await runner.executeQuery(sql);
-            } catch (error: unknown) {
-              result.iterations.push(failedIteration(error));
-              console.error(`Query ${id} failed: ${errorMessage(error)}`);
-              break;
-            }
-
-            if (debug) {
-              console.error(response.plan);
-            }
-            const recorded: QueryIter = {
-              elapsed: response.elapsed,
-              rowCount: response.rowCount,
-              plan: response.plan,
-              tasks: response.tasks,
-            };
-            if (response.statsQErrorP50 !== undefined) {
-              recorded.statsQErrorP50 = response.statsQErrorP50;
-            }
-            if (response.statsQErrorP95 !== undefined) {
-              recorded.statsQErrorP95 = response.statsQErrorP95;
-            }
-            result.iterations.push(recorded);
-
-            if (
-              response.statsQErrorP50 !== undefined &&
-              response.statsQErrorP95 !== undefined
-            ) {
-              console.error(
-                `Query ${id} iteration ${iteration} took ${Math.round(response.elapsed)} ms, stats q-error P50 ${response.statsQErrorP50.toFixed(2)}x, P95 ${response.statsQErrorP95.toFixed(2)}x and returned ${response.rowCount} rows`,
-              );
-            } else {
-              console.error(
-                `Query ${id} iteration ${iteration} took ${Math.round(response.elapsed)} ms and returned ${response.rowCount} rows`,
-              );
-            }
-            iteration += 1;
-          }
-
-          console.error(`Query ${id} p50 time: ${result.p50()} ms`);
-          benchmarkRun.results.push(result);
         }
 
-        const previous = options.compare ? benchmarkRun.loadPrevious() : null;
-        if (previous) console.log(benchmarkRun.comparison(previous));
-        benchmarkRun.store();
-      },
-    );
+        const queryStarted = performance.now();
+        let iteration = 0;
+        while (
+          iteration < iterations ||
+          performance.now() - queryStarted < timeSecs * 1000
+        ) {
+          let response;
+          try {
+            response = await runner.executeQuery(sql);
+          } catch (error: unknown) {
+            result.iterations.push(failedIteration(error));
+            console.error(`Query ${id} failed: ${errorMessage(error)}`);
+            break;
+          }
+
+          if (debug) {
+            console.error(response.plan);
+          }
+          const recorded: QueryIter = {
+            elapsed: response.elapsed,
+            rowCount: response.rowCount,
+            plan: response.plan,
+            tasks: response.tasks,
+          };
+          if (response.statsQErrorP50 !== undefined) {
+            recorded.statsQErrorP50 = response.statsQErrorP50;
+          }
+          if (response.statsQErrorP95 !== undefined) {
+            recorded.statsQErrorP95 = response.statsQErrorP95;
+          }
+          result.iterations.push(recorded);
+
+          if (
+            response.statsQErrorP50 !== undefined &&
+            response.statsQErrorP95 !== undefined
+          ) {
+            console.error(
+              `Query ${id} iteration ${iteration} took ${Math.round(response.elapsed)} ms, stats q-error P50 ${response.statsQErrorP50.toFixed(2)}x, P95 ${response.statsQErrorP95.toFixed(2)}x and returned ${response.rowCount} rows`,
+            );
+          } else {
+            console.error(
+              `Query ${id} iteration ${iteration} took ${Math.round(response.elapsed)} ms and returned ${response.rowCount} rows`,
+            );
+          }
+          iteration += 1;
+        }
+
+        console.error(`Query ${id} p50 time: ${result.p50()} ms`);
+        benchmarkRun.results.push(result);
+      }
+
+      const previous = options.compare ? benchmarkRun.loadPrevious() : null;
+      if (previous) console.log(benchmarkRun.comparison(previous));
+      benchmarkRun.store();
+    });
     console.error("Benchmark run completed");
   } catch (error: unknown) {
     console.error(errorMessage(error));
