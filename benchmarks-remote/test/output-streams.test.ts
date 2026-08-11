@@ -32,11 +32,7 @@ class FakeRunner implements BenchmarkRunner {
 }
 
 function parseOptions(argv: readonly string[]): CommonOptionValues {
-  const parser = commonOptions("test", () => ({
-    bucket: "s3://bucket",
-    clusterName: "cluster",
-    region: "us-east-1",
-  }));
+  const parser = commonOptions("test");
   return runSync<typeof parser>(parser, {
     args: argv.slice(2),
     help: "option",
