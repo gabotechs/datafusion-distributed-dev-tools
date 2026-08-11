@@ -18,7 +18,6 @@ import {
   type ValueParser,
 } from "@optique/core";
 
-import { getLocalFoundation, type LocalFoundation } from "./bucket";
 import { errorMessage, isNotFoundError } from "./filesystem";
 import { datasetParts, datasetPath, DEV_TOOLS_ROOT } from "./paths";
 import { withKubectlPortForward } from "./port-forward";
@@ -35,29 +34,23 @@ export const booleanValue: ValueParser<"sync", boolean> = transform(
     unmap: (value) => (value ? "true" : "false"),
   },
 );
-const CommonOptionParser = object({
+export const CommonOptions = object({
   /** S3 bucket containing the benchmark datasets. */
-  bucket: optional(
-    option("--bucket", string({ metavar: "URI" }), {
-      description: message`S3 bucket containing benchmark data`,
-    }),
-  ),
+  bucket: option("--bucket", string({ metavar: "URI" }), {
+    description: message`S3 bucket containing benchmark data`,
+  }),
   /** Kubernetes context and EKS cluster name. */
-  clusterName: optional(
-    option("--cluster-name", string({ metavar: "NAME" }), {
-      description: message`Benchmark Kubernetes cluster`,
-    }),
-  ),
+  clusterName: option("--cluster-name", string({ metavar: "NAME" }), {
+    description: message`Benchmark Kubernetes cluster`,
+  }),
   /** Dataset identifier, such as tpch/sf1. */
   dataset: option("--dataset", string({ metavar: "DATASET" }), {
     description: message`Dataset to run queries on`,
   }),
   /** Engine deployment whose namespace contains the service. */
-  deployment: optional(
-    option("--deployment", string({ metavar: "NAME" }), {
-      description: message`Benchmark engine deployment`,
-    }),
-  ),
+  deployment: option("--deployment", string({ metavar: "NAME" }), {
+    description: message`Benchmark engine deployment`,
+  }),
   /** Minimum number of measured executions per query. */
   iterations: withDefault(
     option("-i", "--iterations", integerValue, {
@@ -73,17 +66,16 @@ const CommonOptionParser = object({
     path.join(DEV_TOOLS_ROOT, "benchmarks-remote", "k8s", ".kubeconfig"),
   ),
   /** AWS region containing the benchmark cluster. */
-  region: optional(
+  region: withDefault(
     option("--region", string({ metavar: "REGION" }), {
       description: message`AWS region containing the cluster`,
     }),
+    "us-east-1",
   ),
   /** Kubernetes service exposed through the local port-forward. */
-  service: optional(
-    option("--service", string({ metavar: "NAME" }), {
-      description: message`Kubernetes service to port-forward`,
-    }),
-  ),
+  service: option("--service", string({ metavar: "NAME" }), {
+    description: message`Kubernetes service to port-forward`,
+  }),
   /** Local directory containing benchmark queries and result files. */
   testdataRoot: withDefault(
     option("--testdata-root", string({ metavar: "PATH" }), {
@@ -134,29 +126,7 @@ const CommonOptionParser = object({
   ),
 });
 
-export function commonOptions(
-  engine: string,
-  loadFoundation: () => LocalFoundation = getLocalFoundation,
-) {
-  return map(CommonOptionParser, (options) => {
-    const foundation =
-      options.bucket === undefined ||
-      options.clusterName === undefined ||
-      options.region === undefined
-        ? loadFoundation()
-        : undefined;
-    return {
-      ...options,
-      bucket: options.bucket ?? foundation!.bucket,
-      clusterName: options.clusterName ?? foundation!.clusterName,
-      deployment: options.deployment ?? engine,
-      region: options.region ?? foundation!.region,
-      service: options.service ?? engine,
-    };
-  });
-}
-
-export type CommonOptions = InferValue<ReturnType<typeof commonOptions>>;
+export type CommonOptions = InferValue<typeof CommonOptions>;
 
 async function isNonEmptyParquetDirectory(directory: string): Promise<boolean> {
   let entries: string[];

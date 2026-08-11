@@ -2,7 +2,7 @@ import { z } from "zod";
 import { runSync } from "@optique/run";
 
 import {
-  commonOptions,
+  CommonOptions,
   runEngineBenchmark,
   type CommonOptions as CommonOptionValues,
 } from "../lib/engine-cli";
@@ -63,7 +63,7 @@ export class BallistaRunner implements BenchmarkRunner {
 }
 
 if (require.main === module) {
-  const options = runSync(commonOptions("ballista"), {
+  const options = runSync(CommonOptions, {
     help: "option",
     showDefault: true,
   });

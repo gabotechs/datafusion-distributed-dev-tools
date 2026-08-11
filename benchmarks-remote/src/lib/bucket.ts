@@ -16,21 +16,13 @@ function normalizeBucketUri(bucket: string): string {
   return `s3://${withoutProtocol}`;
 }
 
-export interface LocalFoundation {
-  bucket: string;
-  clusterName: string;
-  region: string;
-}
-
-export function getLocalFoundation(): LocalFoundation {
+function getBucketFromLocalOutputs(): string | undefined {
   let raw: string;
   try {
     raw = fs.readFileSync(PULUMI_OUTPUT_FILE, "utf8");
   } catch (error: unknown) {
     if (isNotFoundError(error)) {
-      throw new Error(
-        `Missing ${PULUMI_OUTPUT_FILE}; run npm run foundation-deploy first`,
-      );
+      return undefined;
     }
     throw new Error(
       `Could not read Pulumi outputs at ${PULUMI_OUTPUT_FILE}: ${errorMessage(error)}`,
@@ -53,27 +45,13 @@ export function getLocalFoundation(): LocalFoundation {
       `Pulumi outputs at ${PULUMI_OUTPUT_FILE} must be a JSON object`,
     );
   }
-  const values = outputs as Record<string, unknown>;
-  const bucket = values.datasetBucketName;
-  const clusterName = values.clusterName;
-  const region = values.region;
-  if (
-    typeof bucket !== "string" ||
-    bucket.trim() === "" ||
-    typeof clusterName !== "string" ||
-    clusterName.trim() === "" ||
-    typeof region !== "string" ||
-    region.trim() === ""
-  ) {
+  const value = (outputs as Record<string, unknown>).datasetBucketName;
+  if (typeof value !== "string" || value.trim() === "") {
     throw new Error(
-      `Pulumi outputs at ${PULUMI_OUTPUT_FILE} do not contain valid datasetBucketName, clusterName, and region values`,
+      `Pulumi outputs at ${PULUMI_OUTPUT_FILE} do not contain a valid datasetBucketName`,
     );
   }
-  return {
-    bucket: normalizeBucketUri(bucket),
-    clusterName,
-    region,
-  };
+  return normalizeBucketUri(value);
 }
 
 export function getBucketUri(): string {
@@ -82,5 +60,12 @@ export function getBucketUri(): string {
     return normalizeBucketUri(fromEnvironment);
   }
 
-  return getLocalFoundation().bucket;
+  const fromLocalOutputs = getBucketFromLocalOutputs();
+  if (fromLocalOutputs) {
+    return fromLocalOutputs;
+  }
+
+  throw new Error(
+    "Could not resolve benchmark bucket. Set BENCHMARK_BUCKET or run npm run foundation-deploy from benchmarks-remote.",
+  );
 }
