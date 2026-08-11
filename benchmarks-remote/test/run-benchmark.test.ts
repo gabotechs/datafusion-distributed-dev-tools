@@ -5,19 +5,19 @@ import test from "node:test";
 
 test("benchmark results remain local", () => {
   const runner = fs.readFileSync(
-    path.resolve(__dirname, "../k8s/run-benchmark.sh"),
+    path.resolve(__dirname, "../src/lib/engine-cli.ts"),
     "utf8",
   );
   assert.doesNotMatch(
     runner,
     /resultsBucketName|RESULTS_BUCKET|_SUCCESS|head-object/,
   );
-  assert.match(runner, /Benchmark run completed" >&2/);
+  assert.match(runner, /console\.error\("Benchmark run completed"\)/);
 });
 
 test("benchmark runs do not create cluster state", () => {
   const runner = fs.readFileSync(
-    path.resolve(__dirname, "../k8s/run-benchmark.sh"),
+    path.resolve(__dirname, "../src/lib/engine-cli.ts"),
     "utf8",
   );
   const library = fs.readFileSync(
@@ -39,15 +39,31 @@ test("all benchmark clients use the same local port", () => {
       path.resolve(__dirname, "../src/bin", client),
       "utf8",
     );
-    assert.match(source, /http:\/\/localhost:9000/, client);
+    assert.match(source, /options\.url/, client);
   }
 
+  const cli = fs.readFileSync(
+    path.resolve(__dirname, "../src/lib/engine-cli.ts"),
+    "utf8",
+  );
+  assert.match(cli, /"http:\/\/localhost:9000"/);
   const runner = fs.readFileSync(
-    path.resolve(__dirname, "../k8s/run-benchmark.sh"),
+    path.resolve(__dirname, "../src/lib/port-forward.ts"),
     "utf8",
   );
   assert.match(runner, /"9000:9000"/);
   assert.doesNotMatch(runner, /case \$\{engine\}|_URL=/);
+});
+
+test("benchmark npm commands execute their TypeScript clients directly", () => {
+  const packageJson = fs.readFileSync(
+    path.resolve(__dirname, "../package.json"),
+    "utf8",
+  );
+  assert.doesNotMatch(packageJson, /run-benchmark\.sh|runner:/);
+  for (const engine of ["datafusion", "trino", "spark", "ballista"]) {
+    assert.match(packageJson, new RegExp(`tsx src/bin/${engine}-bench\\.ts`));
+  }
 });
 
 test("publishes the DataFusion worker from its crate target directory", () => {

@@ -4,10 +4,11 @@ export function compareStoredResults(
   dataset: string,
   baseEngine: string,
   newEngine: string,
+  testdataRoot?: string,
 ): string {
-  const base = new BenchmarkRun(dataset, baseEngine);
+  const base = new BenchmarkRun(dataset, baseEngine, undefined, testdataRoot);
   base.loadResults();
-  const next = new BenchmarkRun(dataset, newEngine);
+  const next = new BenchmarkRun(dataset, newEngine, undefined, testdataRoot);
   next.loadResults();
 
   if (base.results.length === 0) {

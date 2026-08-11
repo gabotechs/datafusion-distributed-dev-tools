@@ -125,9 +125,9 @@ test("executes base before head with the bundled trusted harness", async () => {
     override async runBenchmark(
       dataset: string,
       jobId: number,
-      sourceRoot: string,
+      engine: string,
     ): Promise<void> {
-      events.push(`run:${jobId}:${dataset}:${path.basename(sourceRoot)}`);
+      events.push(`run:${jobId}:${dataset}:${engine}`);
     }
     override async compareResults(dataset: string): Promise<string> {
       events.push(`compare:${dataset}`);
@@ -198,15 +198,15 @@ test("executes base before head with the bundled trusted harness", async () => {
     "build:b",
     "deploy:a:c7i.2xlarge:12",
     "publish:b",
-    "run:7:tpch/sf1:base",
-    "run:7:tpch/sf10:base",
-    "run:7:tpch/sf100:base",
+    "run:7:tpch/sf1:datafusion-distributed-aaaaaaaaaaaa",
+    "run:7:tpch/sf10:datafusion-distributed-aaaaaaaaaaaa",
+    "run:7:tpch/sf100:datafusion-distributed-aaaaaaaaaaaa",
     "deploy:b:c7i.2xlarge:12",
-    "run:7:tpch/sf1:head",
+    "run:7:tpch/sf1:datafusion-distributed-bbbbbbbbbbbb",
     "compare:tpch/sf1",
-    "run:7:tpch/sf10:head",
+    "run:7:tpch/sf10:datafusion-distributed-bbbbbbbbbbbb",
     "compare:tpch/sf10",
-    "run:7:tpch/sf100:head",
+    "run:7:tpch/sf100:datafusion-distributed-bbbbbbbbbbbb",
     "compare:tpch/sf100",
     "cleanup-deployment:7",
     "remove:head",
@@ -319,28 +319,40 @@ test("uses request capacity in an isolated per-job Helm release", async () => {
   ]);
 });
 
-test("runs benchmarks against the selected source worktree without comparing results", async () => {
+test("runs benchmarks with the selected engine name without comparing results", async () => {
   const { config } = fixture();
+  let program: string | undefined;
   let arguments_: readonly string[] | undefined;
   let options: RunOptions | undefined;
   const processes: ProcessRunner = {
-    async run(_program, runArguments, runOptions): Promise<RunResult> {
+    async run(runProgram, runArguments, runOptions): Promise<RunResult> {
+      program = runProgram;
       arguments_ = runArguments;
       options = runOptions;
       return { exitCode: 0, stdout: "ignored output", stderr: "" };
     },
   };
-  const sourceRoot = path.join(config.workRoot, "jobs", "7", "head");
+  const engine = "datafusion-distributed-deadbeef1234";
 
   await new BenchmarkExecutor(config, processes).runBenchmark(
     "tpch/sf1",
     JOB.id,
-    sourceRoot,
+    engine,
   );
 
-  assert.equal(options?.env?.DATAFUSION_DISTRIBUTED_ROOT, sourceRoot);
+  assert.equal(program, "node");
+  const argument = (name: string): string | undefined =>
+    arguments_?.[arguments_.indexOf(name) + 1];
+  assert.equal(argument("--engine"), engine);
+  assert.equal(argument("--deployment"), "datafusion");
+  assert.equal(argument("--bucket"), "s3://bucket");
+  assert.equal(argument("--cluster-name"), "cluster");
+  assert.equal(argument("--service"), "datafusion-job-7");
+  assert.equal(argument("--kubeconfig"), config.kubeconfig);
+  assert.equal(argument("--region"), config.region);
+  assert.equal(argument("--testdata-root"), config.testdataRoot);
   assert.ok(arguments_?.includes("--no-compare"));
-  assert.equal(options?.env?.BENCHMARK_COMPARE, undefined);
+  assert.equal(options?.env, undefined);
 });
 
 test("reads comparisons generated from stored result files", async () => {
@@ -379,10 +391,12 @@ test("reads comparisons generated from stored result files", async () => {
     "tpch/sf1",
     "--output",
     output,
+    "--testdata-root",
+    config.testdataRoot,
     "datafusion-distributed-aaaaaaaaaaaa",
     "datafusion-distributed-bbbbbbbbbbbb",
   ]);
-  assert.equal(options?.env?.BENCHMARK_TESTDATA_ROOT, config.testdataRoot);
+  assert.equal(options?.env, undefined);
 });
 
 test("removes stale per-job releases when the controller starts", async () => {
@@ -588,6 +602,14 @@ test("discovers table directories without downloading dataset objects", async ()
   );
   assert.ok(existsSync(path.join(config.testdataRoot, "tpch/sf1/customer")));
   assert.ok(existsSync(path.join(config.testdataRoot, "tpch/sf1/orders")));
+  assert.ok(
+    existsSync(
+      path.join(
+        config.testdataRoot,
+        "tpch/sf1/customer/.remote-layout.parquet",
+      ),
+    ),
+  );
   assert.equal(calls[0]?.program, "aws");
   assert.ok(calls[0]?.arguments_.includes("list-objects-v2"));
   assert.ok(!calls[0]?.arguments_.includes("s3"));

@@ -1,3 +1,5 @@
+import type { CommonOptions } from "./engine-cli";
+
 export interface TableSpec {
   suite: string;
   schema: string;
@@ -15,6 +17,10 @@ export interface ExecuteQueryResult {
 }
 
 export interface BenchmarkRunner {
+  readonly engine: string;
+
+  readonly options: CommonOptions;
+
   createTables(s3Paths: TableSpec[]): Promise<void>;
 
   executeQuery(query: string): Promise<ExecuteQueryResult>;

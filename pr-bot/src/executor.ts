@@ -8,6 +8,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
@@ -172,7 +173,7 @@ export class BenchmarkExecutor {
         progressPlan.baseBenchmarks,
         reportProgress,
         job.id,
-        baseSource,
+        engineName(job.baseSha),
       );
 
       await reportProgress(progressPlan.headDeploy);
@@ -186,7 +187,6 @@ export class BenchmarkExecutor {
         job,
         progressPlan.headBenchmarks,
         reportProgress,
-        headSource,
         jobRoot,
       );
 
@@ -319,13 +319,13 @@ export class BenchmarkExecutor {
     progressMessages: readonly string[],
     reportProgress: (message: string) => Promise<void>,
     jobId: number,
-    source: string,
+    engine: string,
   ): Promise<BenchmarkTiming[]> {
     const timings: BenchmarkTiming[] = [];
     for (const [index, dataset] of datasets.entries()) {
       await reportProgress(progressMessages[index]!);
       const started = performance.now();
-      await this.runBenchmark(dataset, jobId, source);
+      await this.runBenchmark(dataset, jobId, engine);
       timings.push({ dataset, durationMs: performance.now() - started });
     }
     return timings;
@@ -335,7 +335,6 @@ export class BenchmarkExecutor {
     job: Job,
     progressMessages: readonly string[],
     reportProgress: (message: string) => Promise<void>,
-    headSource: string,
     jobRoot: string,
   ): Promise<HeadBenchmarkResult> {
     const timings: BenchmarkTiming[] = [];
@@ -343,7 +342,7 @@ export class BenchmarkExecutor {
     for (const [index, dataset] of job.datasets.entries()) {
       await reportProgress(progressMessages[index]!);
       const started = performance.now();
-      await this.runBenchmark(dataset, job.id, headSource);
+      await this.runBenchmark(dataset, job.id, engineName(job.headSha));
       timings.push({ dataset, durationMs: performance.now() - started });
       comparisons.push(
         await this.compareResults(
@@ -559,7 +558,9 @@ export class BenchmarkExecutor {
       if (!/^[a-zA-Z0-9._-]+$/.test(table)) {
         throw new Error(`Invalid S3 table name ${table}`);
       }
-      mkdirSync(path.join(datasetDirectory, table), { recursive: true });
+      const tableDirectory = path.join(datasetDirectory, table);
+      mkdirSync(tableDirectory, { recursive: true });
+      writeFileSync(path.join(tableDirectory, ".remote-layout.parquet"), "");
     }
   }
 
@@ -706,33 +707,35 @@ export class BenchmarkExecutor {
   async runBenchmark(
     dataset: string,
     jobId: number,
-    sourceRoot: string,
+    engine: string,
   ): Promise<void> {
+    const outputs = loadOutputs(this.config.foundationOutputsFile);
     await this.processes.run(
-      "bash",
+      "node",
       [
-        path.join(this.config.harnessRoot, "k8s", "run-benchmark.sh"),
-        "datafusion",
+        path.join(this.config.harnessRoot, "dist", "datafusion-bench.cjs"),
+        "--bucket",
+        `s3://${outputs.datasetBucketName}`,
+        "--cluster-name",
+        outputs.clusterName,
         "--dataset",
         dataset,
+        "--deployment",
+        "datafusion",
+        "--engine",
+        engine,
+        "--kubeconfig",
+        this.config.kubeconfig,
         "--no-compare",
+        "--region",
+        this.config.region,
+        "--service",
+        deploymentName(jobId),
+        "--testdata-root",
+        this.config.testdataRoot,
       ],
       {
         cwd: this.config.harnessRoot,
-        env: {
-          ...process.env,
-          AWS_REGION: this.config.region,
-          BENCHMARK_RUNNER: path.join(
-            this.config.harnessRoot,
-            "dist",
-            "datafusion-bench.cjs",
-          ),
-          BENCHMARK_SERVICE_NAME: deploymentName(jobId),
-          BENCHMARK_TESTDATA_ROOT: this.config.testdataRoot,
-          DATAFUSION_DISTRIBUTED_ROOT: sourceRoot,
-          KUBECONFIG: this.config.kubeconfig,
-          PULUMI_OUTPUTS_FILE: this.config.foundationOutputsFile,
-        },
       },
     );
   }
@@ -751,15 +754,13 @@ export class BenchmarkExecutor {
         dataset,
         "--output",
         output,
+        "--testdata-root",
+        this.config.testdataRoot,
         baseEngine,
         headEngine,
       ],
       {
         cwd: this.config.harnessRoot,
-        env: {
-          ...process.env,
-          BENCHMARK_TESTDATA_ROOT: this.config.testdataRoot,
-        },
       },
     );
     return readFileSync(output, "utf8");

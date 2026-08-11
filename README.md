@@ -56,7 +56,7 @@ example:
 npm run foundation-deploy
 npm run sync-bucket -- --dataset tpch/sf1
 npm run datafusion-deploy
-npm run datafusion-bench -- --dataset tpch/sf1 --iterations 1
+npm run datafusion-bench -- --dataset tpch/sf1 --engine datafusion-distributed-local --iterations 1
 npm run controller-deploy
 npm run controller-ssh
 ```

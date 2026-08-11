@@ -70,7 +70,7 @@ List and upload local datasets independently from engines and benchmark runs:
 ```bash
 npm run sync-bucket -- --list
 npm run sync-bucket -- --dataset tpch/sf1
-npm run sync-bucket -- --dataset tpch/sf1 tpcds/sf10
+npm run sync-bucket -- --dataset tpch/sf1 --dataset tpcds/sf10
 ```
 
 Running `npm run sync-bucket` without `--dataset` uploads every locally
@@ -119,7 +119,7 @@ An engine and the requested dataset must already be deployed. Benchmark commands
 only open a local Kubernetes port-forward and execute the local client:
 
 ```bash
-npm run datafusion-bench -- --dataset tpch/sf1 --iterations 1
+npm run datafusion-bench -- --dataset tpch/sf1 --engine datafusion-distributed-local --iterations 1
 npm run trino-bench -- --dataset tpch/sf1 --iterations 1
 npm run spark-bench -- --dataset tpch/sf1 --iterations 1
 npm run ballista-bench -- --dataset tpch/sf1 --iterations 1
