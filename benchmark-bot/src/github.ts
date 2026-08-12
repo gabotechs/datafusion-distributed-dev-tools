@@ -109,7 +109,7 @@ export class GitHubClient implements GitHubApi {
         accept: "application/vnd.github+json",
         authorization: `Bearer ${this.token}`,
         "content-type": "application/json",
-        "user-agent": "datafusion-distributed-pr-bot",
+        "user-agent": "datafusion-distributed-benchmark-bot",
         "x-github-api-version": "2026-03-10",
         ...init.headers,
       },

@@ -4,7 +4,7 @@ import * as pulumi from "@pulumi/pulumi";
 
 import { repositoryRoot } from "./paths.js";
 
-const botRoot = path.join(repositoryRoot(), "pr-bot");
+const botRoot = path.join(repositoryRoot(), "benchmark-bot");
 const benchmarkRoot = path.join(repositoryRoot(), "benchmarks-remote");
 
 export function applicationArchive(): pulumi.asset.AssetArchive {

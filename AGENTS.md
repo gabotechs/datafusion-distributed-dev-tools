@@ -12,13 +12,13 @@ and local benchmarks.
 - `benchmarks-remote/`: human-operated AWS/EKS foundation, datasets,
   Kubernetes engine deployments, and local benchmark clients. Follow its
   scoped `AGENTS.md` and operational skills before changing or operating it.
-- `pr-bot/`: persistent controller infrastructure, GitHub comment handling,
+- `benchmark-bot/`: persistent controller infrastructure, GitHub comment handling,
   job queue, source builds, benchmark orchestration, and comparison reporting.
   Follow its scoped `AGENTS.md` before changing it.
 
 ## Architecture boundaries
 
-- Keep the benchmark foundation human managed. The PR bot consumes an existing
+- Keep the benchmark foundation human managed. The benchmark bot consumes an existing
   foundation and must never create, update, or destroy its EKS cluster, VPC,
   nodes, namespaces, datasets, or pod identities.
 - Treat pull-request source, Cargo build scripts, and binaries built from them
@@ -27,7 +27,7 @@ and local benchmarks.
 - Keep the benchmark harness trusted and versioned in this repository. A pull
   request supplies DataFusion Distributed source, not deployment logic.
 - Preserve independent lifecycles for the foundation, datasets, persistent
-  interactive engine deployments, benchmark runs, and the PR bot controller.
+  interactive engine deployments, benchmark runs, and the benchmark bot controller.
 - Prefer TypeScript for orchestration and infrastructure code. Engine adapters
   may use the language required by the engine.
 - Do not commit account IDs, profile names, credentials, generated state,
