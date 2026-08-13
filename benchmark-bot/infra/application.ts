@@ -26,22 +26,6 @@ export function applicationArchive(): pulumi.asset.AssetArchive {
           path.join(benchmarkRoot, "dist", "compare.cjs"),
         ),
       }),
-      engines: new pulumi.asset.AssetArchive({
-        datafusion: new pulumi.asset.AssetArchive({
-          "Cargo.toml": new pulumi.asset.FileAsset(
-            path.join(benchmarkRoot, "engines", "datafusion", "Cargo.toml"),
-          ),
-          "Cargo.lock": new pulumi.asset.FileAsset(
-            path.join(benchmarkRoot, "engines", "datafusion", "Cargo.lock"),
-          ),
-          "build.rs": new pulumi.asset.FileAsset(
-            path.join(benchmarkRoot, "engines", "datafusion", "build.rs"),
-          ),
-          src: new pulumi.asset.FileArchive(
-            path.join(benchmarkRoot, "engines", "datafusion", "src"),
-          ),
-        }),
-      }),
       k8s: new pulumi.asset.AssetArchive({
         "deploy-engine.sh": new pulumi.asset.FileAsset(
           path.join(benchmarkRoot, "k8s", "deploy-engine.sh"),

@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-manifest=/opt/datafusion-pr-bot/current/benchmarks-remote/engines/datafusion/Cargo.toml
 source_root=/opt/datafusion-pr-bot/datafusion-distributed
+manifest=${source_root}/benchmarks/Cargo.toml
+source_lockfile=${source_root}/Cargo.lock
 target=/var/cache/datafusion-pr-build/target
 cargo_home=/var/cache/datafusion-pr-build/cargo
+lockfile=/var/cache/datafusion-pr-build/Cargo.lock
 dns_server=$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)
 
 [[ -f ${manifest} ]] || { echo "Missing ${manifest}" >&2; exit 2; }
+[[ -f ${source_lockfile} ]] || { echo "Missing ${source_lockfile}" >&2; exit 2; }
 [[ -d ${source_root}/.git ]] || { echo "Missing ${source_root}" >&2; exit 2; }
 [[ -n ${dns_server} ]] || { echo "No DNS resolver configured" >&2; exit 1; }
+
+install --owner benchmark-build --group benchmark-cache --mode 0660 \
+  "${source_lockfile}" "${lockfile}"
 
 find -P "${source_root}" -type d -exec chmod g+rX,o-rwx {} +
 find -P "${source_root}" -type f -exec chmod g+r,o-rwx {} +
@@ -26,6 +32,7 @@ systemd-run --quiet --wait --pipe --collect \
   --property=ReadOnlyPaths=/opt/datafusion-pr-bot/current \
   --property=ReadOnlyPaths="${source_root}" \
   --property=ReadWritePaths=/var/cache/datafusion-pr-build \
+  --property=BindPaths="${lockfile}:${source_lockfile}" \
   --property=IPAddressAllow="${dns_server}" \
   --property=IPAddressDeny=10.0.0.0/8 \
   --property=IPAddressDeny=100.64.0.0/10 \
@@ -45,7 +52,6 @@ systemd-run --quiet --wait --pipe --collect \
   --setenv=XDG_CACHE_HOME="${cargo_home}" \
   --setenv=AWS_EC2_METADATA_DISABLED=true \
   /var/lib/datafusion-pr-build/.cargo/bin/cargo fetch \
-  --locked \
   --manifest-path "${manifest}"
 
 systemd-run --quiet --wait --pipe --collect \
@@ -65,6 +71,7 @@ systemd-run --quiet --wait --pipe --collect \
   --property=ReadOnlyPaths=/opt/datafusion-pr-bot/current \
   --property=ReadOnlyPaths="${source_root}" \
   --property=ReadWritePaths=/var/cache/datafusion-pr-build \
+  --property=BindPaths="${lockfile}:${source_lockfile}" \
   --property=IPAddressDeny=any \
   --property=PrivateNetwork=yes \
   --setenv=HOME=/var/lib/datafusion-pr-build \
@@ -77,10 +84,9 @@ systemd-run --quiet --wait --pipe --collect \
   --setenv=XDG_CACHE_HOME="${cargo_home}" \
   --setenv=AWS_EC2_METADATA_DISABLED=true \
   /var/lib/datafusion-pr-build/.cargo/bin/cargo zigbuild \
-  --locked \
   --offline \
   --manifest-path "${manifest}" \
-  --package datafusion-distributed-benchmark-worker \
+  --package datafusion-distributed-benchmarks \
   --release \
   --bin worker \
   --target x86_64-unknown-linux-gnu

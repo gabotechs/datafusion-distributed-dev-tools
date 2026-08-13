@@ -52,8 +52,9 @@ by Pulumi.
 3. Validate every requested dataset against S3 and recreate its local table
    placeholders under that checkout's normal `testdata/` tree.
 4. Run `DEPLOYMENT_NAME=datafusion-benchmark-bot npm run datafusion-deploy`
-   from `benchmarks-remote`. The shared command builds and publishes the worker,
-   installs the named Helm release, and waits for it to become ready.
+   from `benchmarks-remote`. The shared command builds the checked-out
+   `benchmarks` crate's `worker` binary, publishes it, installs the named Helm
+   release, and waits for it to become ready.
 5. Run every requested dataset against the base deployment in order and retain
    its local results.
 6. Fetch and check out the immutable head SHA in the same source clone, then run
@@ -77,8 +78,9 @@ Cargo build scripts and the resulting worker can execute arbitrary code.
   and reading or writing only worker artifacts.
 - Give benchmark pods only dataset-read permission.
 - Never execute scripts or Helm charts from the pull request. Use the trusted
-  deployment and benchmark harness bundled with the controller; consume only
-  DataFusion Distributed source from the requested revisions.
+  deployment and benchmark harness bundled with the controller. The Rust worker
+  target is part of the untrusted DataFusion Distributed source and runs only
+  inside the isolated build and benchmark environments.
 - Restrict triggers to trusted repository roles and keep an auditable job
   record.
 

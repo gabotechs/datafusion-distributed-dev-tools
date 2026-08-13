@@ -6,13 +6,18 @@ to run distributed benchmarks on Kubernetes.
 - `src/` contains the local TypeScript benchmark clients.
 - `pulumi/` provisions the AWS and EKS foundation.
 - `k8s/` contains the engine charts and lifecycle scripts.
-- `engines/` contains engine-specific runtime sources.
+- `engines/` contains runtime sources for engines that do not own their benchmark
+  worker upstream.
 
 ## Source checkout
 
 Use the [repository checkout layout](../README.md#checkout-layout). Datasets and
 benchmark queries are read from the DataFusion Distributed checkout's
 `testdata/` directory.
+
+DataFusion deployments also build the `worker` binary from that checkout's
+`benchmarks` crate. This keeps the worker on the same DataFusion and DataFusion
+Distributed APIs as the revision being benchmarked.
 
 For a source worktree elsewhere, set `DATAFUSION_DISTRIBUTED_ROOT` to that
 checkout. `BENCHMARK_TESTDATA_ROOT` is a more specific override for a custom
