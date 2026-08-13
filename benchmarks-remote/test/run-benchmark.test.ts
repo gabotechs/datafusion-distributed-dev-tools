@@ -28,6 +28,28 @@ test("benchmark runs do not create cluster state", () => {
   assert.doesNotMatch(library, /benchmark_lock|heartbeat|configmap/);
 });
 
+test("engine publishers return artifacts directly without runtime files", () => {
+  const files = [
+    "lib.sh",
+    "deploy-engine.sh",
+    "publish-datafusion.sh",
+    "publish-ballista.sh",
+    "publish-image.sh",
+  ].map((file) =>
+    fs.readFileSync(path.resolve(__dirname, "../k8s", file), "utf8"),
+  );
+  for (const source of files) {
+    assert.doesNotMatch(
+      source,
+      /runtime_file|K8S_RUNTIME_FILE|update_runtime_file|output_value/,
+    );
+  }
+  const deploy = files[1]!;
+  assert.match(deploy, /worker_artifact=.*publish-datafusion\.sh/);
+  assert.match(deploy, /spark_image=.*publish-image\.sh/);
+  assert.match(deploy, /ballista_artifacts=.*publish-ballista\.sh/);
+});
+
 test("all benchmark clients use the same local port", () => {
   for (const client of [
     "datafusion-bench.ts",

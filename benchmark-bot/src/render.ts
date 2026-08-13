@@ -1,8 +1,10 @@
 import type { Job } from "./database.js";
-import type {
-  BenchmarkTiming,
-  ExecutionProgress,
-  ExecutionTimings,
+import {
+  BENCHMARK_ITERATIONS,
+  BENCHMARK_WARMUP,
+  type BenchmarkTiming,
+  type ExecutionProgress,
+  type ExecutionTimings,
 } from "./executor.js";
 
 const GITHUB_COMMENT_LIMIT = 65_536;
@@ -43,10 +45,23 @@ export function renderResult(
     Date.parse(job.updatedAt) - Date.parse(job.createdAt),
   );
 
-  const metadata = `${requestLink(job)}
+  const header = `${requestLink(job)}
+
+## Benchmark results
+
+**Compared:** ${revisionLink(job, "Base", job.baseSha)} → ${revisionLink(job, "PR head", job.headSha)} · [View exact source diff](${compareUrl(job)})
+
+`;
+  const details = `
 
 <details>
-<summary>Run metadata</summary>
+<summary>Verification and run details</summary>
+
+Job \`${job.id}\` captured both immutable revisions when the request was queued. The bot fetched and checked out each full commit SHA in detached HEAD, then built and deployed the \`datafusion-distributed-benchmarks --bin worker\` target from that checkout.
+
+| Identity | Base | PR head |
+| --- | --- | --- |
+| Source commit | ${fullRevisionLink(job, job.baseSha)} | ${fullRevisionLink(job, job.headSha)} |
 
 | Phase | Base | PR head |
 | --- | ---: | ---: |
@@ -54,20 +69,38 @@ export function renderResult(
 | All benchmarks | ${formatDuration(baseBenchmarkMs)} | ${formatDuration(headBenchmarkMs)} |
 ${benchmarkRows}
 
-Queue: ${formatDuration(queueMs)} · Dataset validation: ${formatDuration(timings.validationMs)} · Total: ${formatDuration(timings.totalMs)}
+**Workload:** ${formatDatasets(job.datasets)} · all queries · ${BENCHMARK_WARMUP ? "1 warmup + " : ""}${BENCHMARK_ITERATIONS} measured iterations per query
 
-Capacity: ${capacity(job)}
+**Capacity:** ${capacity(job)} for both revisions
 
-</details>
+**Other timings:** Queue ${formatDuration(queueMs)} · Dataset validation ${formatDuration(timings.validationMs)} · Total ${formatDuration(timings.totalMs)}
 
-`;
-  if (metadata.length >= GITHUB_COMMENT_LIMIT) {
-    return truncate(metadata, GITHUB_COMMENT_LIMIT);
+</details>`;
+  const fixedLength = header.length + details.length;
+  if (fixedLength >= GITHUB_COMMENT_LIMIT) {
+    return truncate(`${header}${details}`, GITHUB_COMMENT_LIMIT);
   }
-  return `${metadata}${renderComparison(
+  const renderedComparison = renderComparison(
     comparison,
-    GITHUB_COMMENT_LIMIT - metadata.length,
-  )}`;
+    GITHUB_COMMENT_LIMIT - fixedLength,
+  );
+  return `${header}${renderedComparison}${details}`;
+}
+
+function revisionLink(job: Job, label: string, sha: string): string {
+  return `[${label} \`${sha.slice(0, 12)}\`](${commitUrl(job, sha)})`;
+}
+
+function fullRevisionLink(job: Job, sha: string): string {
+  return `[\`${sha}\`](${commitUrl(job, sha)})`;
+}
+
+function commitUrl(job: Job, sha: string): string {
+  return `https://github.com/${job.repository}/commit/${sha}`;
+}
+
+function compareUrl(job: Job): string {
+  return `https://github.com/${job.repository}/compare/${job.baseSha}...${job.headSha}`;
 }
 
 function renderComparison(comparison: string, maxLength: number): string {

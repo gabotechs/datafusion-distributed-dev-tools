@@ -80,13 +80,19 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.equal(comments[2]!.match(/TOTAL:/g)?.length, 1);
     assert.match(comments[2]!, /q1: prev= 100 ms/);
     assert.match(comments[2]!, /pull\/99#issuecomment-7/);
-    assert.match(comments[2]!, /Run metadata/);
+    assert.match(comments[2]!, /Benchmark results/);
+    assert.match(comments[2]!, /Base `aaaaaaaaaaaa`.*PR head `bbbbbbbbbbbb`/s);
+    assert.match(comments[2]!, /compare\/a{40}\.\.\.b{40}/);
+    assert.match(comments[2]!, /Verification and run details/);
+    assert.match(comments[2]!, /detached HEAD/);
+    assert.match(
+      comments[2]!,
+      /datafusion-distributed-benchmarks --bin worker/,
+    );
+    assert.match(comments[2]!, /1 warmup \+ 5 measured iterations per query/);
     assert.match(comments[2]!, /Build and deployment \| 2m 2s \| 2m 5s/);
     assert.match(comments[2]!, /Benchmark `tpch\/sf100` \| 30s \| 31s/);
-    assert.match(comments[2]!, /Total: 7m 0s/);
-    for (const comment of comments) {
-      assert.doesNotMatch(comment, /a{12}|b{12}/);
-    }
+    assert.match(comments[2]!, /Total 7m 0s/);
     assert.deepEqual(commentIds, [77, 77, 77]);
   } finally {
     database.close();

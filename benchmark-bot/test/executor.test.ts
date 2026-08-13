@@ -300,6 +300,8 @@ test("runs benchmarks against the shared deployment and adjacent testdata", asyn
   const argument = (name: string): string | undefined =>
     arguments_[arguments_.indexOf(name) + 1];
   assert.equal(argument("--k8s-service"), "datafusion-benchmark-bot");
+  assert.equal(argument("--iterations"), "5");
+  assert.equal(argument("--warmup"), "true");
   assert.equal(
     argument("--testdata-root"),
     path.join(config.sourceRoot, "testdata"),

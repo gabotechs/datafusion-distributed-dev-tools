@@ -13,17 +13,17 @@ CARGO_HOME=${CARGO_HOME:-${TMPDIR:-/tmp}/datafusion-distributed-ballista-cargo-h
   cargo zigbuild \
   --manifest-path "${root}/benchmarks-remote/engines/ballista/Cargo.toml" \
   --release \
-  --target x86_64-unknown-linux-gnu
+  --target x86_64-unknown-linux-gnu >&2
 target="${root}/benchmarks-remote/engines/ballista/target/x86_64-unknown-linux-gnu/release"
 artifacts='{}'
 for binary in ballista-scheduler ballista-executor ballista-http; do
   sha=$(shasum -a 256 "${target}/${binary}" | awk '{print $1}')
   key=".benchmark-artifacts/ballista/${sha}/${binary}"
   if ! aws_cli s3api head-object --bucket "${dataset_bucket}" --key "${key}" >/dev/null 2>&1; then
-    aws_cli s3 cp "${target}/${binary}" "s3://${dataset_bucket}/${key}"
+    aws_cli s3 cp "${target}/${binary}" "s3://${dataset_bucket}/${key}" >&2
   fi
   artifacts=$(jq --arg binary "${binary}" --arg uri "s3://${dataset_bucket}/${key}" \
     '.[$binary] = $uri' <<<"${artifacts}")
 done
-update_runtime_file '.ballistaArtifacts = $artifacts' --argjson artifacts "${artifacts}"
-echo "Published Ballista binaries"
+echo "Published Ballista binaries" >&2
+jq -c . <<<"${artifacts}"

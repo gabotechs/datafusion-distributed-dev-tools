@@ -1,7 +1,7 @@
 import type { Job, JobDatabase } from "./database.js";
 import type {
+  ExecutionResult,
   ExecutionProgress,
-  ExecutionTimings,
   ProgressReporter,
 } from "./executor.js";
 import type { GitHubApi } from "./github.js";
@@ -13,13 +13,7 @@ import {
 } from "./render.js";
 
 export interface JobExecutor {
-  execute(
-    job: Job,
-    onProgress?: ProgressReporter,
-  ): Promise<{
-    comparison: string;
-    timings: ExecutionTimings;
-  }>;
+  execute(job: Job, onProgress?: ProgressReporter): Promise<ExecutionResult>;
 }
 
 export class JobWorker {

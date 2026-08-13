@@ -19,8 +19,7 @@ manifest_values=()
 case ${engine} in
   datafusion)
     benchmark_instance_type=${BENCHMARK_INSTANCE_TYPE:-$(jq -er '.benchmarkInstanceType' "${outputs_file}")}
-    bash "${root}/benchmarks-remote/k8s/publish-datafusion.sh"
-    worker_artifact=${WORKER_ARTIFACT:-$(output_value '.workerArtifact' "${runtime_file}")}
+    worker_artifact=${WORKER_ARTIFACT:-$(bash "${root}/benchmarks-remote/k8s/publish-datafusion.sh")}
     : "${worker_artifact:?DataFusion worker publishing did not produce an artifact}"
     manifest_values+=(--set-string worker.artifact="${worker_artifact}")
     manifest_values+=(--set-string worker.datasetBucket="${dataset_bucket}")
@@ -40,8 +39,7 @@ case ${engine} in
   spark)
     benchmark_instance_type=$(jq -er '.benchmarkInstanceType' "${outputs_file}")
     coordinator_instance_type=$(jq -er '.coordinatorInstanceType' "${outputs_file}")
-    bash "${root}/benchmarks-remote/k8s/publish-image.sh" spark
-    spark_image=${SPARK_IMAGE:-$(output_value '.images.spark' "${runtime_file}")}
+    spark_image=${SPARK_IMAGE:-$(bash "${root}/benchmarks-remote/k8s/publish-image.sh" spark)}
     : "${spark_image:?Spark publishing did not produce an image}"
     manifest_values+=(--set-string image="${spark_image}")
     manifest_values+=(--set-string workerReplicas="${node_count}")
@@ -51,10 +49,10 @@ case ${engine} in
   ballista)
     benchmark_instance_type=$(jq -er '.benchmarkInstanceType' "${outputs_file}")
     coordinator_instance_type=$(jq -er '.coordinatorInstanceType' "${outputs_file}")
-    bash "${root}/benchmarks-remote/k8s/publish-ballista.sh"
-    scheduler_artifact=$(output_value '.ballistaArtifacts["ballista-scheduler"]' "${runtime_file}")
-    executor_artifact=$(output_value '.ballistaArtifacts["ballista-executor"]' "${runtime_file}")
-    http_artifact=$(output_value '.ballistaArtifacts["ballista-http"]' "${runtime_file}")
+    ballista_artifacts=$(bash "${root}/benchmarks-remote/k8s/publish-ballista.sh")
+    scheduler_artifact=$(jq -er '.["ballista-scheduler"]' <<<"${ballista_artifacts}")
+    executor_artifact=$(jq -er '.["ballista-executor"]' <<<"${ballista_artifacts}")
+    http_artifact=$(jq -er '.["ballista-http"]' <<<"${ballista_artifacts}")
     : "${scheduler_artifact:?Ballista publishing did not produce the scheduler artifact}"
     : "${executor_artifact:?Ballista publishing did not produce the executor artifact}"
     : "${http_artifact:?Ballista publishing did not produce the HTTP artifact}"
