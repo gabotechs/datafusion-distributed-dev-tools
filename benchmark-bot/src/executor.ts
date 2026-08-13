@@ -12,6 +12,8 @@ interface FoundationOutputs {
 }
 
 const DEPLOYMENT_NAME = "datafusion-benchmark-bot";
+export const BENCHMARK_ITERATIONS = 5;
+export const BENCHMARK_WARMUP = true;
 
 export interface ExecutorConfig {
   repositoryUrl: string;
@@ -323,6 +325,10 @@ export class BenchmarkExecutor {
         `s3://${outputs.datasetBucketName}`,
         "--k8s-cluster",
         outputs.clusterName,
+        "--iterations",
+        String(BENCHMARK_ITERATIONS),
+        "--warmup",
+        String(BENCHMARK_WARMUP),
         "--result-name",
         resultName,
         "--kubeconfig",
@@ -369,10 +375,6 @@ export class BenchmarkExecutor {
       CARGO_TARGET_DIR: "/var/cache/datafusion-pr-build/target",
       DATAFUSION_BUILD_WRAPPER: "/usr/local/sbin/datafusion-pr-build",
       DEPLOYMENT_NAME,
-      K8S_RUNTIME_FILE: path.join(
-        path.dirname(this.config.foundationOutputsFile),
-        "benchmark-runtime.json",
-      ),
       KUBECONFIG: this.config.kubeconfig,
       PULUMI_OUTPUTS_FILE: this.config.foundationOutputsFile,
       WORKER_ARTIFACT_BUCKET: outputs.artifactBucketName,

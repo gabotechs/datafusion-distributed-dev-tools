@@ -11,7 +11,7 @@ artifact_prefix=${WORKER_ARTIFACT_PREFIX:-.benchmark-artifacts/datafusion}
 source_root=${DATAFUSION_SOURCE_ROOT:-${root}/../datafusion-distributed}
 
 if [[ -n ${DATAFUSION_BUILD_WRAPPER:-} ]]; then
-  sudo "${DATAFUSION_BUILD_WRAPPER}"
+  sudo "${DATAFUSION_BUILD_WRAPPER}" >&2
 else
   ZIG_GLOBAL_CACHE_DIR=${ZIG_GLOBAL_CACHE_DIR:-${TMPDIR:-/tmp}/datafusion-distributed-zig-global} \
   ZIG_LOCAL_CACHE_DIR=${ZIG_LOCAL_CACHE_DIR:-${TMPDIR:-/tmp}/datafusion-distributed-zig-local} \
@@ -20,7 +20,7 @@ else
     --package datafusion-distributed-benchmarks \
     --release \
     --bin worker \
-    --target x86_64-unknown-linux-gnu
+    --target x86_64-unknown-linux-gnu >&2
 fi
 
 target_dir=${CARGO_TARGET_DIR:-${source_root}/target}
@@ -31,11 +31,8 @@ artifact="s3://${artifact_bucket}/${artifact_key}"
 if ! aws_cli s3api head-object \
   --bucket "${artifact_bucket}" \
   --key "${artifact_key}" >/dev/null 2>&1; then
-  aws_cli s3 cp "${worker_binary}" "${artifact}"
+  aws_cli s3 cp "${worker_binary}" "${artifact}" >&2
 fi
 
-update_runtime_file \
-  '.workerArtifact = $workerArtifact | .workerBinarySha = $workerBinarySha' \
-  --arg workerArtifact "${artifact}" \
-  --arg workerBinarySha "${binary_sha}"
-echo "Published ${artifact}"
+echo "Published ${artifact}" >&2
+echo "${artifact}"

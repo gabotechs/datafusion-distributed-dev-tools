@@ -6,7 +6,6 @@ init_environment() {
   root=$(cd "${k8s_dir}/../.." && pwd)
   region=${AWS_REGION:-us-east-1}
   outputs_file=${PULUMI_OUTPUTS_FILE:-${root}/benchmarks-remote/pulumi/.pulumi-outputs.json}
-  runtime_file=${K8S_RUNTIME_FILE:-${root}/benchmarks-remote/k8s/.runtime.json}
   export KUBECONFIG=${KUBECONFIG:-${k8s_dir}/.kubeconfig}
 
   if [[ ! -f ${outputs_file} ]]; then
@@ -43,32 +42,6 @@ benchmark_worker_selector() {
     trino | spark) echo "app.kubernetes.io/name=${engine},app.kubernetes.io/component=worker" ;;
     ballista) echo 'app.kubernetes.io/name=ballista,app.kubernetes.io/component=executor' ;;
   esac
-}
-
-output_value() {
-  local expression=$1
-  local file=$2
-  if [[ -f ${file} ]]; then
-    jq -r "${expression} // empty" "${file}"
-  fi
-}
-
-update_runtime_file() {
-  local expression=${1:?usage: update_runtime_file JQ_EXPRESSION [JQ_ARGUMENTS...]}
-  shift
-  local current='{}'
-  if [[ -f ${runtime_file} ]]; then
-    current=$(<"${runtime_file}")
-  fi
-
-  (
-    local runtime_tmp
-    runtime_tmp=$(mktemp "${runtime_file}.XXXXXX")
-    trap 'rm -f "${runtime_tmp}"' EXIT INT TERM HUP
-    jq "$@" "${expression}" <<<"${current}" >"${runtime_tmp}"
-    mv "${runtime_tmp}" "${runtime_file}"
-    trap - EXIT INT TERM HUP
-  )
 }
 
 aws_cli() {

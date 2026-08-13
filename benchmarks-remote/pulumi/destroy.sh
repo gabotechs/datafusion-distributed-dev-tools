@@ -22,9 +22,6 @@ else
   kubeconfig=${KUBECONFIG:-${script_dir}/../k8s/.kubeconfig.${stack}}
 fi
 rm -f "${outputs_file}" "${kubeconfig}"
-if [[ ${stack} == benchmark ]]; then
-  rm -f "${script_dir}/../k8s/.runtime.json"
-fi
 "${pulumi_bin}" stack select "${stack}"
 "${pulumi_bin}" state unprotect --stack "${stack}" --all --yes
 "${pulumi_bin}" destroy --stack "${stack}" --yes

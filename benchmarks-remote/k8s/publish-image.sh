@@ -29,7 +29,7 @@ if ! aws_cli ecr describe-images \
   archive=$(mktemp)
   COPYFILE_DISABLE=1 tar -czf "${archive}" -C "${context}" Dockerfile spark_http.py
   artifact="s3://${results_bucket}/runs/bootstrap/images/${engine}-${tag}.tar.gz"
-  aws_cli s3 cp "${archive}" "${artifact}"
+  aws_cli s3 cp "${archive}" "${artifact}" >&2
   build_id=$(aws_cli codebuild start-build \
     --project-name "${builder}" \
     --environment-variables-override \
@@ -62,6 +62,5 @@ if ! aws_cli ecr describe-images \
   done
 fi
 
-update_runtime_file '.images = (.images // {}) | .images[$engine] = $image' \
-  --arg engine "${engine}" --arg image "${image}"
-echo "Published ${image}"
+echo "Published ${image}" >&2
+echo "${image}"
