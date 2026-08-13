@@ -76,11 +76,10 @@ test("isolates the shared harness build from controller credentials", () => {
   assert.match(build, /IPAddressAllow="\$\{dns_server\}"/);
   assert.match(build, /PrivateNetwork=yes/);
   assert.match(build, /--offline/);
-  assert.match(
-    build,
-    /current\/benchmarks-remote\/engines\/datafusion\/Cargo\.toml/,
-  );
-  assert.match(build, /datafusion-distributed-benchmark-worker/);
+  assert.match(build, /BindPaths="\$\{lockfile\}:\$\{source_lockfile\}"/);
+  assert.doesNotMatch(build, /--locked/);
+  assert.match(build, /source_root\}\/benchmarks\/Cargo\.toml/);
+  assert.match(build, /datafusion-distributed-benchmarks/);
   for (const obsolete of [
     "cache-paths",
     "prepare-cache",

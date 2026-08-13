@@ -66,14 +66,19 @@ test("benchmark npm commands execute their TypeScript clients directly", () => {
   }
 });
 
-test("publishes the DataFusion worker from its crate target directory", () => {
+test("publishes the DataFusion worker from the adjacent source checkout", () => {
   const publisher = fs.readFileSync(
     path.resolve(__dirname, "../k8s/publish-datafusion.sh"),
     "utf8",
   );
   assert.match(
     publisher,
-    /target_dir=\$\{CARGO_TARGET_DIR:-\$\{root\}\/benchmarks-remote\/engines\/datafusion\/target\}/,
+    /--manifest-path "\$\{source_root\}\/benchmarks\/Cargo\.toml"/,
+  );
+  assert.match(publisher, /--package datafusion-distributed-benchmarks/);
+  assert.match(
+    publisher,
+    /target_dir=\$\{CARGO_TARGET_DIR:-\$\{source_root\}\/target\}/,
   );
   assert.match(
     publisher,
