@@ -21,14 +21,12 @@ const JOB: NewJob = {
 
 const TIMINGS = {
   validationMs: 2_000,
-  baseCompileMs: 61_000,
   baseDeployMs: 122_000,
   baseBenchmarks: [
     { dataset: "tpch/sf1", durationMs: 10_000 },
     { dataset: "tpch/sf10", durationMs: 20_000 },
     { dataset: "tpch/sf100", durationMs: 30_000 },
   ],
-  headCompileMs: 65_000,
   headDeployMs: 125_000,
   headBenchmarks: [
     { dataset: "tpch/sf1", durationMs: 11_000 },
@@ -60,8 +58,8 @@ test("reports a completed comparison and consumes the job", async () => {
       execute: async (_job, onProgress) => {
         await onProgress?.({
           step: 3,
-          totalSteps: 13,
-          message: "Compiling the base revision",
+          totalSteps: 10,
+          message: "Deploying the base revision",
         });
         return {
           comparison: COMPARISON,
@@ -74,8 +72,8 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[0]!, /Running/);
     assert.match(comments[0]!, /`tpch\/sf1`, `tpch\/sf10`, `tpch\/sf100`/);
     assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
-    assert.match(comments[1]!, /Progress 3\/13/);
-    assert.match(comments[1]!, /Compiling the base revision/);
+    assert.match(comments[1]!, /Progress 3\/10/);
+    assert.match(comments[1]!, /Deploying the base revision/);
     assert.match(comments[2]!, /TOTAL: prev=300 ms, new=270 ms/);
     assert.match(comments[2]!, /Show full query output/);
     assert.equal(comments[2]!.match(/=== Comparing/g)?.length, 1);
@@ -83,10 +81,12 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[2]!, /q1: prev= 100 ms/);
     assert.match(comments[2]!, /pull\/99#issuecomment-7/);
     assert.match(comments[2]!, /Run metadata/);
-    assert.match(comments[2]!, /Compilation \| 1m 1s \| 1m 5s/);
-    assert.match(comments[2]!, /Kubernetes provisioning \| 2m 2s \| 2m 5s/);
+    assert.match(comments[2]!, /Build and deployment \| 2m 2s \| 2m 5s/);
     assert.match(comments[2]!, /Benchmark `tpch\/sf100` \| 30s \| 31s/);
     assert.match(comments[2]!, /Total: 7m 0s/);
+    for (const comment of comments) {
+      assert.doesNotMatch(comment, /a{12}|b{12}/);
+    }
     assert.deepEqual(commentIds, [77, 77, 77]);
   } finally {
     database.close();

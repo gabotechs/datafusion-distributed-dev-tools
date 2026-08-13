@@ -62,3 +62,20 @@ test("all engine charts default to twelve workers", () => {
     );
   }
 });
+
+test("DataFusion deploy and destroy share the optional deployment name", () => {
+  const deploy = fs.readFileSync(
+    path.join(root, "k8s/deploy-engine.sh"),
+    "utf8",
+  );
+  const destroy = fs.readFileSync(
+    path.join(root, "k8s/destroy-engine.sh"),
+    "utf8",
+  );
+  const library = fs.readFileSync(path.join(root, "k8s/lib.sh"), "utf8");
+  assert.match(deploy, /deployment_name=\$\{DEPLOYMENT_NAME:-\$\{engine\}\}/);
+  assert.match(deploy, /helm upgrade --install "\$\{deployment_name\}"/);
+  assert.match(deploy, /--set-string name="\$\{deployment_name\}"/);
+  assert.match(destroy, /helm uninstall "\$\{deployment_name\}"/);
+  assert.match(library, /validate_deployment_name/);
+});

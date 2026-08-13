@@ -52,6 +52,8 @@ before(async () => {
           state.publicIp = "192.0.2.20";
         } else if (args.type === "aws:s3/bucket:Bucket") {
           state.arn = `arn:aws:s3:::${args.name}`;
+        } else if (args.type === "aws:s3/bucketObjectv2:BucketObjectv2") {
+          state.versionId = "version-123";
         }
         return { id: `${args.name}_id`, state };
       },
@@ -132,6 +134,26 @@ test("creates only a passive controller with stable outbound identity", () => {
     "aws:ec2/eipAssociation:EipAssociation",
     "bot-controller-address-association",
   );
+});
+
+test("deploys every controller archive through Systems Manager", () => {
+  const deployment = resource(
+    "aws:ssm/association:Association",
+    "bot-controller-deployment",
+  );
+  assert.equal(deployment.inputs.name, "AWS-RunShellScript");
+  assert.equal(deployment.inputs.waitForSuccessTimeoutSeconds, 3600);
+  assert.deepEqual(deployment.inputs.targets, [
+    { key: "InstanceIds", values: ["bot-controller_id"] },
+  ]);
+  const commands = String(
+    (deployment.inputs.parameters as Record<string, unknown>).commands,
+  );
+  assert.match(commands, /s3api get-object/);
+  assert.match(commands, /--version-id 'version-123'/);
+  assert.match(commands, /controller\/install-release/);
+  assert.match(commands, /https:\/\/example\.invalid\/repository\.git/);
+  assert.match(commands, /systemctl is-active --quiet datafusion-pr-bot/);
 });
 
 test("leaves GH_TOKEN provisioning outside Pulumi", () => {
@@ -217,7 +239,11 @@ test("installs protected controller state and verified native toolchains", () =>
   );
   assert.match(userData, /install .*\/usr\/local\/bin\/kubectl/);
   assert.match(userData, /install .*\/usr\/local\/bin\/helm/);
-  assert.match(userData, /chown --recursive root:root \$\{release\}/);
+  assert.match(userData, /controller\/install-release/);
+  assert.match(
+    userData,
+    /DATAFUSION_SOURCE_ROOT=\/opt\/datafusion-pr-bot\/datafusion-distributed/,
+  );
   assert.match(
     userData,
     /ExecStart=\/usr\/local\/bin\/node \/opt\/datafusion-pr-bot\/current\/src\/main\.js/,

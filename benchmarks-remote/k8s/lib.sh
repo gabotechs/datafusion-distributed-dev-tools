@@ -27,6 +27,14 @@ validate_engine() {
   esac
 }
 
+validate_deployment_name() {
+  local name=$1
+  if [[ ${#name} -gt 53 || ! ${name} =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]]; then
+    echo "Invalid deployment name '${name}'" >&2
+    return 2
+  fi
+}
+
 benchmark_worker_selector() {
   local engine=$1
   validate_engine "${engine}" || return

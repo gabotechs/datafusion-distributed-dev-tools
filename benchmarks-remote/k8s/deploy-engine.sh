@@ -7,10 +7,10 @@ source "${script_dir}/lib.sh"
 engine=${1:?usage: deploy-engine.sh ENGINE}
 validate_engine "${engine}"
 init_environment
+deployment_name=${DEPLOYMENT_NAME:-${engine}}
+validate_deployment_name "${deployment_name}"
 
 dataset_bucket=$(jq -er '.datasetBucketName' "${outputs_file}")
-benchmark_instance_type=$(jq -er '.benchmarkInstanceType' "${outputs_file}")
-coordinator_instance_type=$(jq -er '.coordinatorInstanceType' "${outputs_file}")
 node_count=${NODE_COUNT:-$(jq -er '.benchmarkNodeCount' "${outputs_file}")}
 require_aws_credentials
 ensure_kubeconfig
@@ -18,15 +18,19 @@ ensure_kubeconfig
 manifest_values=()
 case ${engine} in
   datafusion)
-    "${root}/benchmarks-remote/k8s/publish-datafusion.sh"
+    benchmark_instance_type=${BENCHMARK_INSTANCE_TYPE:-$(jq -er '.benchmarkInstanceType' "${outputs_file}")}
+    bash "${root}/benchmarks-remote/k8s/publish-datafusion.sh"
     worker_artifact=${WORKER_ARTIFACT:-$(output_value '.workerArtifact' "${runtime_file}")}
     : "${worker_artifact:?DataFusion worker publishing did not produce an artifact}"
     manifest_values+=(--set-string worker.artifact="${worker_artifact}")
     manifest_values+=(--set-string worker.datasetBucket="${dataset_bucket}")
     manifest_values+=(--set-string worker.replicas="${node_count}")
     manifest_values+=(--set-string worker.instanceType="${benchmark_instance_type}")
+    manifest_values+=(--set-string name="${deployment_name}")
     ;;
   trino)
+    benchmark_instance_type=$(jq -er '.benchmarkInstanceType' "${outputs_file}")
+    coordinator_instance_type=$(jq -er '.coordinatorInstanceType' "${outputs_file}")
     manifest_values+=(--set-string region="${region}")
     manifest_values+=(--set-string datasetBucket="${dataset_bucket}")
     manifest_values+=(--set-string workerReplicas="${node_count}")
@@ -34,7 +38,9 @@ case ${engine} in
     manifest_values+=(--set-string coordinatorInstanceType="${coordinator_instance_type}")
     ;;
   spark)
-    "${root}/benchmarks-remote/k8s/publish-image.sh" spark
+    benchmark_instance_type=$(jq -er '.benchmarkInstanceType' "${outputs_file}")
+    coordinator_instance_type=$(jq -er '.coordinatorInstanceType' "${outputs_file}")
+    bash "${root}/benchmarks-remote/k8s/publish-image.sh" spark
     spark_image=${SPARK_IMAGE:-$(output_value '.images.spark' "${runtime_file}")}
     : "${spark_image:?Spark publishing did not produce an image}"
     manifest_values+=(--set-string image="${spark_image}")
@@ -43,7 +49,9 @@ case ${engine} in
     manifest_values+=(--set-string coordinatorInstanceType="${coordinator_instance_type}")
     ;;
   ballista)
-    "${root}/benchmarks-remote/k8s/publish-ballista.sh"
+    benchmark_instance_type=$(jq -er '.benchmarkInstanceType' "${outputs_file}")
+    coordinator_instance_type=$(jq -er '.coordinatorInstanceType' "${outputs_file}")
+    bash "${root}/benchmarks-remote/k8s/publish-ballista.sh"
     scheduler_artifact=$(output_value '.ballistaArtifacts["ballista-scheduler"]' "${runtime_file}")
     executor_artifact=$(output_value '.ballistaArtifacts["ballista-executor"]' "${runtime_file}")
     http_artifact=$(output_value '.ballistaArtifacts["ballista-http"]' "${runtime_file}")
@@ -63,7 +71,7 @@ esac
 HELM_CACHE_HOME=/tmp/datafusion-distributed-helm-cache \
   HELM_CONFIG_HOME=/tmp/datafusion-distributed-helm-config \
   HELM_DATA_HOME=/tmp/datafusion-distributed-helm-data \
-  helm upgrade --install "${engine}" "${root}/benchmarks-remote/k8s/${engine}" \
+  helm upgrade --install "${deployment_name}" "${root}/benchmarks-remote/k8s/${engine}" \
   --namespace "benchmark-${engine}" \
   --kube-context "${cluster_name}" \
   --values "${root}/benchmarks-remote/k8s/worker-resources.yaml" \
@@ -73,4 +81,4 @@ HELM_CACHE_HOME=/tmp/datafusion-distributed-helm-cache \
   --timeout 25m \
   "${manifest_values[@]}"
 
-echo "Deployed ${engine}; it will remain running until npm run ${engine}-destroy"
+echo "Deployed ${deployment_name}; it will remain running until npm run ${engine}-destroy"

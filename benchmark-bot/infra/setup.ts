@@ -12,7 +12,6 @@ export const controllerSetupFiles = [
   "03-kubernetes-clients.sh",
   "04-identities.sh",
   "05-application.sh",
-  "06-build-wrappers.sh",
   "07-rust.sh",
   "08-zig.sh",
   "09-controller-environment.sh",

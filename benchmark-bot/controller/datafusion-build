@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+manifest=/opt/datafusion-pr-bot/current/benchmarks-remote/engines/datafusion/Cargo.toml
+source_root=/opt/datafusion-pr-bot/datafusion-distributed
+target=/var/cache/datafusion-pr-build/target
+cargo_home=/var/cache/datafusion-pr-build/cargo
+dns_server=$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)
+
+[[ -f ${manifest} ]] || { echo "Missing ${manifest}" >&2; exit 2; }
+[[ -d ${source_root}/.git ]] || { echo "Missing ${source_root}" >&2; exit 2; }
+[[ -n ${dns_server} ]] || { echo "No DNS resolver configured" >&2; exit 1; }
+
+find -P "${source_root}" -type d -exec chmod g+rX,o-rwx {} +
+find -P "${source_root}" -type f -exec chmod g+r,o-rwx {} +
+
+systemd-run --quiet --wait --pipe --collect \
+  --property=User=benchmark-build \
+  --property=Group=benchmark-cache \
+  --property=UMask=0007 \
+  --property=NoNewPrivileges=yes \
+  --property=PrivateTmp=yes \
+  --property=ProtectHome=yes \
+  --property=ProtectSystem=strict \
+  --property=InaccessiblePaths=/var/lib/datafusion-pr-bot \
+  --property=ReadOnlyPaths=/opt/datafusion-pr-bot/current \
+  --property=ReadOnlyPaths="${source_root}" \
+  --property=ReadWritePaths=/var/cache/datafusion-pr-build \
+  --property=IPAddressAllow="${dns_server}" \
+  --property=IPAddressDeny=10.0.0.0/8 \
+  --property=IPAddressDeny=100.64.0.0/10 \
+  --property=IPAddressDeny=127.0.0.0/8 \
+  --property=IPAddressDeny=172.16.0.0/12 \
+  --property=IPAddressDeny=192.168.0.0/16 \
+  --property=IPAddressDeny=169.254.169.254/32 \
+  --property=IPAddressDeny=::1/128 \
+  --property=IPAddressDeny=fc00::/7 \
+  --property=IPAddressDeny=fe80::/10 \
+  --property=IPAddressDeny=fd00:ec2::254/128 \
+  --setenv=HOME=/var/lib/datafusion-pr-build \
+  --setenv=PATH=/var/lib/datafusion-pr-build/.cargo/bin:/usr/local/bin:/usr/bin \
+  --setenv=RUSTUP_TOOLCHAIN=1.94.0 \
+  --setenv=CARGO_HOME="${cargo_home}" \
+  --setenv=CARGO_TARGET_DIR="${target}" \
+  --setenv=XDG_CACHE_HOME="${cargo_home}" \
+  --setenv=AWS_EC2_METADATA_DISABLED=true \
+  /var/lib/datafusion-pr-build/.cargo/bin/cargo fetch \
+  --locked \
+  --manifest-path "${manifest}"
+
+systemd-run --quiet --wait --pipe --collect \
+  --property=User=benchmark-build \
+  --property=Group=benchmark-cache \
+  --property=UMask=0007 \
+  --property=NoNewPrivileges=yes \
+  --property=PrivateTmp=yes \
+  --property=ProtectHome=yes \
+  --property=ProtectSystem=strict \
+  --property=InaccessiblePaths=/var/lib/datafusion-pr-bot \
+  --property=ProtectKernelModules=yes \
+  --property=ProtectKernelTunables=yes \
+  --property=ProtectControlGroups=yes \
+  --property=RestrictSUIDSGID=yes \
+  --property=LockPersonality=yes \
+  --property=ReadOnlyPaths=/opt/datafusion-pr-bot/current \
+  --property=ReadOnlyPaths="${source_root}" \
+  --property=ReadWritePaths=/var/cache/datafusion-pr-build \
+  --property=IPAddressDeny=any \
+  --property=PrivateNetwork=yes \
+  --setenv=HOME=/var/lib/datafusion-pr-build \
+  --setenv=PATH=/var/lib/datafusion-pr-build/.cargo/bin:/usr/local/bin:/usr/bin \
+  --setenv=RUSTUP_TOOLCHAIN=1.94.0 \
+  --setenv=CARGO_HOME="${cargo_home}" \
+  --setenv=CARGO_TARGET_DIR="${target}" \
+  --setenv=ZIG_GLOBAL_CACHE_DIR="${cargo_home}/zig-global" \
+  --setenv=ZIG_LOCAL_CACHE_DIR="${cargo_home}/zig-local" \
+  --setenv=XDG_CACHE_HOME="${cargo_home}" \
+  --setenv=AWS_EC2_METADATA_DISABLED=true \
+  /var/lib/datafusion-pr-build/.cargo/bin/cargo zigbuild \
+  --locked \
+  --offline \
+  --manifest-path "${manifest}" \
+  --package datafusion-distributed-benchmark-worker \
+  --release \
+  --bin worker \
+  --target x86_64-unknown-linux-gnu

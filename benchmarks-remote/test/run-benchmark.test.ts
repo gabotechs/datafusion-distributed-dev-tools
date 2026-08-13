@@ -73,10 +73,10 @@ test("publishes the DataFusion worker from its crate target directory", () => {
   );
   assert.match(
     publisher,
-    /benchmarks-remote\/engines\/datafusion\/target\/x86_64-unknown-linux-gnu\/release\/worker/,
+    /target_dir=\$\{CARGO_TARGET_DIR:-\$\{root\}\/benchmarks-remote\/engines\/datafusion\/target\}/,
   );
-  assert.doesNotMatch(
+  assert.match(
     publisher,
-    /\$\{root\}\/target\/x86_64-unknown-linux-gnu\/release\/worker/,
+    /worker_binary="\$\{target_dir\}\/x86_64-unknown-linux-gnu\/release\/worker"/,
   );
 });
