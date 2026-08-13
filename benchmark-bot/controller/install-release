@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+archive=${1:?application archive is required}
+repository_url=${2:?source repository URL is required}
+[[ -f ${archive} ]] || { echo "Application archive does not exist" >&2; exit 2; }
+unzip -tq "${archive}"
+
+release_id=$(sha256sum "${archive}" | cut -d ' ' -f 1)
+release=/opt/datafusion-pr-bot/releases/${release_id}
+if [[ ! -d ${release} ]]; then
+  staging=$(mktemp -d /opt/datafusion-pr-bot/releases/.install.XXXXXX)
+  trap 'rm --recursive --force "${staging}"' EXIT
+  unzip -q "${archive}" -d "${staging}"
+  chown --recursive root:root "${staging}"
+  chmod --recursive go-w "${staging}"
+  chmod 0755 "${staging}"
+  mv "${staging}" "${release}"
+  trap - EXIT
+fi
+chmod 0755 "${release}"
+
+install --owner root --group root --mode 0755 \
+  "${release}/controller/datafusion-build" /usr/local/sbin/datafusion-pr-build
+cat > /etc/sudoers.d/datafusion-pr-bot <<'SUDOERS'
+benchmark-bot ALL=(root) NOPASSWD: /usr/local/sbin/datafusion-pr-build
+SUDOERS
+chmod 0440 /etc/sudoers.d/datafusion-pr-bot
+ln --symbolic --force --no-dereference "${release}" /opt/datafusion-pr-bot/current
+
+source_root=/opt/datafusion-pr-bot/datafusion-distributed
+if [[ ! -d ${source_root}/.git ]]; then
+  install --directory --owner benchmark-bot --group benchmark-cache --mode 2750 "${source_root}"
+  runuser --user benchmark-bot -- git clone -- "${repository_url}" "${source_root}"
+fi
+chown --recursive benchmark-bot:benchmark-cache "${source_root}"
+chmod --recursive g+rX,o-rwx "${source_root}"
+find "${source_root}" -type d -exec chmod g+s {} +
+
+if systemctl cat datafusion-pr-bot.service >/dev/null 2>&1; then
+  install --directory --mode 0755 /etc/systemd/system/datafusion-pr-bot.service.d
+  cat > /etc/systemd/system/datafusion-pr-bot.service.d/release.conf <<'SERVICE'
+[Service]
+Environment=DATAFUSION_SOURCE_ROOT=/opt/datafusion-pr-bot/datafusion-distributed
+UMask=0027
+SERVICE
+  systemctl daemon-reload
+  systemctl restart datafusion-pr-bot.service
+fi
+echo "Installed controller release ${release_id}"

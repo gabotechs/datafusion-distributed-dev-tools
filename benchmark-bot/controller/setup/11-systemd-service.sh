@@ -9,7 +9,7 @@ Wants=network-online.target
 Type=simple
 User=benchmark-bot
 Group=benchmark-bot
-UMask=0077
+UMask=0027
 WorkingDirectory=/opt/datafusion-pr-bot/current
 Environment=HOME=/var/lib/datafusion-pr-bot
 EnvironmentFile=/var/lib/datafusion-pr-bot/controller.env

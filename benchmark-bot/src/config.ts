@@ -25,10 +25,6 @@ export function loadConfig(): Config {
   if (!Number.isFinite(pollIntervalSeconds) || pollIntervalSeconds <= 0) {
     throw new Error("POLL_INTERVAL_SECONDS must be a positive number");
   }
-  const buildCacheMaxGiB = Number(process.env.BUILD_CACHE_MAX_GIB ?? "400");
-  if (!Number.isFinite(buildCacheMaxGiB) || buildCacheMaxGiB <= 0) {
-    throw new Error("BUILD_CACHE_MAX_GIB must be a positive number");
-  }
   return {
     repository: required("GITHUB_REPOSITORY"),
     sourceRepositoryUrl: required("SOURCE_REPOSITORY_URL"),
@@ -39,17 +35,15 @@ export function loadConfig(): Config {
     databasePath: process.env.DATABASE_PATH ?? ".data/jobs.db",
     pollIntervalMs: pollIntervalSeconds * 1_000,
     executor: {
-      stateRoot: process.env.STATE_ROOT ?? ".data",
-      workRoot: process.env.BENCHMARK_WORK_ROOT ?? ".data/work",
-      buildCacheRoot: process.env.BUILD_CACHE_ROOT ?? ".data/build-cache",
-      buildCacheMaxBytes: buildCacheMaxGiB * 1024 ** 3,
+      sourceRoot:
+        process.env.DATAFUSION_SOURCE_ROOT ??
+        path.resolve(process.cwd(), "../datafusion-distributed"),
       foundationOutputsFile:
         process.env.FOUNDATION_OUTPUTS_FILE ?? ".data/foundation-outputs.json",
       harnessRoot:
         process.env.BENCHMARK_HARNESS_ROOT ??
         path.resolve(process.cwd(), "benchmarks-remote"),
       kubeconfig: process.env.KUBECONFIG ?? ".data/kubeconfig",
-      testdataRoot: process.env.BENCHMARK_TESTDATA_ROOT ?? ".data/testdata",
       region: process.env.AWS_REGION ?? "us-east-1",
     },
   };

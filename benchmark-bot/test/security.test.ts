@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -33,53 +33,65 @@ test("keeps controller setup fragments valid and version-independent", () => {
   assert.doesNotMatch(setup, /kubectl_version=1\.|helm_version=4\./);
 });
 
-test("validates every cache path passed to privileged build wrappers", () => {
-  for (const name of ["prepare-cache", "cargo-fetch", "cargo-build"]) {
-    const script = controllerScript(name);
-    assert.match(script, /datafusion-pr-bot\/cache-paths/);
-    assert.match(script, /validate_cache_path "\$\{target\}"/);
-    assert.match(script, /validate_cache_path "\$\{cargo_home\}"/);
-  }
-  const helper = controllerScript("cache-paths");
-  assert.match(
-    helper,
-    /\(targets\|cargo\)\/\(trusted\|untrusted\)-\[0-9a-f\]\{40\}/,
+test("keeps the shared release installer valid", () => {
+  const installer = fileURLToPath(
+    new URL("../controller/install-release", import.meta.url),
   );
-  assert.match(helper, /\[0-9\]\+\/\(base\|head\)/);
+  execFileSync("bash", ["-n", installer]);
+  const script = readFileSync(installer, "utf8");
+  assert.match(script, /sha256sum/);
+  assert.match(script, /chmod 0755 "\$\{release\}"/);
+  assert.match(script, /controller\/datafusion-build/);
+  assert.match(script, /\/etc\/sudoers\.d\/datafusion-pr-bot/);
+  assert.match(script, /git clone -- "\$\{repository_url\}"/);
+  assert.match(script, /benchmark-bot:benchmark-cache/);
+  assert.match(script, /chmod --recursive g\+rX,o-rwx/);
+  assert.match(
+    script,
+    /Environment=DATAFUSION_SOURCE_ROOT=\/opt\/datafusion-pr-bot\/datafusion-distributed/,
+  );
+  assert.match(script, /UMask=0027/);
+  assert.match(script, /systemctl daemon-reload/);
+  assert.match(script, /systemctl restart datafusion-pr-bot/);
 });
 
-test("hides controller state and cannot silently lose offline isolation", () => {
-  for (const name of ["cargo-fetch", "cargo-build"]) {
-    const script = controllerScript(name);
-    assert.match(script, /InaccessiblePaths=\/var\/lib\/datafusion-pr-bot/);
-    assert.match(
-      script,
-      /PATH=\/var\/lib\/datafusion-pr-build\/\.cargo\/bin:\/usr\/local\/bin:\/usr\/bin/,
-    );
-    assert.match(script, /RUSTUP_TOOLCHAIN=1\.94\.0/);
-  }
-  const build = controllerScript("cargo-build");
-  const fetch = controllerScript("cargo-fetch");
-  assert.match(fetch, /nameserver.*\/etc\/resolv\.conf/);
-  assert.match(fetch, /IPAddressAllow="\$\{dns_server\}"/);
+test("isolates the shared harness build from controller credentials", () => {
+  const buildPath = fileURLToPath(
+    new URL("../controller/datafusion-build", import.meta.url),
+  );
+  execFileSync("bash", ["-n", buildPath]);
+  const build = readFileSync(buildPath, "utf8");
+  assert.match(build, /InaccessiblePaths=\/var\/lib\/datafusion-pr-bot/);
+  assert.match(
+    build,
+    /find -P "\$\{source_root\}" -type f -exec chmod g\+r,o-rwx/,
+  );
+  assert.match(
+    build,
+    /PATH=\/var\/lib\/datafusion-pr-build\/\.cargo\/bin:\/usr\/local\/bin:\/usr\/bin/,
+  );
+  assert.match(build, /RUSTUP_TOOLCHAIN=1\.94\.0/);
+  assert.match(build, /XDG_CACHE_HOME="\$\{cargo_home\}"/);
+  assert.match(build, /nameserver.*\/etc\/resolv\.conf/);
+  assert.match(build, /IPAddressAllow="\$\{dns_server\}"/);
   assert.match(build, /PrivateNetwork=yes/);
   assert.match(build, /--offline/);
-  assert.match(build, /XDG_CACHE_HOME="\$\{cargo_home\}\/cache"/);
-  assert.match(build, /benchmarks\/Cargo\.toml/);
-  assert.doesNotMatch(build, /benchmarks-remote/);
-});
-
-test("cache preparation performs filesystem changes as the build user", () => {
-  const prepare = controllerScript("prepare-cache");
-  assert.match(prepare, /umask 0007/);
   assert.match(
-    prepare,
-    /runuser --user benchmark-build --group benchmark-cache --.*mkdir/s,
+    build,
+    /current\/benchmarks-remote\/engines\/datafusion\/Cargo\.toml/,
   );
-  assert.match(
-    prepare,
-    /runuser --user benchmark-build --group benchmark-cache --.*touch/s,
-  );
-  assert.doesNotMatch(prepare, /install --directory/);
-  assert.doesNotMatch(prepare, /chown/);
+  assert.match(build, /datafusion-distributed-benchmark-worker/);
+  for (const obsolete of [
+    "cache-paths",
+    "prepare-cache",
+    "cargo-fetch",
+    "cargo-build",
+  ]) {
+    assert.equal(
+      existsSync(
+        fileURLToPath(new URL(`../controller/${obsolete}`, import.meta.url)),
+      ),
+      false,
+    );
+  }
 });

@@ -97,6 +97,14 @@ npm run spark-deploy
 npm run ballista-deploy
 ```
 
+Set `DEPLOYMENT_NAME` to operate a separate named DataFusion release with the
+same commands:
+
+```bash
+DEPLOYMENT_NAME=my-datafusion npm run datafusion-deploy
+DEPLOYMENT_NAME=my-datafusion npm run datafusion-destroy
+```
+
 Each deploy command publishes any required engine artifacts and installs or
 updates that engine's Helm release. The release and its EKS capacity remain
 running across benchmark invocations until explicitly destroyed:

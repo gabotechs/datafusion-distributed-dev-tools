@@ -3,6 +3,7 @@ import * as aws from "@pulumi/aws";
 import { applicationArchive } from "./application.js";
 import type { ControllerConfig } from "./config.js";
 import { createController } from "./controller.js";
+import { deployControllerApplication } from "./deployment.js";
 import { createControllerRole } from "./identity.js";
 
 export function createControllerInfrastructure(config: ControllerConfig) {
@@ -18,10 +19,13 @@ export function createControllerInfrastructure(config: ControllerConfig) {
     ignorePublicAcls: true,
     restrictPublicBuckets: true,
   });
-  new aws.s3.BucketVersioning("bot-artifacts-versioning", {
-    bucket: artifactBucket.id,
-    versioningConfiguration: { status: "Enabled" },
-  });
+  const artifactVersioning = new aws.s3.BucketVersioning(
+    "bot-artifacts-versioning",
+    {
+      bucket: artifactBucket.id,
+      versioningConfiguration: { status: "Enabled" },
+    },
+  );
   new aws.s3.BucketPolicy("bot-artifacts-policy", {
     bucket: artifactBucket.id,
     policy: artifactBucket.arn.apply((artifactBucketArn) =>
@@ -47,11 +51,15 @@ export function createControllerInfrastructure(config: ControllerConfig) {
       }),
     ),
   });
-  const application = new aws.s3.BucketObjectv2("bot-controller-application", {
-    bucket: artifactBucket.id,
-    key: "controller/application.zip",
-    source: applicationArchive(),
-  });
+  const application = new aws.s3.BucketObjectv2(
+    "bot-controller-application",
+    {
+      bucket: artifactBucket.id,
+      key: "controller/application.zip",
+      source: applicationArchive(),
+    },
+    { dependsOn: artifactVersioning },
+  );
   const identity = createControllerRole(config, cluster, artifactBucket);
   const { controller, publicAddress } = createController({
     config,
@@ -60,10 +68,17 @@ export function createControllerInfrastructure(config: ControllerConfig) {
     profile: identity.profile,
     identityDependencies: [identity.policy, identity.ssmAttachment],
   });
+  const deployment = deployControllerApplication(
+    controller,
+    application,
+    config.sourceRepositoryUrl,
+    [identity.policy, identity.ssmAttachment],
+  );
   return {
     controller,
     controllerRole: identity.role,
     publicAddress,
     artifactBucket,
+    deployment,
   };
 }

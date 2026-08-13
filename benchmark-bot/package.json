@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc --noEmit && npm run pulumi:build && npm run application:build",
     "application:build": "tsc --project tsconfig.controller.json && npm --prefix ../benchmarks-remote run application:build",
-    "controller-deploy": "npm run application:build && npm run pulumi:build && pulumi up",
+    "controller-deploy": "npm run application:build && npm run pulumi:build && pulumi up --stack controller",
     "controller-destroy": "pulumi destroy",
     "controller-outputs": "pulumi stack output --json",
     "controller-ssh": "aws ssm start-session --target $(pulumi stack output controllerInstanceId)",

@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "format": "prettier --write package.json tsconfig.base.json eslint.config.mjs .github README.md AGENTS.md && npm --prefix benchmark-bot run format && npm --prefix benchmarks-remote run format",
     "format:check": "prettier --check package.json tsconfig.base.json eslint.config.mjs .github README.md AGENTS.md && npm --prefix benchmark-bot run format:check && npm --prefix benchmarks-remote run format:check",
-    "controller-deploy": "npm --prefix benchmark-bot run controller-deploy",
+    "controller-deploy": "npm --prefix benchmark-bot run controller-deploy --",
     "controller-destroy": "npm --prefix benchmark-bot run controller-destroy",
     "controller-outputs": "npm --prefix benchmark-bot run controller-outputs",
     "controller-ssh": "npm --prefix benchmark-bot run controller-ssh",

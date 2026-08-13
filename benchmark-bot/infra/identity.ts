@@ -29,7 +29,7 @@ export function createControllerRole(
             {
               Sid: "ReadControllerApplication",
               Effect: "Allow",
-              Action: "s3:GetObject",
+              Action: ["s3:GetObject", "s3:GetObjectVersion"],
               Resource: `${artifactBucketArn}/controller/*`,
             },
             {

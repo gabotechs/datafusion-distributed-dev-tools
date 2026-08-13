@@ -18,6 +18,9 @@ npm run datafusion-bench -- tpch/sf1 --iterations 1
 npm run datafusion-destroy
 ```
 
+Use `DEPLOYMENT_NAME` with both commands to deploy an independently named
+DataFusion release.
+
 Benchmark commands require the engine release and dataset to exist. They do not
 run Helm, upload datasets, or uninstall the engine. Deployments continue to use
 EKS capacity between runs until their corresponding `<engine>-destroy` command

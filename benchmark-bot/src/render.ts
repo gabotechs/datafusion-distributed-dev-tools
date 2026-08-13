@@ -9,11 +9,11 @@ const GITHUB_COMMENT_LIMIT = 65_536;
 const TRUNCATION_NOTICE = "... earlier output truncated\n";
 
 export function renderQueued(job: Job): string {
-  return `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}, comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`.`;
+  return `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}.`;
 }
 
 export function renderRunning(job: Job): string {
-  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}: base \`${shortSha(job.baseSha)}\`, head \`${shortSha(job.headSha)}\`.`;
+  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}.`;
 }
 
 export function renderProgress(job: Job, progress: ExecutionProgress): string {
@@ -21,7 +21,7 @@ export function renderProgress(job: Job, progress: ExecutionProgress): string {
 }
 
 export function renderFailure(job: Job): string {
-  return `${requestLink(job)}\n\nBenchmark job ${job.id} failed for ${formatDatasets(job.datasets)} while comparing base \`${shortSha(job.baseSha)}\` with head \`${shortSha(job.headSha)}\`. Full details are available in the controller journal.`;
+  return `${requestLink(job)}\n\nBenchmark job ${job.id} failed for ${formatDatasets(job.datasets)}. Full details are available in the controller journal.`;
 }
 
 export function renderResult(
@@ -50,14 +50,13 @@ export function renderResult(
 
 | Phase | Base | PR head |
 | --- | ---: | ---: |
-| Compilation | ${formatDuration(timings.baseCompileMs)} | ${formatDuration(timings.headCompileMs)} |
-| Kubernetes provisioning | ${formatDuration(timings.baseDeployMs)} | ${formatDuration(timings.headDeployMs)} |
+| Build and deployment | ${formatDuration(timings.baseDeployMs)} | ${formatDuration(timings.headDeployMs)} |
 | All benchmarks | ${formatDuration(baseBenchmarkMs)} | ${formatDuration(headBenchmarkMs)} |
 ${benchmarkRows}
 
 Queue: ${formatDuration(queueMs)} · Dataset validation: ${formatDuration(timings.validationMs)} · Total: ${formatDuration(timings.totalMs)}
 
-Base: \`${shortSha(job.baseSha)}\` · PR head: \`${shortSha(job.headSha)}\` · Capacity: ${capacity(job)}
+Capacity: ${capacity(job)}
 
 </details>
 
@@ -186,8 +185,4 @@ function htmlEscape(value: string): string {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
-}
-
-function shortSha(sha: string): string {
-  return sha.slice(0, 12);
 }

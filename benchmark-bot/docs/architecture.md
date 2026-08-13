@@ -7,11 +7,9 @@
 A single persistent EC2 instance runs the controller. Its EBS volume contains:
 
 - the SQLite queue and deduplication state;
-- a bare mirror of `datafusion-distributed`;
-- one worktree per active job side in a build-only shared directory that is
-  separate from controller state;
-- Cargo registry and Git dependency caches; and
-- revision-specific Cargo target directories.
+- one `datafusion-distributed` checkout adjacent to the installed development
+  tools project; and
+- a conventional persistent Cargo home and target directory.
 
 Jobs are serialized initially. This avoids Cargo target locking and guarantees
 that only one deployment owns the dedicated benchmark cluster.
@@ -49,23 +47,20 @@ by Pulumi.
 1. Validate and persist the ordered dataset list, requested instance type, and
    node count together with the PR base SHA and head SHA. Create one GitHub
    status comment and persist its ID for all subsequent progress updates.
-2. Validate every requested dataset against S3. If any dataset is unavailable,
-   stop before creating worktrees, compiling, or performing Kubernetes
-   operations.
-3. Create isolated worktrees for both immutable SHAs.
-4. Fetch the base revision's locked dependencies as the unprivileged build user,
-   then compile offline in a network-disabled systemd sandbox using persistent
-   Cargo caches.
-5. Let the controller upload and deploy the base artifact with the trusted
-   harness bundled from this repository in a Helm release dedicated to the job.
-6. Run every requested dataset in order and retain its local results.
-7. Build, upload, and deploy the head artifact once using the same process.
-8. Run the same ordered dataset list against the head deployment.
-9. Combine the comparison-only stdout from every dataset and update the existing
-   status comment in place.
-10. Remove the job's DataFusion release and worktrees. Keep only bounded build
-    caches for later compilations. On startup, remove stale job releases left by
-    an interrupted controller process before retrying persisted work.
+2. Fetch and check out the immutable base SHA in the persistent adjacent source
+   clone.
+3. Validate every requested dataset against S3 and recreate its local table
+   placeholders under that checkout's normal `testdata/` tree.
+4. Run `DEPLOYMENT_NAME=datafusion-benchmark-bot npm run datafusion-deploy`
+   from `benchmarks-remote`. The shared command builds and publishes the worker,
+   installs the named Helm release, and waits for it to become ready.
+5. Run every requested dataset against the base deployment in order and retain
+   its local results.
+6. Fetch and check out the immutable head SHA in the same source clone, then run
+   the same named deployment command to upgrade the release.
+7. Run the same ordered dataset list against the head deployment, combine the
+   comparison stdout, and update the existing status comment in place.
+8. Run the shared `datafusion-destroy` command for the bot-owned deployment.
 
 ## Security boundary
 
@@ -75,8 +70,7 @@ Cargo build scripts and the resulting worker can execute arbitrary code.
 - Run fetch and compilation as the separate `benchmark-build` account. It cannot
   read the controller's environment file or `GH_TOKEN`.
 - Block EC2 metadata during dependency fetch. Run compilation with networking
-  disabled, the source tree read-only, and only the revision-specific Cargo
-  caches writable.
+  disabled, the source tree read-only, and only the shared Cargo cache writable.
 - Keep GitHub and deployment credentials in the controller process only.
 - Give the controller a dedicated least-privilege AWS role scoped to describing
   the configured cluster, listing the dataset bucket, reading its application,
@@ -90,13 +84,10 @@ Cargo build scripts and the resulting worker can execute arbitrary code.
 
 ## Cache strategy
 
-Use persistent EBS-backed Cargo registry, Git, and target directories outside
-the private controller home. Cache directories are keyed by trust domain and
-immutable SHA, and pruned least-recently-used when their configured total-size
-limit is exceeded. The head receives a copy-on-write seed from the base cache,
-so it reuses dependencies without allowing pull-request build output to become a
-future trusted-base cache if that SHA is later merged. Add `sccache` only after
-measuring cache misses.
+Use the same persistent EBS-backed Cargo home and target directory for the
+serialized base and head deployments. This matches a normal local checkout and
+lets Cargo perform its own incremental reuse. Add `sccache` only after measuring
+cache misses.
 
 ## Failure behavior
 

@@ -15,6 +15,9 @@ export function applicationArchive(): pulumi.asset.AssetArchive {
     migrations: new pulumi.asset.FileArchive(path.join(botRoot, "migrations")),
     controller: new pulumi.asset.FileArchive(path.join(botRoot, "controller")),
     "benchmarks-remote": new pulumi.asset.AssetArchive({
+      "package.json": new pulumi.asset.FileAsset(
+        path.join(benchmarkRoot, "package.json"),
+      ),
       dist: new pulumi.asset.AssetArchive({
         "datafusion-bench.cjs": new pulumi.asset.FileAsset(
           path.join(benchmarkRoot, "dist", "datafusion-bench.cjs"),
@@ -28,6 +31,9 @@ export function applicationArchive(): pulumi.asset.AssetArchive {
           "Cargo.toml": new pulumi.asset.FileAsset(
             path.join(benchmarkRoot, "engines", "datafusion", "Cargo.toml"),
           ),
+          "Cargo.lock": new pulumi.asset.FileAsset(
+            path.join(benchmarkRoot, "engines", "datafusion", "Cargo.lock"),
+          ),
           "build.rs": new pulumi.asset.FileAsset(
             path.join(benchmarkRoot, "engines", "datafusion", "build.rs"),
           ),
@@ -37,6 +43,18 @@ export function applicationArchive(): pulumi.asset.AssetArchive {
         }),
       }),
       k8s: new pulumi.asset.AssetArchive({
+        "deploy-engine.sh": new pulumi.asset.FileAsset(
+          path.join(benchmarkRoot, "k8s", "deploy-engine.sh"),
+        ),
+        "destroy-engine.sh": new pulumi.asset.FileAsset(
+          path.join(benchmarkRoot, "k8s", "destroy-engine.sh"),
+        ),
+        "lib.sh": new pulumi.asset.FileAsset(
+          path.join(benchmarkRoot, "k8s", "lib.sh"),
+        ),
+        "publish-datafusion.sh": new pulumi.asset.FileAsset(
+          path.join(benchmarkRoot, "k8s", "publish-datafusion.sh"),
+        ),
         datafusion: new pulumi.asset.FileArchive(
           path.join(benchmarkRoot, "k8s", "datafusion"),
         ),
