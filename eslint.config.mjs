@@ -24,8 +24,8 @@ export default [
       parser: tseslint.parser,
       parserOptions: {
         project: [
-          "./pr-bot/tsconfig.json",
-          "./pr-bot/tsconfig.pulumi.json",
+          "./benchmark-bot/tsconfig.json",
+          "./benchmark-bot/tsconfig.pulumi.json",
           "./benchmarks-remote/tsconfig.json",
           "./benchmarks-remote/pulumi/tsconfig.json",
         ],

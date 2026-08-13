@@ -1,4 +1,4 @@
-# DataFusion Distributed PR bot agent guide
+# DataFusion Distributed benchmark bot agent guide
 
 ## Architecture boundaries
 

@@ -18,10 +18,10 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            pr-bot/package-lock.json
+            benchmark-bot/package-lock.json
             benchmarks-remote/package-lock.json
       - run: npm ci
-      - run: npm --prefix pr-bot ci
+      - run: npm --prefix benchmark-bot ci
       - run: npm --prefix benchmarks-remote ci
       - run: npm run format:check
       - run: npm run lint

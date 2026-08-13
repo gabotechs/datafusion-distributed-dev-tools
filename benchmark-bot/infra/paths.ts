@@ -13,7 +13,7 @@ export function repositoryRoot(): string {
   while (true) {
     const isRepositoryRoot = [
       path.join(current, "package.json"),
-      path.join(current, "pr-bot", "package.json"),
+      path.join(current, "benchmark-bot", "package.json"),
       path.join(current, "benchmarks-remote", "package.json"),
     ].every(existsSync);
     if (isRepositoryRoot) {

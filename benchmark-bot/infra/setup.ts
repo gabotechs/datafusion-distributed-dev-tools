@@ -34,7 +34,7 @@ function renderSection(
 ): string {
   const filePath = path.join(
     repositoryRoot(),
-    "pr-bot",
+    "benchmark-bot",
     "controller",
     "setup",
     file,

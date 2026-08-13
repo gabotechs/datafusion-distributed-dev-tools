@@ -9,12 +9,12 @@ It has two independently operated components:
 - [`benchmarks-remote/`](benchmarks-remote/README.md) provisions the shared EKS
   foundation, manages datasets and engine deployments, and runs benchmarks
   from a developer machine.
-- [`pr-bot/`](pr-bot/README.md) provisions a persistent EC2 controller that
+- [`benchmark-bot/`](benchmark-bot/README.md) provisions a persistent EC2 controller that
   accepts trusted GitHub PR comments, builds immutable base and head revisions,
   runs isolated benchmark deployments on the existing EKS foundation, and
   reports the comparison.
 
-The PR bot does not own the EKS foundation. A human provisions the foundation
+The benchmark bot does not own the EKS foundation. A human provisions the foundation
 from `benchmarks-remote/` and gives the controller narrowly scoped access to
 use it. Both components live in this repository so the trusted benchmark
 harness can evolve independently of DataFusion Distributed source revisions.
