@@ -122,3 +122,27 @@ test("reports malformed previous-run manifests instead of treating them as absen
     /Invalid previous run manifest/,
   );
 });
+
+test("averages task counts across successful measured iterations", () => {
+  const value = new BenchResult("tpch/sf1", "head", "q1");
+  value.iterations.push(
+    { elapsed: 10, plan: "", rowCount: 1, tasks: 4 },
+    { elapsed: 11, plan: "", rowCount: 1, tasks: 6 },
+    { elapsed: 0, plan: "", rowCount: 0, tasks: 0, error: "failed" },
+  );
+
+  assert.equal(value.averageTasks(), 5);
+});
+
+test("does not report an average task count without a successful iteration", () => {
+  const value = new BenchResult("tpch/sf1", "head", "q1");
+  value.iterations.push({
+    elapsed: 0,
+    plan: "",
+    rowCount: 0,
+    tasks: 0,
+    error: "failed",
+  });
+
+  assert.equal(value.averageTasks(), undefined);
+});

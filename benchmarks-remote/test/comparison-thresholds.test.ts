@@ -23,9 +23,9 @@ test("highlights individual queries at 1.5x", () => {
     result("base", 150),
   );
 
-  assert.match(normalRegression, /1\.49 slower ✖$/);
-  assert.match(highlightedRegression, /1\.50 slower ❌$/);
-  assert.match(highlightedImprovement, /1\.50 faster ✅$/);
+  assert.match(normalRegression, /1\.49 slower ✖, tasks:/);
+  assert.match(highlightedRegression, /1\.50 slower ❌, tasks:/);
+  assert.match(highlightedImprovement, /1\.50 faster ✅, tasks:/);
 });
 
 test("highlights aggregate totals at 1.1x and prints TOTAL last", () => {

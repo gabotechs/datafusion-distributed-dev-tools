@@ -134,9 +134,18 @@ function renderComparisonBlock(block: string, blockLimit: number): string {
     return renderPreformatted(block, blockLimit);
   }
 
-  const summary = `${lines[0]}\n${lines[totalIndex]!.trimStart()}`;
+  const summaryIndexes = new Set([0, totalIndex]);
+  for (const [index, line] of lines.entries()) {
+    if (line.trimStart().startsWith("TASKS:")) {
+      summaryIndexes.add(index);
+    }
+  }
+  const summary = lines
+    .filter((_line, index) => summaryIndexes.has(index))
+    .map((line) => line.trimStart())
+    .join("\n");
   const details = lines
-    .filter((_line, index) => index !== 0 && index !== totalIndex)
+    .filter((_line, index) => !summaryIndexes.has(index))
     .join("\n");
   const summaryPrefix = "<pre>";
   const summarySuffix = "</pre>\n\n";
