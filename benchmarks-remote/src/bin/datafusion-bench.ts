@@ -5,6 +5,7 @@ import {
   message,
   object,
   option,
+  optional,
   string,
   withDefault,
   type InferValue,
@@ -29,89 +30,75 @@ const Options = object({
     }),
     () => `datafusion-distributed-${datafusionDistributedGitReference()}`,
   ),
-  fileScanConfigBytesPerPartition: withDefault(
+  fileScanConfigBytesPerPartition: optional(
     option("--file-scan-config-bytes-per-partition", integerValue, {
       description: message`Bytes each partition scans`,
     }),
-    16_777_216,
   ),
-  cardinalityTaskSf: withDefault(
+  cardinalityTaskSf: optional(
     option("--cardinality-task-sf", numberValue, {
       description: message`Cardinality task scale factor`,
     }),
-    1,
   ),
-  batchSize: withDefault(
+  batchSize: optional(
     option("--batch-size", integerValue, {
       description: message`Standard batch coalescing size`,
     }),
-    32_768,
   ),
-  shuffleBatchSize: withDefault(
+  shuffleBatchSize: optional(
     option("--shuffle-batch-size", integerValue, {
       description: message`Worker RepartitionExec batch size`,
     }),
-    0,
   ),
-  childrenIsolatorUnions: withDefault(
+  childrenIsolatorUnions: optional(
     option("--children-isolator-unions", booleanValue, {
       description: message`Use children isolator unions`,
     }),
-    true,
   ),
-  broadcastJoins: withDefault(
+  broadcastJoins: optional(
     option("--broadcast-joins", booleanValue, {
       description: message`Use broadcast joins`,
     }),
-    true,
   ),
-  partialReduce: withDefault(
+  partialReduce: optional(
     option("--partial-reduce", booleanValue, {
       description: message`Enable PartialReduce optimization`,
     }),
-    false,
   ),
-  collectMetrics: withDefault(
+  collectMetrics: optional(
     option("--collect-metrics", booleanValue, {
       description: message`Propagate metric collection`,
     }),
-    true,
   ),
-  compression: withDefault(
+  compression: optional(
     option("--compression", string({ metavar: "CODEC" }), {
       description: message`Worker compression codec`,
     }),
-    "lz4",
   ),
-  maxTasksPerStage: withDefault(
+  maxTasksPerStage: optional(
     option("--max-tasks-per-stage", integerValue, {
       description: message`Maximum tasks per stage`,
     }),
-    0,
   ),
-  repartitionFileMinSize: withDefault(
+  repartitionFileMinSize: optional(
     option("--repartition-file-min-size", integerValue, {
       description: message`DataFusion repartition file minimum size`,
     }),
-    10_485_760,
   ),
-  targetPartitions: withDefault(
+  targetPartitions: optional(
     option("--target-partitions", integerValue, {
       description: message`DataFusion target partition count`,
     }),
-    8,
   ),
-  dynamic: withDefault(
+  dynamic: optional(
     option("--dynamic", booleanValue, {
       description: message`Use dynamic task count assignment`,
     }),
-    false,
   ),
-  dynamicBytesPerPartition: withDefault(
+  dynamicBytesPerPartition: optional(
     option("--dynamic-bytes-per-partition", integerValue, {
       description: message`Dynamic allocation bytes per partition`,
     }),
-    16 * 1024 * 1024,
   ),
 });
 
@@ -128,6 +115,23 @@ const queryResponseSchema = z.object({
   stats_q_error_p95: z.number().nullable(),
 });
 type QueryResponse = z.infer<typeof queryResponseSchema>;
+
+export interface DataFusionSettingOptions {
+  fileScanConfigBytesPerPartition?: number | undefined;
+  cardinalityTaskSf?: number | undefined;
+  batchSize?: number | undefined;
+  shuffleBatchSize?: number | undefined;
+  collectMetrics?: boolean | undefined;
+  compression?: string | undefined;
+  childrenIsolatorUnions?: boolean | undefined;
+  broadcastJoins?: boolean | undefined;
+  partialReduce?: boolean | undefined;
+  dynamic?: boolean | undefined;
+  dynamicBytesPerPartition?: number | undefined;
+  maxTasksPerStage?: number | undefined;
+  repartitionFileMinSize?: number | undefined;
+  targetPartitions?: number | undefined;
+}
 
 export class DataFusionRunner implements BenchmarkRunner {
   readonly deployment = "datafusion";
@@ -185,23 +189,46 @@ export class DataFusionRunner implements BenchmarkRunner {
  `;
     }
     await this.query(statement);
-    await this.query(`
-      SET distributed.file_scan_config_bytes_per_partition=${this.options.fileScanConfigBytesPerPartition};
-      SET distributed.cardinality_task_count_factor=${this.options.cardinalityTaskSf};
-      SET datafusion.execution.batch_size=${this.options.batchSize};
-      SET distributed.shuffle_batch_size=${this.options.shuffleBatchSize};
-      SET distributed.collect_metrics=${this.options.collectMetrics};
-      SET distributed.compression=${this.options.compression};
-      SET distributed.children_isolator_unions=${this.options.childrenIsolatorUnions};
-      SET distributed.broadcast_joins=${this.options.broadcastJoins};
-      SET distributed.partial_reduce=${this.options.partialReduce};
-      SET distributed.dynamic_task_count=${this.options.dynamic};
-      SET distributed.dynamic_bytes_per_partition=${this.options.dynamicBytesPerPartition};
-      SET distributed.max_tasks_per_stage=${this.options.maxTasksPerStage};
-      SET datafusion.optimizer.repartition_file_min_size=${this.options.repartitionFileMinSize};
-      SET datafusion.execution.target_partitions=${this.options.targetPartitions};
-    `);
+    const settings = dataFusionSettingStatements(this.options);
+    if (settings) {
+      await this.query(settings);
+    }
   }
+}
+
+export function dataFusionSettingStatements(
+  options: DataFusionSettingOptions,
+): string {
+  const settings: [string, string | number | boolean | undefined][] = [
+    [
+      "distributed.file_scan_config_bytes_per_partition",
+      options.fileScanConfigBytesPerPartition,
+    ],
+    ["distributed.cardinality_task_count_factor", options.cardinalityTaskSf],
+    ["datafusion.execution.batch_size", options.batchSize],
+    ["distributed.shuffle_batch_size", options.shuffleBatchSize],
+    ["distributed.collect_metrics", options.collectMetrics],
+    ["distributed.compression", options.compression],
+    ["distributed.children_isolator_unions", options.childrenIsolatorUnions],
+    ["distributed.broadcast_joins", options.broadcastJoins],
+    ["distributed.partial_reduce", options.partialReduce],
+    ["distributed.dynamic_task_count", options.dynamic],
+    [
+      "distributed.dynamic_bytes_per_partition",
+      options.dynamicBytesPerPartition,
+    ],
+    ["distributed.max_tasks_per_stage", options.maxTasksPerStage],
+    [
+      "datafusion.optimizer.repartition_file_min_size",
+      options.repartitionFileMinSize,
+    ],
+    ["datafusion.execution.target_partitions", options.targetPartitions],
+  ];
+  return settings
+    .flatMap(([name, value]) =>
+      value === undefined ? [] : [`SET ${name}=${value};`],
+    )
+    .join("\n");
 }
 
 if (require.main === module) {
