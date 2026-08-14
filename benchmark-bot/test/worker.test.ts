@@ -39,6 +39,7 @@ const TIMINGS = {
 const COMPARISON = `=== Comparing tpch/sf1 results 'base' [prev] with 'head' [new] ===
       q1: prev= 100 ms, new= 120 ms, diff=1.20 slower ✖
       q2: prev= 200 ms, new= 150 ms, diff=1.33 faster ✔
+   TASKS: prev=20.0, new=18.0, diff=2.0 fewer (10.0%) (sum of per-query averages)
    TOTAL: prev=300 ms, new=270 ms, diff=1.11 faster ✅`;
 
 test("reports a completed comparison and consumes the job", async () => {
@@ -75,6 +76,8 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[1]!, /Progress 3\/10/);
     assert.match(comments[1]!, /Deploying the base revision/);
     assert.match(comments[2]!, /TOTAL: prev=300 ms, new=270 ms/);
+    assert.match(comments[2]!, /TASKS: prev=20\.0, new=18\.0/);
+    assert.match(comments[2]!, /TASKS:.*TOTAL:.*<\/pre>\s*<details>/s);
     assert.match(comments[2]!, /Show full query output/);
     assert.equal(comments[2]!.match(/=== Comparing/g)?.length, 1);
     assert.equal(comments[2]!.match(/TOTAL:/g)?.length, 1);

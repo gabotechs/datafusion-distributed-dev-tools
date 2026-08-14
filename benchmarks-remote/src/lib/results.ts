@@ -270,6 +270,8 @@ export class BenchmarkRun {
     ];
     let totalTimePrev = 0;
     let totalTimeNew = 0;
+    let totalTasksPrev = 0;
+    let totalTasksNew = 0;
     const statsQErrorP50Prev: number[] = [];
     const statsQErrorP50New: number[] = [];
     const statsQErrorP95Prev: number[] = [];
@@ -284,6 +286,12 @@ export class BenchmarkRun {
       if (timePrev !== undefined && timeNew !== undefined) {
         totalTimePrev += timePrev;
         totalTimeNew += timeNew;
+        const tasksPrev = prevQuery.averageTasks();
+        const tasksNew = query.averageTasks();
+        if (tasksPrev !== undefined && tasksNew !== undefined) {
+          totalTasksPrev += tasksPrev;
+          totalTasksNew += tasksNew;
+        }
         statsQErrorP50Prev.push(
           ...prevQuery.iterations.flatMap((iteration) =>
             iteration.statsQErrorP50 === undefined
@@ -343,6 +351,9 @@ export class BenchmarkRun {
     if (qErrorP50) lines.push(qErrorP50);
     if (qErrorP95) lines.push(qErrorP95);
     lines.push(
+      `${taskComparison("TASKS", totalTasksPrev, totalTasksNew)} (sum of per-query averages)`,
+    );
+    lines.push(
       `${"TOTAL".padStart(8)}: prev=${totalTimePrev.toString()} ms, new=${totalTimeNew.toString()} ms, diff=${factor.toFixed(2)} ${tag} ${emoji}`,
     );
     return lines.join("\n");
@@ -396,6 +407,16 @@ export class BenchResult {
     return this.p50();
   }
 
+  averageTasks(): number | undefined {
+    const values = this.iterations
+      .filter((iteration) => !iteration.error)
+      .map((iteration) => iteration.tasks);
+    if (values.length === 0) {
+      return undefined;
+    }
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
   comparison(prevQuery: BenchResult): string {
     const prevError = prevQuery.iterations.find((value) => value.error)?.error;
     const newError = this.iterations.find((value) => value.error)?.error;
@@ -412,6 +433,8 @@ export class BenchResult {
 
     const p50Prev = prevQuery.p50();
     const p50 = this.p50();
+    const tasksPrev = prevQuery.averageTasks();
+    const tasks = this.averageTasks();
 
     let factor: number;
     let tag: string;
@@ -426,7 +449,11 @@ export class BenchResult {
       emoji = factor >= QUERY_HIGHLIGHT_THRESHOLD ? "❌" : "✖";
     }
 
-    return `${this.id.padStart(8)}: prev=${p50Prev.toString().padStart(4)} ms, new=${p50.toString().padStart(4)} ms, diff=${factor.toFixed(2)} ${tag} ${emoji}`;
+    const timeComparison = `${this.id.padStart(8)}: prev=${p50Prev.toString().padStart(4)} ms, new=${p50.toString().padStart(4)} ms, diff=${factor.toFixed(2)} ${tag} ${emoji}`;
+    if (tasksPrev === undefined || tasks === undefined) {
+      return timeComparison;
+    }
+    return `${timeComparison}, ${taskComparison("tasks", tasksPrev, tasks).trimStart()}`;
   }
 
   store(): void {
@@ -578,6 +605,24 @@ function qErrorComparison(
     return `${label.padStart(8)}: prev=n/a, new=${nextValue.toFixed(2)}x`;
   }
   return undefined;
+}
+
+function taskComparison(label: string, previous: number, next: number): string {
+  let difference: string;
+  if (next === previous) {
+    difference = "no change";
+  } else if (previous === 0) {
+    difference = `${formatTasks(next)} more`;
+  } else {
+    const absolute = Math.abs(next - previous);
+    const percentage = (absolute / previous) * 100;
+    difference = `${formatTasks(absolute)} ${next < previous ? "fewer" : "more"} (${percentage.toFixed(1)}%)`;
+  }
+  return `${label.padStart(8)}: prev=${formatTasks(previous)}, new=${formatTasks(next)}, diff=${difference}`;
+}
+
+function formatTasks(value: number): string {
+  return value.toFixed(1);
 }
 
 function median(values: number[]): number | undefined {
