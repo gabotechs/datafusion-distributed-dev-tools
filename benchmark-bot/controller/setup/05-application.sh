@@ -6,4 +6,5 @@ unzip -p ${application_temporary}/application.zip controller/install-release \
 chmod 0755 ${application_temporary}/install-release
 ${application_temporary}/install-release \
   ${application_temporary}/application.zip \
-  "{{SOURCE_REPOSITORY_URL}}"
+  "{{SOURCE_REPOSITORY_URL}}" \
+  "{{AUTHORIZED_GITHUB_LOGINS}}"

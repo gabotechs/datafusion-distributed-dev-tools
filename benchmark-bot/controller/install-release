@@ -3,6 +3,7 @@ set -euo pipefail
 
 archive=${1:?application archive is required}
 repository_url=${2:?source repository URL is required}
+authorized_github_logins=${3:?authorized GitHub logins are required}
 [[ -f ${archive} ]] || { echo "Application archive does not exist" >&2; exit 2; }
 unzip -tq "${archive}"
 
@@ -36,6 +37,19 @@ fi
 chown --recursive benchmark-bot:benchmark-cache "${source_root}"
 chmod --recursive g+rX,o-rwx "${source_root}"
 find "${source_root}" -type d -exec chmod g+s {} +
+
+controller_environment=/var/lib/datafusion-pr-bot/controller.env
+if [[ -f ${controller_environment} ]]; then
+  grep --quiet '^AUTHORIZED_GITHUB_LOGINS=' "${controller_environment}" || {
+    echo "Controller environment has no GitHub authorization setting" >&2
+    exit 2
+  }
+  sed --in-place \
+    "s/^AUTHORIZED_GITHUB_LOGINS=.*/AUTHORIZED_GITHUB_LOGINS=${authorized_github_logins}/" \
+    "${controller_environment}"
+  chown benchmark-bot:benchmark-bot "${controller_environment}"
+  chmod 0600 "${controller_environment}"
+fi
 
 if systemctl cat datafusion-pr-bot.service >/dev/null 2>&1; then
   install --directory --mode 0755 /etc/systemd/system/datafusion-pr-bot.service.d

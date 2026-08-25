@@ -84,6 +84,7 @@ export function createController(args: ControllerArguments) {
     },
     {
       dependsOn: [args.application, ...args.identityDependencies],
+      ignoreChanges: ["ami"],
     },
   );
   const publicAddress = new aws.ec2.Eip("bot-controller-address", {
