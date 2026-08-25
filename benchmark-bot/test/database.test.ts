@@ -17,6 +17,7 @@ const JOB: NewJob = {
   datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
   benchmarkInstanceType: "c7i.2xlarge",
   benchmarkNodeCount: 12,
+  baseKind: "pull-request",
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
 };
@@ -83,6 +84,7 @@ test("deduplicates comments while preserving immutable refs", () => {
     assert.deepEqual(queued?.datasets, JOB.datasets);
     assert.equal(queued?.benchmarkInstanceType, "c7i.2xlarge");
     assert.equal(queued?.benchmarkNodeCount, 12);
+    assert.equal(queued?.baseKind, "pull-request");
     assert.equal(queued?.baseSha, JOB.baseSha);
     assert.equal(queued?.headSha, JOB.headSha);
   } finally {
@@ -178,6 +180,10 @@ test("migrates an unversioned database away from the legacy dataset column", () 
       database.getJobForComment(JOB.commentId)?.benchmarkNodeCount,
       12,
     );
+    assert.equal(
+      database.getJobForComment(JOB.commentId)?.baseKind,
+      "pull-request",
+    );
   } finally {
     database.close();
   }
@@ -202,7 +208,7 @@ test("migrates an unversioned database away from the legacy dataset column", () 
           .prepare("SELECT version FROM schema_version ORDER BY version")
           .all() as { version: number }[]
       ).map(({ version }) => version),
-      [1, 2],
+      [1, 2, 3],
     );
     assert.throws(() =>
       migrated
@@ -239,7 +245,7 @@ test("does not reapply completed database migrations", () => {
             .get() as { count: number }
         ).count,
       ),
-      2,
+      3,
     );
   } finally {
     database.close();

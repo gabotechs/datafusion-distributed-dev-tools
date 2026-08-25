@@ -18,6 +18,7 @@ export interface PullRequest {
 export interface GitHubApi {
   listIssueComments(repository: string, since: string): Promise<IssueComment[]>;
   getPullRequest(repository: string, number: number): Promise<PullRequest>;
+  getBranchHeadSha(repository: string, branch: string): Promise<string>;
   postComment(
     repository: string,
     pullRequestNumber: number,
@@ -76,6 +77,14 @@ export class GitHubClient implements GitHubApi {
       `${GITHUB_API}/repos/${repositoryPath(repository)}/pulls/${number}`,
     );
     return (await response.json()) as PullRequest;
+  }
+
+  async getBranchHeadSha(repository: string, branch: string): Promise<string> {
+    const response = await this.request(
+      `${GITHUB_API}/repos/${repositoryPath(repository)}/branches/${encodeURIComponent(branch)}`,
+    );
+    const result = (await response.json()) as { commit: { sha: string } };
+    return result.commit.sha;
   }
 
   async postComment(

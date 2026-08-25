@@ -64,6 +64,25 @@ test("posts comments as JSON without invoking a subprocess", async () => {
   assert.equal(requests[0]?.init?.body, JSON.stringify({ body }));
 });
 
+test("resolves a branch head to an immutable commit SHA", async () => {
+  const sha = "c".repeat(40);
+  const { fetchImpl, requests } = recordingFetch([
+    Response.json({ commit: { sha } }),
+  ]);
+
+  assert.equal(
+    await new GitHubClient("secret-token", fetchImpl).getBranchHeadSha(
+      "owner/repository",
+      "main",
+    ),
+    sha,
+  );
+  assert.equal(
+    requests[0]?.input,
+    "https://api.github.com/repos/owner/repository/branches/main",
+  );
+});
+
 test("updates an existing comment as JSON", async () => {
   const { fetchImpl, requests } = recordingFetch([Response.json({ id: 7 })]);
   const body = "benchmark completed";

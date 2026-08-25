@@ -15,6 +15,7 @@ const JOB: NewJob = {
   datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
   benchmarkInstanceType: "c7i.2xlarge",
   benchmarkNodeCount: 12,
+  baseKind: "pull-request",
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
 };
@@ -71,6 +72,7 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.equal(await worker.runOnce(), true);
     assert.equal(await worker.runOnce(), false);
     assert.match(comments[0]!, /Running/);
+    assert.match(comments[0]!, /Baseline: PR base/);
     assert.match(comments[0]!, /`tpch\/sf1`, `tpch\/sf10`, `tpch\/sf100`/);
     assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
     assert.match(comments[1]!, /Progress 3\/10/);
@@ -84,7 +86,10 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[2]!, /q1: prev= 100 ms/);
     assert.match(comments[2]!, /pull\/99#issuecomment-7/);
     assert.match(comments[2]!, /Benchmark results/);
-    assert.match(comments[2]!, /Base `aaaaaaaaaaaa`.*PR head `bbbbbbbbbbbb`/s);
+    assert.match(
+      comments[2]!,
+      /PR base `aaaaaaaaaaaa`.*PR head `bbbbbbbbbbbb`/s,
+    );
     assert.match(comments[2]!, /compare\/a{40}\.\.\.b{40}/);
     assert.match(comments[2]!, /Verification and run details/);
     assert.match(comments[2]!, /detached HEAD/);
@@ -97,6 +102,30 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[2]!, /Benchmark `tpch\/sf100` \| 30s \| 31s/);
     assert.match(comments[2]!, /Total 7m 0s/);
     assert.deepEqual(commentIds, [77, 77, 77]);
+  } finally {
+    database.close();
+  }
+});
+
+test("labels an explicitly selected main baseline", async () => {
+  const database = new JobDatabase(":memory:");
+  const comments: string[] = [];
+  const github = {
+    updateComment: async (_repo: string, _commentId: number, body: string) => {
+      comments.push(body);
+    },
+  } as GitHubApi;
+  try {
+    const jobId = database.enqueue({ ...JOB, baseKind: "main" })!;
+    database.setStatusCommentId(jobId, 77);
+    const worker = new JobWorker(database, github, {
+      execute: async () => ({ comparison: COMPARISON, timings: TIMINGS }),
+    });
+
+    await worker.runOnce();
+    assert.match(comments[0]!, /Baseline: Main/);
+    assert.match(comments[1]!, /Main `aaaaaaaaaaaa`.*PR head `bbbbbbbbbbbb`/s);
+    assert.match(comments[1]!, /\| Identity \| Main \| PR head \|/);
   } finally {
     database.close();
   }

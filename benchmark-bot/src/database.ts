@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 export type JobStatus = "pending" | "running" | "completed" | "failed";
+export type BaseKind = "pull-request" | "main";
 
 export interface NewJob {
   commentId: number;
@@ -14,6 +15,7 @@ export interface NewJob {
   datasets: string[];
   benchmarkInstanceType: string;
   benchmarkNodeCount: number;
+  baseKind: BaseKind;
   baseSha: string;
   headSha: string;
 }
@@ -161,8 +163,8 @@ export class JobDatabase {
              comment_id, repository, pull_request_number, pull_request_url,
              requested_by, datasets_json,
              benchmark_instance_type, benchmark_node_count,
-             base_sha, head_sha, status, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+             base_kind, base_sha, head_sha, status, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
         )
         .run(
           job.commentId,
@@ -173,6 +175,7 @@ export class JobDatabase {
           JSON.stringify(job.datasets),
           job.benchmarkInstanceType,
           job.benchmarkNodeCount,
+          job.baseKind,
           job.baseSha,
           job.headSha,
           timestamp,
@@ -435,6 +438,7 @@ function jobFromRow(row: Record<string, unknown>): Job {
     datasets: parseDatasets(row.datasets_json),
     benchmarkInstanceType: String(row.benchmark_instance_type),
     benchmarkNodeCount: Number(row.benchmark_node_count),
+    baseKind: String(row.base_kind) as BaseKind,
     baseSha: String(row.base_sha),
     headSha: String(row.head_sha),
     status: String(row.status) as JobStatus,

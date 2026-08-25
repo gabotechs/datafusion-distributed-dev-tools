@@ -118,6 +118,11 @@ export class CommentPoller {
       this.repository,
       pullRequestNumber,
     );
+    const baseKind = parsed.request.base === "main" ? "main" : "pull-request";
+    const baseSha =
+      baseKind === "main"
+        ? await this.github.getBranchHeadSha(this.repository, "main")
+        : pullRequest.base.sha;
     let jobId: number | null;
     try {
       jobId = this.database.enqueue({
@@ -129,7 +134,8 @@ export class CommentPoller {
         datasets: parsed.request.datasets,
         benchmarkInstanceType: parsed.request.instanceType,
         benchmarkNodeCount: parsed.request.nodeCount,
-        baseSha: pullRequest.base.sha,
+        baseKind,
+        baseSha,
         headSha: pullRequest.head.sha,
       });
     } catch (error) {

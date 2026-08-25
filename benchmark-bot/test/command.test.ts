@@ -100,6 +100,22 @@ test("sanitizes benchmark capacity", () => {
   );
 });
 
+test("accepts only main as an explicit comparison base", () => {
+  assert.deepEqual(parseComment("benchmarks run tpch/sf100 --base main"), {
+    kind: "request",
+    request: {
+      datasets: ["tpch/sf100"],
+      instanceType: "c5n.2xlarge",
+      nodeCount: 12,
+      base: "main",
+    },
+  });
+  assert.deepEqual(parseComment("benchmarks run tpch/sf100 --base release-3"), {
+    kind: "invalid",
+    message: "Invalid base `release-3`; only `main` is supported.",
+  });
+});
+
 test("ignores unrelated comments", () => {
   assert.deepEqual(parseComment("looks good"), { kind: "none" });
 });
@@ -122,7 +138,7 @@ test("rejects aliases and extra arguments", () => {
     {
       kind: "invalid",
       message:
-        "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>]`.",
+        "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main]`.",
     },
   );
   assert.deepEqual(parseComment("benchmarks run tpch/sf1 tpch/sf1"), {

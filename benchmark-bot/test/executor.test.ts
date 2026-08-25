@@ -28,6 +28,7 @@ const JOB: Job = {
   datasets: ["tpch/sf1"],
   benchmarkInstanceType: "c7i.2xlarge",
   benchmarkNodeCount: 12,
+  baseKind: "pull-request",
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
   status: "running",
