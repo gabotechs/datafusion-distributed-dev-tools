@@ -10,6 +10,7 @@ export function controllerDeployCommand(
   key: string,
   versionId: string,
   repositoryUrl: string,
+  authorizedGithubLogins: string[],
 ): string {
   return `set -euo pipefail
 for attempt in $(seq 1 720); do
@@ -29,7 +30,8 @@ unzip -p "\${deployment}/application.zip" controller/install-release \
 chmod 0755 "\${deployment}/install-release"
 "\${deployment}/install-release" \
   "\${deployment}/application.zip" \
-  ${shellQuote(repositoryUrl)}
+  ${shellQuote(repositoryUrl)} \
+  ${shellQuote(authorizedGithubLogins.join(","))}
 systemctl is-active --quiet datafusion-pr-bot.service`;
 }
 
@@ -37,6 +39,7 @@ export function deployControllerApplication(
   controller: aws.ec2.Instance,
   application: aws.s3.BucketObjectv2,
   repositoryUrl: string,
+  authorizedGithubLogins: string[],
   dependencies: pulumi.Resource[],
 ): aws.ssm.Association {
   const commands = pulumi
@@ -44,7 +47,13 @@ export function deployControllerApplication(
     .apply(([bucket, key, versionId]) => {
       if (!versionId)
         throw new Error("Controller application has no S3 version");
-      return controllerDeployCommand(bucket, key, versionId, repositoryUrl);
+      return controllerDeployCommand(
+        bucket,
+        key,
+        versionId,
+        repositoryUrl,
+        authorizedGithubLogins,
+      );
     });
 
   return new aws.ssm.Association(

@@ -72,6 +72,7 @@ export function createControllerInfrastructure(config: ControllerConfig) {
     controller,
     application,
     config.sourceRepositoryUrl,
+    config.authorizedGithubLogins,
     [identity.policy, identity.ssmAttachment],
   );
   return {

@@ -153,6 +153,7 @@ test("deploys every controller archive through Systems Manager", () => {
   assert.match(commands, /--version-id 'version-123'/);
   assert.match(commands, /controller\/install-release/);
   assert.match(commands, /https:\/\/example\.invalid\/repository\.git/);
+  assert.match(commands, /'maintainer'/);
   assert.match(commands, /systemctl is-active --quiet datafusion-pr-bot/);
 });
 
@@ -240,6 +241,10 @@ test("installs protected controller state and verified native toolchains", () =>
   assert.match(userData, /install .*\/usr\/local\/bin\/kubectl/);
   assert.match(userData, /install .*\/usr\/local\/bin\/helm/);
   assert.match(userData, /controller\/install-release/);
+  assert.match(
+    userData,
+    /application\.zip \\\n+  "https:\/\/example\.invalid\/repository\.git" \\\n+  "maintainer"/,
+  );
   assert.match(
     userData,
     /DATAFUSION_SOURCE_ROOT=\/opt\/datafusion-pr-bot\/datafusion-distributed/,

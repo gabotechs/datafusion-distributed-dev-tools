@@ -53,6 +53,9 @@ test("keeps the shared release installer valid", () => {
   assert.match(script, /UMask=0027/);
   assert.match(script, /systemctl daemon-reload/);
   assert.match(script, /systemctl restart datafusion-pr-bot/);
+  assert.match(script, /\^AUTHORIZED_GITHUB_LOGINS=/);
+  assert.match(script, /sed --in-place/);
+  assert.match(script, /chmod 0600 "\$\{controller_environment\}"/);
 });
 
 test("isolates the shared harness build from controller credentials", () => {
