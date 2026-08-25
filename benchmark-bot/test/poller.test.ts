@@ -128,10 +128,49 @@ test("creates one persisted status comment for an accepted benchmark", async () 
     await poller.process(comment(1, "maintainer"));
     await poller.process(comment(1, "maintainer"));
 
+    const queued = database.getJobForComment(1);
     assert.equal(posted.length, 1);
     assert.match(posted[0]!, /queued/);
     assert.match(posted[0]!, /pull\/1#issuecomment-1/);
-    assert.equal(database.getJobForComment(1)?.statusCommentId, 321);
+    assert.equal(queued?.statusCommentId, 321);
+    assert.equal(queued?.baseKind, "pull-request");
+    assert.equal(queued?.baseSha, "a".repeat(40));
+  } finally {
+    database.close();
+  }
+});
+
+test("snapshots main when explicitly requested", async () => {
+  const database = new JobDatabase(":memory:");
+  const request = comment(1, "maintainer");
+  request.body = "benchmarks run tpch/sf100 --base main";
+  const branchRequests: [string, string][] = [];
+  const github = {
+    getPullRequest: async () => ({
+      number: 1,
+      html_url: "https://github.com/owner/repository/pull/1",
+      base: { sha: "a".repeat(40), ref: "stacked-base" },
+      head: { sha: "b".repeat(40), ref: "feature" },
+    }),
+    getBranchHeadSha: async (repository: string, branch: string) => {
+      branchRequests.push([repository, branch]);
+      return "c".repeat(40);
+    },
+    postComment: async () => 321,
+  } as unknown as GitHubApi;
+  try {
+    await new CommentPoller(
+      "owner/repository",
+      new Set(["maintainer"]),
+      database,
+      github,
+    ).process(request);
+
+    const queued = database.getJobForComment(1);
+    assert.deepEqual(branchRequests, [["owner/repository", "main"]]);
+    assert.equal(queued?.baseKind, "main");
+    assert.equal(queued?.baseSha, "c".repeat(40));
+    assert.equal(queued?.headSha, "b".repeat(40));
   } finally {
     database.close();
   }

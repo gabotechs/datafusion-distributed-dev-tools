@@ -26,6 +26,13 @@ and completed step count.
 benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --instance-type c7i.2xlarge --nodes 6
 ```
 
+By default, the bot compares against the pull request's configured base. Use
+`--base main` to snapshot and compare against the current `main` commit instead:
+
+```text
+benchmarks run tpch/sf100 --base main
+```
+
 ## Architecture
 
 - A persistent EC2 controller serializes jobs and keeps its Git mirror, Cargo

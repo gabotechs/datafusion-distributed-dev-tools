@@ -2,6 +2,7 @@ export interface BenchmarkRequest {
   datasets: string[];
   instanceType: string;
   nodeCount: number;
+  base?: "main";
 }
 
 export type ParseResult =
@@ -16,7 +17,7 @@ export const DEFAULT_BENCHMARK_INSTANCE_TYPE = "c5n.2xlarge";
 export const DEFAULT_BENCHMARK_NODE_COUNT = 12;
 
 const USAGE =
-  "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>]`.";
+  "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main]`.";
 
 export function parseComment(body: string): ParseResult {
   const line = body
@@ -59,7 +60,7 @@ export function parseComment(body: string): ParseResult {
     const option = optionWords[index]!;
     const value = optionWords[index + 1]!;
     if (
-      !["--instance-type", "--nodes"].includes(option) ||
+      !["--instance-type", "--nodes", "--base"].includes(option) ||
       options.has(option)
     ) {
       return { kind: "invalid", message: USAGE };
@@ -87,8 +88,20 @@ export function parseComment(body: string): ParseResult {
       message: `Invalid node count \`${nodeCountText}\`; expected an integer from 1 to ${MAX_BENCHMARK_NODES}.`,
     };
   }
+  const base = options.get("--base");
+  if (base !== undefined && base !== "main") {
+    return {
+      kind: "invalid",
+      message: `Invalid base \`${base}\`; only \`main\` is supported.`,
+    };
+  }
   return {
     kind: "request",
-    request: { datasets, instanceType, nodeCount },
+    request: {
+      datasets,
+      instanceType,
+      nodeCount,
+      ...(base === "main" ? { base } : {}),
+    },
   };
 }

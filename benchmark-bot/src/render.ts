@@ -11,11 +11,11 @@ const GITHUB_COMMENT_LIMIT = 65_536;
 const TRUNCATION_NOTICE = "... earlier output truncated\n";
 
 export function renderQueued(job: Job): string {
-  return `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}.`;
+  return `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.`;
 }
 
 export function renderRunning(job: Job): string {
-  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}.`;
+  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.`;
 }
 
 export function renderProgress(job: Job, progress: ExecutionProgress): string {
@@ -49,7 +49,7 @@ export function renderResult(
 
 ## Benchmark results
 
-**Compared:** ${revisionLink(job, "Base", job.baseSha)} → ${revisionLink(job, "PR head", job.headSha)} · [View exact source diff](${compareUrl(job)})
+**Compared:** ${revisionLink(job, baseLabel(job), job.baseSha)} → ${revisionLink(job, "PR head", job.headSha)} · [View exact source diff](${compareUrl(job)})
 
 `;
   const details = `
@@ -59,7 +59,7 @@ export function renderResult(
 
 Job \`${job.id}\` captured both immutable revisions when the request was queued. The bot fetched and checked out each full commit SHA in detached HEAD, then built and deployed the \`datafusion-distributed-benchmarks --bin worker\` target from that checkout.
 
-| Identity | Base | PR head |
+| Identity | ${baseLabel(job)} | PR head |
 | --- | --- | --- |
 | Source commit | ${fullRevisionLink(job, job.baseSha)} | ${fullRevisionLink(job, job.headSha)} |
 
@@ -89,6 +89,10 @@ ${benchmarkRows}
 
 function revisionLink(job: Job, label: string, sha: string): string {
   return `[${label} \`${sha.slice(0, 12)}\`](${commitUrl(job, sha)})`;
+}
+
+function baseLabel(job: Job): string {
+  return job.baseKind === "main" ? "Main" : "PR base";
 }
 
 function fullRevisionLink(job: Job, sha: string): string {
