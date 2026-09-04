@@ -22,7 +22,12 @@ import {
 
 import { getLocalFoundationConfiguration } from "./pulumi-output";
 import { errorMessage, isNotFoundError } from "./filesystem";
-import { datasetParts, datasetPath, DEV_TOOLS_ROOT } from "./paths";
+import {
+  datasetParts,
+  datasetPath,
+  DEFAULT_DATAFUSION_DISTRIBUTED_ROOT,
+  DEV_TOOLS_ROOT,
+} from "./paths";
 import { withKubectlPortForward } from "./port-forward";
 import { compareQueryIds } from "./query-order";
 import { BenchmarkRun, BenchResult, type QueryIter } from "./results";
@@ -97,7 +102,7 @@ export const CommonOptions = object({
     option("--testdata-root", string({ metavar: "PATH" }), {
       description: message`Benchmark testdata directory`,
     }),
-    path.resolve(DEV_TOOLS_ROOT, "../datafusion-distributed/testdata"),
+    path.resolve(DEFAULT_DATAFUSION_DISTRIBUTED_ROOT, "testdata"),
   ),
   timeSecs: withDefault(
     option("--time-secs", numberValue, {
