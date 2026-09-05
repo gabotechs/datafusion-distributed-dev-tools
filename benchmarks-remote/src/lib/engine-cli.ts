@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 
+import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+
 import {
   argument,
   choice,
@@ -166,10 +168,60 @@ async function isNonEmptyParquetDirectory(directory: string): Promise<boolean> {
   );
 }
 
+function s3BucketAndPrefix(bucket: string): {
+  bucketName: string;
+  prefix: string;
+} {
+  const parts = bucket
+    .replace(/^s3:\/\//, "")
+    .replace(/^\/+|\/+$/g, "")
+    .split("/");
+  const bucketName = parts.shift();
+  if (bucketName === undefined || bucketName.length === 0) {
+    throw new Error(`Invalid S3 bucket '${bucket}'`);
+  }
+  return {
+    bucketName,
+    prefix: parts.length === 0 ? "" : `${parts.join("/")}/`,
+  };
+}
+
+async function remoteTableNames(
+  dataset: string,
+  bucket: string,
+  region: string,
+): Promise<string[]> {
+  const { bucketName, prefix: bucketPrefix } = s3BucketAndPrefix(bucket);
+  const datasetPrefix = `${bucketPrefix}${dataset}/`;
+  const client = new S3Client({ region });
+  let prefixes: { Prefix?: string | undefined }[] | undefined;
+  try {
+    ({ CommonPrefixes: prefixes } = await client.send(
+      new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: datasetPrefix,
+        Delimiter: "/",
+      }),
+    ));
+  } catch (error: unknown) {
+    throw new Error(
+      `Could not list remote dataset '${dataset}' in s3://${bucketName}/${datasetPrefix}: ${errorMessage(error)}`,
+      { cause: error },
+    );
+  }
+
+  return (prefixes ?? []).flatMap(({ Prefix }) => {
+    if (Prefix === undefined) return [];
+    const name = Prefix.slice(datasetPrefix.length).replace(/\/$/, "");
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? [name] : [];
+  });
+}
+
 export async function tablePathsForDataset(
   dataset: string,
   testdataRoot: string,
   bucket: string,
+  region: string,
 ): Promise<TableSpec[]> {
   const localDatasetPath = datasetPath(dataset, testdataRoot);
   const bucketUri = `s3://${bucket.replace(/^s3:\/\//, "").replace(/\/+$/, "")}`;
@@ -199,8 +251,18 @@ export async function tablePathsForDataset(
     }
   }
   if (tables.length === 0) {
+    for (const name of await remoteTableNames(dataset, bucket, region)) {
+      tables.push({
+        suite,
+        name,
+        schema,
+        s3Path: `${bucketUri}/${dataset}/${name}/`,
+      });
+    }
+  }
+  if (tables.length === 0) {
     throw new Error(
-      `Dataset '${dataset}' contains no non-empty table directories made entirely of Parquet files`,
+      `Dataset '${dataset}' contains no table directories locally or in ${bucketUri}`,
     );
   }
   return tables;
@@ -329,6 +391,7 @@ export async function runEngineBenchmark(
         dataset,
         options.testdataRoot,
         options.bucket,
+        options.region,
       );
       await runner.createTables(tableSpecs);
 

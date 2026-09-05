@@ -5,6 +5,8 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import test from "node:test";
 
+import { S3Client } from "@aws-sdk/client-s3";
+
 import { runEngineBenchmark, type CommonOptions } from "../src/lib/engine-cli";
 import type { BenchmarkRunner, ExecuteQueryResult } from "../src/lib/runner";
 
@@ -89,38 +91,46 @@ test("runs each query until both its iteration and time minimums are met", async
   }
 });
 
-test("rejects datasets whose table directories contain no Parquet files", async () => {
+test("discovers remote table directories when benchmark data is not stored locally", async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-empty-table-"));
-  const datasetDirectory = path.join(root, "tpch", "sf1", "table");
-  const queries = path.join(root, "tpch", "queries");
-  fs.mkdirSync(datasetDirectory, { recursive: true });
+  const queries = path.join(root, "custom", "queries");
+  fs.mkdirSync(path.join(root, "custom", "scale"), { recursive: true });
   fs.mkdirSync(queries, { recursive: true });
   fs.writeFileSync(path.join(queries, "custom.sql"), "select 1");
   const restorePath = installFakeKubectl(root);
-  const stderr: string[] = [];
-  const previousError = console.error;
-  const previousExitCode = process.exitCode;
-  console.error = (message?: unknown) => stderr.push(String(message));
+  context.mock.method(
+    S3Client.prototype as unknown as { send: () => unknown },
+    "send",
+    async () => ({
+      CommonPrefixes: [
+        { Prefix: "custom/scale/events/" },
+        { Prefix: "custom/scale/users/" },
+      ],
+    }),
+  );
 
   try {
+    let tables: Parameters<BenchmarkRunner["createTables"]>[0] = [];
     const runner: BenchmarkRunner = {
       deployment: "deployment",
       resultName: "test",
-      options: options(root),
-      async createTables(): Promise<void> {},
+      options: options(root, { dataset: "custom/scale" }),
+      async createTables(value): Promise<void> {
+        tables = value;
+      },
       async executeQuery(): Promise<ExecuteQueryResult> {
         return { elapsed: 1, plan: "", rowCount: 1, tasks: 1 };
       },
     };
     await runEngineBenchmark(runner);
-    assert.match(
-      stderr.join("\n"),
-      /contains no non-empty table directories made entirely of Parquet files/,
+    assert.deepEqual(
+      tables.map(({ name, s3Path }) => ({ name, s3Path })),
+      [
+        { name: "events", s3Path: "s3://bucket/custom/scale/events/" },
+        { name: "users", s3Path: "s3://bucket/custom/scale/users/" },
+      ],
     );
-    assert.equal(process.exitCode, 1);
   } finally {
-    console.error = previousError;
-    process.exitCode = previousExitCode;
     restorePath();
     fs.rmSync(root, { recursive: true, force: true });
   }
