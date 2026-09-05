@@ -31,6 +31,7 @@
     "command": "bash ./k8s/command.sh"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1127.0",
     "@optique/core": "^1.2.0",
     "@optique/run": "^1.2.0",
     "zod": "^4.1.12"
