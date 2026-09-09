@@ -128,7 +128,7 @@ export class BenchmarkExecutor {
       await reportProgress(progressPlan.headDeploy);
       const headDeployMs = await this.deployTimed(outputs, job);
       const head = await this.benchmarkHeadDatasets(
-        job.datasets,
+        job,
         progressPlan.headBenchmarks,
         reportProgress,
       );
@@ -193,16 +193,20 @@ export class BenchmarkExecutor {
   }
 
   private async benchmarkHeadDatasets(
-    datasets: readonly string[],
+    job: Job,
     progressMessages: readonly string[],
     reportProgress: (message: string) => Promise<void>,
   ): Promise<HeadBenchmarkResult> {
     const timings: BenchmarkTiming[] = [];
     const comparisons: string[] = [];
-    for (const [index, dataset] of datasets.entries()) {
+    for (const [index, dataset] of job.datasets.entries()) {
       await reportProgress(progressMessages[index]!);
       const started = performance.now();
-      await this.runBenchmark(dataset, "datafusion-benchmark-head");
+      await this.runBenchmark(
+        dataset,
+        "datafusion-benchmark-head",
+        job.headConfigs,
+      );
       timings.push({ dataset, durationMs: performance.now() - started });
       comparisons.push(
         await this.compareResults(
@@ -314,35 +318,39 @@ export class BenchmarkExecutor {
     });
   }
 
-  async runBenchmark(dataset: string, resultName: string): Promise<void> {
+  async runBenchmark(
+    dataset: string,
+    resultName: string,
+    configs: readonly string[] = [],
+  ): Promise<void> {
     const outputs = loadOutputs(this.config.foundationOutputsFile);
-    await this.processes.run(
-      "node",
-      [
-        path.join(this.config.harnessRoot, "dist", "datafusion-bench.cjs"),
-        dataset,
-        "--bucket",
-        `s3://${outputs.datasetBucketName}`,
-        "--k8s-cluster",
-        outputs.clusterName,
-        "--iterations",
-        String(BENCHMARK_ITERATIONS),
-        "--warmup",
-        String(BENCHMARK_WARMUP),
-        "--result-name",
-        resultName,
-        "--kubeconfig",
-        this.config.kubeconfig,
-        "--no-compare",
-        "--region",
-        this.config.region,
-        "--k8s-service",
-        DEPLOYMENT_NAME,
-        "--testdata-root",
-        this.testdataRoot(),
-      ],
-      { cwd: this.config.harnessRoot },
-    );
+    const arguments_ = [
+      path.join(this.config.harnessRoot, "dist", "datafusion-bench.cjs"),
+      dataset,
+      "--bucket",
+      `s3://${outputs.datasetBucketName}`,
+      "--k8s-cluster",
+      outputs.clusterName,
+      "--iterations",
+      String(BENCHMARK_ITERATIONS),
+      "--warmup",
+      String(BENCHMARK_WARMUP),
+      "--result-name",
+      resultName,
+      "--kubeconfig",
+      this.config.kubeconfig,
+      "--no-compare",
+      "--region",
+      this.config.region,
+      "--k8s-service",
+      DEPLOYMENT_NAME,
+      "--testdata-root",
+      this.testdataRoot(),
+    ];
+    for (const config of configs) arguments_.push("--config", config);
+    await this.processes.run("node", arguments_, {
+      cwd: this.config.harnessRoot,
+    });
   }
 
   async compareResults(

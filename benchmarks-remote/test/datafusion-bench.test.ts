@@ -22,6 +22,17 @@ test("sets only explicitly provided DataFusion options", () => {
   );
 });
 
+test("rejects unsafe or duplicate generic configs", () => {
+  assert.throws(
+    () => dataFusionSettingStatements({ configs: ["x=1;DROP TABLE y"] }),
+    /expected a safe KEY=VALUE token/,
+  );
+  assert.throws(
+    () => dataFusionSettingStatements({ configs: ["x=1", "x=2"] }),
+    /Duplicate config 'x'/,
+  );
+});
+
 test("maps every DataFusion override to its session setting", () => {
   assert.deepEqual(
     dataFusionSettingStatements({
@@ -29,6 +40,7 @@ test("maps every DataFusion override to its session setting", () => {
       cardinalityTaskSf: 2,
       batchSize: 3,
       shuffleBatchSize: 4,
+      configs: ["distributed.collect_dynamic_filters=false"],
       collectMetrics: true,
       compression: "lz4",
       childrenIsolatorUnions: false,
@@ -55,6 +67,7 @@ test("maps every DataFusion override to its session setting", () => {
       "SET distributed.max_tasks_per_stage=6;",
       "SET datafusion.optimizer.repartition_file_min_size=7;",
       "SET datafusion.execution.target_partitions=8;",
+      "SET distributed.collect_dynamic_filters=false;",
     ],
   );
 });

@@ -92,8 +92,9 @@ test("checks out and deploys base then head through the shared harness", async (
     override async runBenchmark(
       dataset: string,
       resultName: string,
+      configs: readonly string[] = [],
     ): Promise<void> {
-      events.push(`run:${dataset}:${resultName}`);
+      events.push(`run:${dataset}:${resultName}:${configs.join(",")}`);
     }
     override async compareResults(dataset: string): Promise<string> {
       events.push(`compare:${dataset}`);
@@ -107,7 +108,11 @@ test("checks out and deploys base then head through the shared harness", async (
   const datasets = ["tpch/sf1", "tpch/sf10"];
   const progress: string[] = [];
   const result = await new RecordingExecutor(config, NOOP_PROCESSES).execute(
-    { ...JOB, datasets },
+    {
+      ...JOB,
+      datasets,
+      headConfigs: ["distributed.collect_dynamic_filters=false"],
+    },
     async ({ step, totalSteps, message }) => {
       progress.push(`${step}/${totalSteps}:${message}`);
     },
@@ -142,13 +147,13 @@ test("checks out and deploys base then head through the shared harness", async (
     "prepare-dataset:tpch/sf1",
     "prepare-dataset:tpch/sf10",
     "deploy:c7i.2xlarge:12",
-    "run:tpch/sf1:datafusion-benchmark-base",
-    "run:tpch/sf10:datafusion-benchmark-base",
+    "run:tpch/sf1:datafusion-benchmark-base:",
+    "run:tpch/sf10:datafusion-benchmark-base:",
     "checkout:b",
     "deploy:c7i.2xlarge:12",
-    "run:tpch/sf1:datafusion-benchmark-head",
+    "run:tpch/sf1:datafusion-benchmark-head:distributed.collect_dynamic_filters=false",
     "compare:tpch/sf1",
-    "run:tpch/sf10:datafusion-benchmark-head",
+    "run:tpch/sf10:datafusion-benchmark-head:distributed.collect_dynamic_filters=false",
     "compare:tpch/sf10",
     "cleanup-deployment",
   ]);
@@ -295,7 +300,8 @@ test("runs benchmarks against the shared deployment and adjacent testdata", asyn
 
   await new BenchmarkExecutor(config, processes).runBenchmark(
     "tpch/sf1",
-    "datafusion-benchmark-base",
+    "datafusion-benchmark-head",
+    ["distributed.collect_dynamic_filters=false"],
   );
 
   const argument = (name: string): string | undefined =>
@@ -307,7 +313,11 @@ test("runs benchmarks against the shared deployment and adjacent testdata", asyn
     argument("--testdata-root"),
     path.join(config.sourceRoot, "testdata"),
   );
-  assert.equal(argument("--result-name"), "datafusion-benchmark-base");
+  assert.equal(argument("--result-name"), "datafusion-benchmark-head");
+  assert.equal(
+    argument("--config"),
+    "distributed.collect_dynamic_filters=false",
+  );
 });
 
 test("reads comparison output directly from the shared client", async () => {

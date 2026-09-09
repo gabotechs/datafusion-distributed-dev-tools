@@ -134,6 +134,9 @@ export class CommentPoller {
         datasets: parsed.request.datasets,
         benchmarkInstanceType: parsed.request.instanceType,
         benchmarkNodeCount: parsed.request.nodeCount,
+        ...(parsed.request.configs
+          ? { headConfigs: parsed.request.configs }
+          : {}),
         baseKind,
         baseSha,
         headSha: pullRequest.head.sha,

@@ -92,6 +92,21 @@ test("deduplicates comments while preserving immutable refs", () => {
   }
 });
 
+test("persists head-only configs", () => {
+  const database = new JobDatabase(":memory:");
+  try {
+    database.enqueue({
+      ...JOB,
+      headConfigs: ["distributed.collect_dynamic_filters=false"],
+    });
+    assert.deepEqual(database.getJobForComment(JOB.commentId)?.headConfigs, [
+      "distributed.collect_dynamic_filters=false",
+    ]);
+  } finally {
+    database.close();
+  }
+});
+
 test("claims a pending job atomically", () => {
   const database = new JobDatabase(":memory:");
   try {
@@ -208,7 +223,7 @@ test("migrates an unversioned database away from the legacy dataset column", () 
           .prepare("SELECT version FROM schema_version ORDER BY version")
           .all() as { version: number }[]
       ).map(({ version }) => version),
-      [1, 2, 3],
+      [1, 2, 3, 4],
     );
     assert.throws(() =>
       migrated
@@ -245,7 +260,7 @@ test("does not reapply completed database migrations", () => {
             .get() as { count: number }
         ).count,
       ),
-      3,
+      4,
     );
   } finally {
     database.close();

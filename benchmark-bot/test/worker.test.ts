@@ -54,7 +54,10 @@ test("reports a completed comparison and consumes the job", async () => {
     },
   } as GitHubApi;
   try {
-    const jobId = database.enqueue(JOB)!;
+    const jobId = database.enqueue({
+      ...JOB,
+      headConfigs: ["distributed.collect_dynamic_filters=false"],
+    })!;
     database.setStatusCommentId(jobId, 77);
     const worker = new JobWorker(database, github, {
       execute: async (_job, onProgress) => {
@@ -75,6 +78,10 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[0]!, /Baseline: PR base/);
     assert.match(comments[0]!, /`tpch\/sf1`, `tpch\/sf10`, `tpch\/sf100`/);
     assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
+    assert.match(
+      comments[0]!,
+      /PR-head configs: `distributed\.collect_dynamic_filters=false`/,
+    );
     assert.match(comments[1]!, /Progress 3\/10/);
     assert.match(comments[1]!, /Deploying the base revision/);
     assert.match(comments[2]!, /TOTAL: prev=300 ms, new=270 ms/);
@@ -98,6 +105,10 @@ test("reports a completed comparison and consumes the job", async () => {
       /datafusion-distributed-benchmarks --bin worker/,
     );
     assert.match(comments[2]!, /1 warmup \+ 5 measured iterations per query/);
+    assert.match(
+      comments[2]!,
+      /\*\*PR-head configs:\*\* `distributed\.collect_dynamic_filters=false`/,
+    );
     assert.match(comments[2]!, /Build and deployment \| 2m 2s \| 2m 5s/);
     assert.match(comments[2]!, /Benchmark `tpch\/sf100` \| 30s \| 31s/);
     assert.match(comments[2]!, /Total 7m 0s/);

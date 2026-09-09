@@ -133,6 +133,7 @@ only open a local Kubernetes port-forward and execute the local client:
 
 ```bash
 npm run datafusion-bench -- tpch/sf1 --iterations 1
+npm run datafusion-bench -- tpch/sf1 --config distributed.collect_dynamic_filters=false
 npm run trino-bench -- tpch/sf1 --iterations 1
 npm run spark-bench -- tpch/sf1 --iterations 1
 npm run ballista-bench -- tpch/sf1 --iterations 1
