@@ -15,6 +15,7 @@ export interface NewJob {
   datasets: string[];
   benchmarkInstanceType: string;
   benchmarkNodeCount: number;
+  headConfigs?: string[];
   baseKind: BaseKind;
   baseSha: string;
   headSha: string;
@@ -163,8 +164,9 @@ export class JobDatabase {
              comment_id, repository, pull_request_number, pull_request_url,
              requested_by, datasets_json,
              benchmark_instance_type, benchmark_node_count,
+             head_configs_json,
              base_kind, base_sha, head_sha, status, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
         )
         .run(
           job.commentId,
@@ -175,6 +177,7 @@ export class JobDatabase {
           JSON.stringify(job.datasets),
           job.benchmarkInstanceType,
           job.benchmarkNodeCount,
+          JSON.stringify(job.headConfigs ?? []),
           job.baseKind,
           job.baseSha,
           job.headSha,
@@ -438,6 +441,7 @@ function jobFromRow(row: Record<string, unknown>): Job {
     datasets: parseDatasets(row.datasets_json),
     benchmarkInstanceType: String(row.benchmark_instance_type),
     benchmarkNodeCount: Number(row.benchmark_node_count),
+    ...parseHeadConfigs(row.head_configs_json),
     baseKind: String(row.base_kind) as BaseKind,
     baseSha: String(row.base_sha),
     headSha: String(row.head_sha),
@@ -447,6 +451,22 @@ function jobFromRow(row: Record<string, unknown>): Job {
     updatedAt: String(row.updated_at),
     attemptCount: Number(row.attempt_count),
   };
+}
+
+function parseHeadConfigs(value: unknown): { headConfigs?: string[] } {
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (
+      Array.isArray(parsed) &&
+      parsed.every((config) => typeof config === "string")
+    ) {
+      return parsed.length === 0 ? {} : { headConfigs: parsed };
+    }
+  } catch {
+    // Fall through to the corruption error below.
+  }
+  throw new Error("Benchmark job has invalid head configs");
 }
 
 function parseDatasets(value: unknown): string[] {

@@ -11,11 +11,11 @@ const GITHUB_COMMENT_LIMIT = 65_536;
 const TRUNCATION_NOTICE = "... earlier output truncated\n";
 
 export function renderQueued(job: Job): string {
-  return `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.`;
+  return `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.${configSummary(job)}`;
 }
 
 export function renderRunning(job: Job): string {
-  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.`;
+  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.${configSummary(job)}`;
 }
 
 export function renderProgress(job: Job, progress: ExecutionProgress): string {
@@ -71,7 +71,7 @@ ${benchmarkRows}
 
 **Workload:** ${formatDatasets(job.datasets)} · all queries · ${BENCHMARK_WARMUP ? "1 warmup + " : ""}${BENCHMARK_ITERATIONS} measured iterations per query
 
-**Capacity:** ${capacity(job)} for both revisions
+**Capacity:** ${capacity(job)} for both revisions${configDetails(job)}
 
 **Other timings:** Queue ${formatDuration(queueMs)} · Dataset validation ${formatDuration(timings.validationMs)} · Total ${formatDuration(timings.totalMs)}
 
@@ -211,6 +211,22 @@ function formatDuration(durationMs: number): string {
 
 function capacity(job: Job): string {
   return `${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes`;
+}
+
+function configSummary(job: Job): string {
+  return job.headConfigs?.length
+    ? ` PR-head configs: ${formatConfigs(job.headConfigs)}.`
+    : "";
+}
+
+function configDetails(job: Job): string {
+  return job.headConfigs?.length
+    ? `\n\n**PR-head configs:** ${formatConfigs(job.headConfigs)}`
+    : "";
+}
+
+function formatConfigs(configs: readonly string[]): string {
+  return configs.map((config) => `\`${config}\``).join(", ");
 }
 
 function formatDatasets(datasets: readonly string[]): string {

@@ -50,6 +50,9 @@ const Options = object({
       description: message`Worker RepartitionExec batch size`,
     }),
   ),
+  configs: option("--config", string({ metavar: "KEY=VALUE" }), {
+    description: message`Set a DataFusion session config; repeat for multiple settings`,
+  }).multiple(),
   childrenIsolatorUnions: optional(
     option("--children-isolator-unions", booleanValue, {
       description: message`Use children isolator unions`,
@@ -121,6 +124,7 @@ export interface DataFusionSettingOptions {
   cardinalityTaskSf?: number | undefined;
   batchSize?: number | undefined;
   shuffleBatchSize?: number | undefined;
+  configs?: readonly string[] | undefined;
   collectMetrics?: boolean | undefined;
   compression?: string | undefined;
   childrenIsolatorUnions?: boolean | undefined;
@@ -224,11 +228,23 @@ export function dataFusionSettingStatements(
     ],
     ["datafusion.execution.target_partitions", options.targetPartitions],
   ];
-  return settings
-    .flatMap(([name, value]) =>
-      value === undefined ? [] : [`SET ${name}=${value};`],
-    )
-    .join("\n");
+  const statements = settings.flatMap(([name, value]) =>
+    value === undefined ? [] : [`SET ${name}=${value};`],
+  );
+  const names = new Set<string>();
+  for (const config of options.configs ?? []) {
+    const match = /^([a-zA-Z][a-zA-Z0-9_.]*)=([a-zA-Z0-9._-]+)$/.exec(config);
+    if (!match) {
+      throw new Error(
+        `Invalid config '${config}'; expected a safe KEY=VALUE token`,
+      );
+    }
+    const [, name, value] = match;
+    if (names.has(name!)) throw new Error(`Duplicate config '${name}'`);
+    names.add(name!);
+    statements.push(`SET ${name}=${value};`);
+  }
+  return statements.join("\n");
 }
 
 if (require.main === module) {

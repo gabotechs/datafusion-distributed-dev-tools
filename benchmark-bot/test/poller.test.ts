@@ -143,7 +143,8 @@ test("creates one persisted status comment for an accepted benchmark", async () 
 test("snapshots main when explicitly requested", async () => {
   const database = new JobDatabase(":memory:");
   const request = comment(1, "maintainer");
-  request.body = "benchmarks run tpch/sf100 --base main";
+  request.body =
+    "benchmarks run tpch/sf100 --base main --config distributed.collect_dynamic_filters=false";
   const branchRequests: [string, string][] = [];
   const github = {
     getPullRequest: async () => ({
@@ -171,6 +172,9 @@ test("snapshots main when explicitly requested", async () => {
     assert.equal(queued?.baseKind, "main");
     assert.equal(queued?.baseSha, "c".repeat(40));
     assert.equal(queued?.headSha, "b".repeat(40));
+    assert.deepEqual(queued?.headConfigs, [
+      "distributed.collect_dynamic_filters=false",
+    ]);
   } finally {
     database.close();
   }

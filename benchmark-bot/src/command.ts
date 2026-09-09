@@ -3,6 +3,7 @@ export interface BenchmarkRequest {
   instanceType: string;
   nodeCount: number;
   base?: "main";
+  configs?: string[];
 }
 
 export type ParseResult =
@@ -12,12 +13,13 @@ export type ParseResult =
 
 const DATASET = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
 const INSTANCE_TYPE = /^[a-z][a-z0-9-]{0,19}\.[a-z0-9-]{1,20}$/;
+const CONFIG = /^([a-zA-Z][a-zA-Z0-9_.]*)=([a-zA-Z0-9._-]+)$/;
 export const MAX_BENCHMARK_NODES = 24;
 export const DEFAULT_BENCHMARK_INSTANCE_TYPE = "c5n.2xlarge";
 export const DEFAULT_BENCHMARK_NODE_COUNT = 12;
 
 const USAGE =
-  "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main]`.";
+  "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main] [--config <key=value>]...`.";
 
 export function parseComment(body: string): ParseResult {
   const line = body
@@ -56,9 +58,30 @@ export function parseComment(body: string): ParseResult {
     };
   }
   const options = new Map<string, string>();
+  const configs: string[] = [];
+  const configNames = new Set<string>();
   for (let index = 0; index < optionWords.length; index += 2) {
     const option = optionWords[index]!;
     const value = optionWords[index + 1]!;
+    if (option === "--config") {
+      const match = CONFIG.exec(value);
+      if (!match) {
+        return {
+          kind: "invalid",
+          message: `Invalid config \`${value}\`; expected a safe \`key=value\` token.`,
+        };
+      }
+      const name = match[1]!;
+      if (configNames.has(name)) {
+        return {
+          kind: "invalid",
+          message: `Config \`${name}\` may be specified only once.`,
+        };
+      }
+      configNames.add(name);
+      configs.push(value);
+      continue;
+    }
     if (
       !["--instance-type", "--nodes", "--base"].includes(option) ||
       options.has(option)
@@ -102,6 +125,7 @@ export function parseComment(body: string): ParseResult {
       instanceType,
       nodeCount,
       ...(base === "main" ? { base } : {}),
+      ...(configs.length === 0 ? {} : { configs }),
     },
   };
 }

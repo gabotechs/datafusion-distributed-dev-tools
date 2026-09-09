@@ -70,6 +70,41 @@ test("parses the requested dataset and capacity", () => {
   );
 });
 
+test("accepts repeatable head-only configs", () => {
+  assert.deepEqual(
+    parseComment(
+      "benchmarks run tpch/sf1 --base main --config distributed.collect_dynamic_filters=false --config distributed.max_tasks_per_stage=8",
+    ),
+    {
+      kind: "request",
+      request: {
+        datasets: ["tpch/sf1"],
+        instanceType: "c5n.2xlarge",
+        nodeCount: 12,
+        base: "main",
+        configs: [
+          "distributed.collect_dynamic_filters=false",
+          "distributed.max_tasks_per_stage=8",
+        ],
+      },
+    },
+  );
+});
+
+test("rejects unsafe or duplicate configs", () => {
+  assert.deepEqual(parseComment("benchmarks run tpch/sf1 --config x=1;DROP"), {
+    kind: "invalid",
+    message: "Invalid config `x=1;DROP`; expected a safe `key=value` token.",
+  });
+  assert.deepEqual(
+    parseComment("benchmarks run tpch/sf1 --config x=1 --config x=2"),
+    {
+      kind: "invalid",
+      message: "Config `x` may be specified only once.",
+    },
+  );
+});
+
 test("sanitizes benchmark capacity", () => {
   assert.deepEqual(
     parseComment(
@@ -138,7 +173,7 @@ test("rejects aliases and extra arguments", () => {
     {
       kind: "invalid",
       message:
-        "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main]`.",
+        "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main] [--config <key=value>]...`.",
     },
   );
   assert.deepEqual(parseComment("benchmarks run tpch/sf1 tpch/sf1"), {

@@ -33,6 +33,13 @@ By default, the bot compares against the pull request's configured base. Use
 benchmarks run tpch/sf100 --base main
 ```
 
+Repeat `--config <key=value>` to apply DataFusion session settings to the PR
+head only; the comparison base keeps its defaults:
+
+```text
+benchmarks run tpch/sf1 --base main --config distributed.collect_dynamic_filters=false
+```
+
 ## Architecture
 
 - A persistent EC2 controller serializes jobs and keeps its Git mirror, Cargo
