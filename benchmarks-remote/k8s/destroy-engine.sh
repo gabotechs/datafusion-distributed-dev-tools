@@ -7,7 +7,7 @@ source "${script_dir}/lib.sh"
 engine=${1:?usage: destroy-engine.sh ENGINE}
 validate_engine "${engine}"
 init_environment
-deployment_name=${DEPLOYMENT_NAME:-${engine}}
+deployment_name=${DEPLOYMENT_NAME:-${engine}-${USER//./-}}
 validate_deployment_name "${deployment_name}"
 require_aws_credentials
 ensure_kubeconfig
