@@ -3,6 +3,8 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
+import { MAX_ACTIVE_JOBS_PER_REQUESTER, MAX_QUEUE_DEPTH } from "./limits.js";
+
 export type JobStatus = "pending" | "running" | "completed" | "failed";
 export type BaseKind = "pull-request" | "main";
 
@@ -37,9 +39,6 @@ export interface RecoveryResult {
 }
 
 export class QueueLimitError extends Error {}
-
-const MAX_QUEUE_DEPTH = 20;
-const MAX_QUEUED_PER_USER = 3;
 
 const MIGRATIONS_DIRECTORY = fileURLToPath(
   new URL("../migrations/", import.meta.url),
@@ -152,7 +151,7 @@ export class JobDatabase {
       if (active.total >= MAX_QUEUE_DEPTH) {
         throw new QueueLimitError("The benchmark queue is full");
       }
-      if ((active.requester ?? 0) >= MAX_QUEUED_PER_USER) {
+      if ((active.requester ?? 0) >= MAX_ACTIVE_JOBS_PER_REQUESTER) {
         throw new QueueLimitError(
           "The requester already has three active jobs",
         );

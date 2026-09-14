@@ -2,6 +2,7 @@ import { parseComment } from "./command.js";
 import { QueueLimitError, type Job, type JobDatabase } from "./database.js";
 import type { GitHubApi, IssueComment } from "./github.js";
 import { renderQueued } from "./render.js";
+import { appendUsage } from "./usage.js";
 
 const INITIAL_LOOKBACK_MS = 60 * 60 * 1_000;
 const SCAN_OVERLAP_MS = 2 * 60 * 1_000;
@@ -108,7 +109,7 @@ export class CommentPoller {
       await this.github.postComment(
         this.repository,
         pullRequestNumber,
-        `@${comment.user.login} ${parsed.message}`,
+        appendUsage(`@${comment.user.login} ${parsed.message}`),
       );
       this.database.markCommentSeen(comment.id);
       return;
@@ -147,7 +148,9 @@ export class CommentPoller {
       await this.github.postComment(
         this.repository,
         pullRequestNumber,
-        `@${comment.user.login} ${error.message}; this request was not queued.`,
+        appendUsage(
+          `@${comment.user.login} ${error.message}; this request was not queued.`,
+        ),
       );
       return;
     }

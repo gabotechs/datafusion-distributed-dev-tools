@@ -13,7 +13,7 @@ const JOB: NewJob = {
     "https://github.com/datafusion-contrib/datafusion-distributed/pull/99",
   requestedBy: "maintainer",
   datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
-  benchmarkInstanceType: "c7i.2xlarge",
+  benchmarkInstanceType: "m5.2xlarge",
   benchmarkNodeCount: 12,
   baseKind: "pull-request",
   baseSha: "a".repeat(40),
@@ -75,15 +75,20 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.equal(await worker.runOnce(), true);
     assert.equal(await worker.runOnce(), false);
     assert.match(comments[0]!, /Running/);
+    assert.match(comments[0]!, /How to use the benchmark bot/);
     assert.match(comments[0]!, /Baseline: PR base/);
     assert.match(comments[0]!, /`tpch\/sf1`, `tpch\/sf10`, `tpch\/sf100`/);
-    assert.match(comments[0]!, /12 `c7i\.2xlarge` nodes/);
+    assert.match(comments[0]!, /12 `m5\.2xlarge` nodes/);
     assert.match(
       comments[0]!,
       /PR-head configs: `distributed\.collect_dynamic_filters=false`/,
     );
     assert.match(comments[1]!, /Progress 3\/10/);
     assert.match(comments[1]!, /Deploying the base revision/);
+    assert.equal(
+      comments[1]!.match(/How to use the benchmark bot/g)?.length,
+      1,
+    );
     assert.match(comments[2]!, /TOTAL: prev=300 ms, new=270 ms/);
     assert.match(comments[2]!, /TASKS: prev=20\.0, new=18\.0/);
     assert.match(comments[2]!, /TASKS:.*TOTAL:.*<\/pre>\s*<details>/s);
@@ -112,6 +117,7 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[2]!, /Build and deployment \| 2m 2s \| 2m 5s/);
     assert.match(comments[2]!, /Benchmark `tpch\/sf100` \| 30s \| 31s/);
     assert.match(comments[2]!, /Total 7m 0s/);
+    assert.match(comments[2]!, /Query selection and iteration overrides/);
     assert.deepEqual(commentIds, [77, 77, 77]);
   } finally {
     database.close();
@@ -160,6 +166,7 @@ test("does not publish command output when a job fails", async () => {
     });
     await worker.runOnce();
     assert.match(comments[1]!, /controller journal/);
+    assert.match(comments[1]!, /How to use the benchmark bot/);
     assert.doesNotMatch(comments[1]!, /123456789012/);
   } finally {
     database.close();

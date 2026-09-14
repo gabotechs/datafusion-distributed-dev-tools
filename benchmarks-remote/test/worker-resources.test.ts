@@ -45,6 +45,21 @@ test("all engine workers consume the same node-filling resources", () => {
     "utf8",
   );
   assert.match(deploy, /--values .*worker-resources\.yaml/);
+  for (const resource of [
+    "workerResources.requests.cpu",
+    "workerResources.requests.memory",
+    "workerResources.limits.cpu",
+    "workerResources.limits.memory",
+  ]) {
+    assert.match(
+      deploy,
+      new RegExp(`--set-string ${resource.replaceAll(".", "\\.")}`),
+    );
+  }
+  assert.match(
+    deploy,
+    /BENCHMARK_WORKER_CPU and BENCHMARK_WORKER_MEMORY must be set together/,
+  );
 });
 
 test("all engine charts default to twelve workers", () => {

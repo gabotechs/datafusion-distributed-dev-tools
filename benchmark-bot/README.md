@@ -12,18 +12,21 @@ Kubernetes deployment with the requested capacity, runs every dataset against
 the pull request's immutable base SHA, deploys the head SHA once, repeats the
 same datasets in the same order, posts the combined comparison, and removes the
 deployment. The optional `--instance-type` and `--nodes` arguments default to
-the upstream benchmark settings of `c5n.2xlarge` and 12 nodes. Node counts are
-limited to 24.
+`c5n.4xlarge` and 12 nodes. Node counts are limited to 60. Instance types come
+from a supported catalog, and each catalog entry determines the node-filling
+CPU and memory requests and limits used by its benchmark worker.
 
 The bot creates one status comment for each accepted request and edits it in
 place as the job moves from queued to running and then completed or failed. The
 comment links back to the request and includes a compact metadata section with
 queue, validation, compilation, Kubernetes provisioning, per-dataset benchmark,
 and total timings. While a job runs, the same comment shows its current phase
-and completed step count.
+and completed step count. Every bot response includes a collapsible usage
+section documenting the available datasets, capacity controls, comparison and
+configuration options, and operational limits.
 
 ```text
-benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --instance-type c7i.2xlarge --nodes 6
+benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --instance-type m5.2xlarge --nodes 6
 ```
 
 By default, the bot compares against the pull request's configured base. Use

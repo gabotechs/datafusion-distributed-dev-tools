@@ -34,13 +34,14 @@ that existing namespace.
 
 The controller polls PR comments through the GitHub REST API using a manually
 provisioned `GH_TOKEN`. It deduplicates comment IDs, validates the commenter's
-repository permission, and accepts
-`benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>]`
-commands. Omitted capacity uses the upstream defaults of `c5n.2xlarge` and 12
-nodes. It validates every dataset and the instance-type token, rejects duplicate
-datasets, and limits requests to 24 nodes. Polling keeps the EC2 instance
-private with no inbound internet listener. GitHub authentication is not managed
-by Pulumi.
+repository permission, and accepts `benchmarks run <suite>/<variant>...`
+commands with optional `--instance-type`, `--nodes`, `--base main`, and
+repeatable `--config` arguments. Omitted capacity uses `c5n.4xlarge` and 12
+nodes. It validates every dataset, accepts only cataloged instance types,
+derives node-filling worker CPU and memory resources from that catalog, rejects
+duplicate datasets, and limits requests to 60 nodes. Polling keeps the EC2
+instance private with no inbound internet listener. GitHub authentication is
+not managed by Pulumi.
 
 ## Job sequence
 

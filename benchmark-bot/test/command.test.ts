@@ -8,7 +8,7 @@ test("parses the requested dataset and capacity", () => {
     kind: "request",
     request: {
       datasets: ["tpch/sf1"],
-      instanceType: "c5n.2xlarge",
+      instanceType: "c5n.4xlarge",
       nodeCount: 12,
     },
   });
@@ -18,33 +18,33 @@ test("parses the requested dataset and capacity", () => {
       kind: "request",
       request: {
         datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
-        instanceType: "c5n.2xlarge",
+        instanceType: "c5n.4xlarge",
         nodeCount: 6,
       },
     },
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 12",
+      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 12",
     ),
     {
       kind: "request",
       request: {
         datasets: ["tpch/sf1"],
-        instanceType: "c7i.2xlarge",
+        instanceType: "m5.2xlarge",
         nodeCount: 12,
       },
     },
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --nodes 12 --instance-type c7i.2xlarge",
+      "benchmarks run tpch/sf1 --nodes 12 --instance-type m5.2xlarge",
     ),
     {
       kind: "request",
       request: {
         datasets: ["tpch/sf1"],
-        instanceType: "c7i.2xlarge",
+        instanceType: "m5.2xlarge",
         nodeCount: 12,
       },
     },
@@ -53,17 +53,17 @@ test("parses the requested dataset and capacity", () => {
     kind: "request",
     request: {
       datasets: ["tpch/sf1"],
-      instanceType: "c5n.2xlarge",
+      instanceType: "c5n.4xlarge",
       nodeCount: 4,
     },
   });
   assert.deepEqual(
-    parseComment("benchmarks run tpch/sf1 --instance-type c7i.2xlarge"),
+    parseComment("benchmarks run tpch/sf1 --instance-type m5.2xlarge"),
     {
       kind: "request",
       request: {
         datasets: ["tpch/sf1"],
-        instanceType: "c7i.2xlarge",
+        instanceType: "m5.2xlarge",
         nodeCount: 12,
       },
     },
@@ -79,7 +79,7 @@ test("accepts repeatable head-only configs", () => {
       kind: "request",
       request: {
         datasets: ["tpch/sf1"],
-        instanceType: "c5n.2xlarge",
+        instanceType: "c5n.4xlarge",
         nodeCount: 12,
         base: "main",
         configs: [
@@ -108,11 +108,24 @@ test("rejects unsafe or duplicate configs", () => {
 test("sanitizes benchmark capacity", () => {
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 25",
+      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 60",
+    ),
+    {
+      kind: "request",
+      request: {
+        datasets: ["tpch/sf1"],
+        instanceType: "m5.2xlarge",
+        nodeCount: 60,
+      },
+    },
+  );
+  assert.deepEqual(
+    parseComment(
+      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 61",
     ),
     {
       kind: "invalid",
-      message: "Invalid node count `25`; expected an integer from 1 to 24.",
+      message: "Invalid node count `61`; expected an integer from 1 to 60.",
     },
   );
   assert.deepEqual(
@@ -125,12 +138,20 @@ test("sanitizes benchmark capacity", () => {
     },
   );
   assert.deepEqual(
+    parseComment("benchmarks run tpch/sf1 --instance-type c7i.2xlarge"),
+    {
+      kind: "invalid",
+      message:
+        "Unsupported instance type `c7i.2xlarge`; expected one of `c5n.2xlarge`, `c5n.4xlarge`, `m5.2xlarge`, `m5.4xlarge`, `r5.2xlarge`, `r5.4xlarge`.",
+    },
+  );
+  assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 1.5",
+      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 1.5",
     ),
     {
       kind: "invalid",
-      message: "Invalid node count `1.5`; expected an integer from 1 to 24.",
+      message: "Invalid node count `1.5`; expected an integer from 1 to 60.",
     },
   );
 });
@@ -140,7 +161,7 @@ test("accepts only main as an explicit comparison base", () => {
     kind: "request",
     request: {
       datasets: ["tpch/sf100"],
-      instanceType: "c5n.2xlarge",
+      instanceType: "c5n.4xlarge",
       nodeCount: 12,
       base: "main",
     },
@@ -158,7 +179,7 @@ test("ignores unrelated comments", () => {
 test("rejects aliases and extra arguments", () => {
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch_sf1 --instance-type c7i.2xlarge --nodes 12",
+      "benchmarks run tpch_sf1 --instance-type m5.2xlarge --nodes 12",
     ),
     {
       kind: "invalid",
@@ -168,7 +189,7 @@ test("rejects aliases and extra arguments", () => {
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 12 now",
+      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 12 now",
     ),
     {
       kind: "invalid",
