@@ -19,6 +19,18 @@ manifest_values=()
 case ${engine} in
   datafusion)
     benchmark_instance_type=${BENCHMARK_INSTANCE_TYPE:-$(jq -er '.benchmarkInstanceType' "${outputs_file}")}
+    benchmark_worker_cpu=${BENCHMARK_WORKER_CPU:-}
+    benchmark_worker_memory=${BENCHMARK_WORKER_MEMORY:-}
+    if [[ -n ${benchmark_worker_cpu} || -n ${benchmark_worker_memory} ]]; then
+      if [[ -z ${benchmark_worker_cpu} || -z ${benchmark_worker_memory} ]]; then
+        echo "BENCHMARK_WORKER_CPU and BENCHMARK_WORKER_MEMORY must be set together" >&2
+        exit 2
+      fi
+      manifest_values+=(--set-string workerResources.requests.cpu="${benchmark_worker_cpu}")
+      manifest_values+=(--set-string workerResources.requests.memory="${benchmark_worker_memory}")
+      manifest_values+=(--set-string workerResources.limits.cpu="${benchmark_worker_cpu}")
+      manifest_values+=(--set-string workerResources.limits.memory="${benchmark_worker_memory}")
+    fi
     worker_artifact=${WORKER_ARTIFACT:-$(bash "${root}/benchmarks-remote/k8s/publish-datafusion.sh")}
     : "${worker_artifact:?DataFusion worker publishing did not produce an artifact}"
     manifest_values+=(--set-string worker.artifact="${worker_artifact}")

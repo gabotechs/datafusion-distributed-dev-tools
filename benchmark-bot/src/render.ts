@@ -6,24 +6,31 @@ import {
   type ExecutionProgress,
   type ExecutionTimings,
 } from "./executor.js";
+import { appendUsage, renderUsage } from "./usage.js";
 
 const GITHUB_COMMENT_LIMIT = 65_536;
 const TRUNCATION_NOTICE = "... earlier output truncated\n";
 
 export function renderQueued(job: Job): string {
-  return `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.${configSummary(job)}`;
+  return appendUsage(
+    `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.${configSummary(job)}`,
+  );
 }
 
 export function renderRunning(job: Job): string {
-  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.${configSummary(job)}`;
+  return appendUsage(renderRunningSummary(job));
 }
 
 export function renderProgress(job: Job, progress: ExecutionProgress): string {
-  return `${renderRunning(job)}\n\n**Progress ${progress.step}/${progress.totalSteps}:** ${progress.message}.`;
+  return appendUsage(
+    `${renderRunningSummary(job)}\n\n**Progress ${progress.step}/${progress.totalSteps}:** ${progress.message}.`,
+  );
 }
 
 export function renderFailure(job: Job): string {
-  return `${requestLink(job)}\n\nBenchmark job ${job.id} failed for ${formatDatasets(job.datasets)}. Full details are available in the controller journal.`;
+  return appendUsage(
+    `${requestLink(job)}\n\nBenchmark job ${job.id} failed for ${formatDatasets(job.datasets)}. Full details are available in the controller journal.`,
+  );
 }
 
 export function renderResult(
@@ -75,7 +82,9 @@ ${benchmarkRows}
 
 **Other timings:** Queue ${formatDuration(queueMs)} · Dataset validation ${formatDuration(timings.validationMs)} · Total ${formatDuration(timings.totalMs)}
 
-</details>`;
+</details>
+
+${renderUsage()}`;
   const fixedLength = header.length + details.length;
   if (fixedLength >= GITHUB_COMMENT_LIMIT) {
     return truncate(`${header}${details}`, GITHUB_COMMENT_LIMIT);
@@ -85,6 +94,10 @@ ${benchmarkRows}
     GITHUB_COMMENT_LIMIT - fixedLength,
   );
   return `${header}${renderedComparison}${details}`;
+}
+
+function renderRunningSummary(job: Job): string {
+  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.${configSummary(job)}`;
 }
 
 function revisionLink(job: Job, label: string, sha: string): string {

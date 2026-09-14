@@ -8,7 +8,7 @@ import { CommentPoller } from "../src/poller.js";
 function comment(id: number, login: string): IssueComment {
   return {
     id,
-    body: "benchmarks run tpch/sf1 --instance-type c7i.2xlarge --nodes 12",
+    body: "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 12",
     issue_url: `https://api.github.com/repos/owner/repository/issues/${id}`,
     html_url: `https://github.com/owner/repository/issues/${id}`,
     created_at: `2026-08-10T00:00:0${id}.000Z`,
@@ -132,9 +132,42 @@ test("creates one persisted status comment for an accepted benchmark", async () 
     assert.equal(posted.length, 1);
     assert.match(posted[0]!, /queued/);
     assert.match(posted[0]!, /pull\/1#issuecomment-1/);
+    assert.match(posted[0]!, /How to use the benchmark bot/);
+    assert.match(posted[0]!, /integer from 1 to 60/);
+    assert.match(posted[0]!, /`clickbench\/0-100`/);
+    assert.match(posted[0]!, /`c5n\.4xlarge` \| 16 vCPU, 42 GiB/);
+    assert.match(posted[0]!, /15 vCPU, 38Gi/);
     assert.equal(queued?.statusCommentId, 321);
     assert.equal(queued?.baseKind, "pull-request");
     assert.equal(queued?.baseSha, "a".repeat(40));
+  } finally {
+    database.close();
+  }
+});
+
+test("includes usage instructions when rejecting an invalid command", async () => {
+  const database = new JobDatabase(":memory:");
+  const posted: string[] = [];
+  const request = comment(1, "maintainer");
+  request.body = "benchmarks run tpch/sf1 --nodes 61";
+  const github = {
+    postComment: async (_repository: string, _pr: number, body: string) => {
+      posted.push(body);
+      return 321;
+    },
+  } as unknown as GitHubApi;
+  try {
+    await new CommentPoller(
+      "owner/repository",
+      new Set(["maintainer"]),
+      database,
+      github,
+    ).process(request);
+
+    assert.equal(posted.length, 1);
+    assert.match(posted[0]!, /Invalid node count `61`/);
+    assert.match(posted[0]!, /How to use the benchmark bot/);
+    assert.equal(database.nextPending(), null);
   } finally {
     database.close();
   }

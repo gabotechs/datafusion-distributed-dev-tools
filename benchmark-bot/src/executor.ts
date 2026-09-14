@@ -3,6 +3,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 
 import type { Job } from "./database.js";
+import { benchmarkWorkerResources } from "./instance-types.js";
 import type { ProcessRunner } from "./process.js";
 
 interface FoundationOutputs {
@@ -389,7 +390,17 @@ export class BenchmarkExecutor {
       WORKER_ARTIFACT_PREFIX: "workers/datafusion",
     };
     if (job) {
+      const workerResources = benchmarkWorkerResources(
+        job.benchmarkInstanceType,
+      );
+      if (!workerResources) {
+        throw new Error(
+          `Unsupported benchmark instance type ${job.benchmarkInstanceType}`,
+        );
+      }
       environment.BENCHMARK_INSTANCE_TYPE = job.benchmarkInstanceType;
+      environment.BENCHMARK_WORKER_CPU = workerResources.cpu;
+      environment.BENCHMARK_WORKER_MEMORY = workerResources.memory;
       environment.NODE_COUNT = String(job.benchmarkNodeCount);
     }
     return environment;

@@ -1,3 +1,9 @@
+import {
+  SUPPORTED_BENCHMARK_INSTANCE_TYPES,
+  benchmarkWorkerResources,
+  type SupportedBenchmarkInstanceType,
+} from "./instance-types.js";
+
 export interface BenchmarkRequest {
   datasets: string[];
   instanceType: string;
@@ -14,8 +20,9 @@ export type ParseResult =
 const DATASET = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
 const INSTANCE_TYPE = /^[a-z][a-z0-9-]{0,19}\.[a-z0-9-]{1,20}$/;
 const CONFIG = /^([a-zA-Z][a-zA-Z0-9_.]*)=([a-zA-Z0-9._-]+)$/;
-export const MAX_BENCHMARK_NODES = 24;
-export const DEFAULT_BENCHMARK_INSTANCE_TYPE = "c5n.2xlarge";
+export const MAX_BENCHMARK_NODES = 60;
+export const DEFAULT_BENCHMARK_INSTANCE_TYPE: SupportedBenchmarkInstanceType =
+  "c5n.4xlarge";
 export const DEFAULT_BENCHMARK_NODE_COUNT = 12;
 
 const USAGE =
@@ -96,6 +103,12 @@ export function parseComment(body: string): ParseResult {
     return {
       kind: "invalid",
       message: `Invalid instance type \`${instanceType}\`.`,
+    };
+  }
+  if (!benchmarkWorkerResources(instanceType)) {
+    return {
+      kind: "invalid",
+      message: `Unsupported instance type \`${instanceType}\`; expected one of ${SUPPORTED_BENCHMARK_INSTANCE_TYPES.map((value) => `\`${value}\``).join(", ")}.`,
     };
   }
   const nodeCountText =

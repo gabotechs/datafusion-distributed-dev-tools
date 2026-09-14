@@ -26,7 +26,7 @@ const JOB: Job = {
   pullRequestUrl: "https://example.invalid/pull/12",
   requestedBy: "maintainer",
   datasets: ["tpch/sf1"],
-  benchmarkInstanceType: "c7i.2xlarge",
+  benchmarkInstanceType: "m5.2xlarge",
   benchmarkNodeCount: 12,
   baseKind: "pull-request",
   baseSha: "a".repeat(40),
@@ -146,11 +146,11 @@ test("checks out and deploys base then head through the shared harness", async (
     "checkout:a",
     "prepare-dataset:tpch/sf1",
     "prepare-dataset:tpch/sf10",
-    "deploy:c7i.2xlarge:12",
+    "deploy:m5.2xlarge:12",
     "run:tpch/sf1:datafusion-benchmark-base:",
     "run:tpch/sf10:datafusion-benchmark-base:",
     "checkout:b",
-    "deploy:c7i.2xlarge:12",
+    "deploy:m5.2xlarge:12",
     "run:tpch/sf1:datafusion-benchmark-head:distributed.collect_dynamic_filters=false",
     "compare:tpch/sf1",
     "run:tpch/sf10:datafusion-benchmark-head:distributed.collect_dynamic_filters=false",
@@ -229,7 +229,9 @@ test("uses the shared named deployment command for deploy and cleanup", async ()
     "datafusion-benchmark-bot",
   );
   assert.equal(calls[0]?.options?.env?.NODE_COUNT, "12");
-  assert.equal(calls[0]?.options?.env?.BENCHMARK_INSTANCE_TYPE, "c7i.2xlarge");
+  assert.equal(calls[0]?.options?.env?.BENCHMARK_INSTANCE_TYPE, "m5.2xlarge");
+  assert.equal(calls[0]?.options?.env?.BENCHMARK_WORKER_CPU, "7");
+  assert.equal(calls[0]?.options?.env?.BENCHMARK_WORKER_MEMORY, "28Gi");
   assert.equal(calls[0]?.options?.env?.WORKER_ARTIFACT_BUCKET, "artifacts");
   assert.equal(
     calls[0]?.options?.env?.DATAFUSION_BUILD_WRAPPER,
