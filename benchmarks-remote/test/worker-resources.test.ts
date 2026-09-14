@@ -88,7 +88,14 @@ test("DataFusion deploy and destroy share the optional deployment name", () => {
     "utf8",
   );
   const library = fs.readFileSync(path.join(root, "k8s/lib.sh"), "utf8");
-  assert.match(deploy, /deployment_name=\$\{DEPLOYMENT_NAME:-\$\{engine\}\}/);
+  assert.match(
+    deploy,
+    /deployment_name=\$\{DEPLOYMENT_NAME:-\$\{engine\}-\$\{USER\/\/\.\/-\}\}/,
+  );
+  assert.match(
+    destroy,
+    /deployment_name=\$\{DEPLOYMENT_NAME:-\$\{engine\}-\$\{USER\/\/\.\/-\}\}/,
+  );
   assert.match(deploy, /helm upgrade --install "\$\{deployment_name\}"/);
   assert.match(deploy, /--set-string name="\$\{deployment_name\}"/);
   assert.match(destroy, /helm uninstall "\$\{deployment_name\}"/);
