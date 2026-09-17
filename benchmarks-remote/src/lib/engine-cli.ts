@@ -362,7 +362,7 @@ export async function runEngineBenchmark(
     const portForwardConfiguration = {
       ...options,
       deployment: runner.deployment,
-      service: options.service ?? runner.deployment,
+      service: options.service ?? runner.defaultService ?? runner.deployment,
     };
     await withKubectlPortForward(portForwardConfiguration, async () => {
       const availableQueries = await queriesForDataset(

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { userInfo } from "node:os";
 
 import {
   merge,
@@ -137,7 +138,17 @@ export interface DataFusionSettingOptions {
   targetPartitions?: number | undefined;
 }
 
+export function dataFusionServiceName(
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  return (
+    environment.DEPLOYMENT_NAME ||
+    `datafusion-${(environment.USER || userInfo().username).replaceAll(".", "-")}`
+  );
+}
+
 export class DataFusionRunner implements BenchmarkRunner {
+  readonly defaultService = dataFusionServiceName();
   readonly deployment = "datafusion";
   readonly resultName: string;
 

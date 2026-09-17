@@ -17,6 +17,7 @@ export interface ExecuteQueryResult {
 }
 
 export interface BenchmarkRunner {
+  readonly defaultService?: string;
   readonly deployment: string;
 
   readonly resultName: string;
