@@ -129,7 +129,10 @@ are idempotent and can likewise be rerun after interruption.
 ## Running benchmarks
 
 An engine and the requested dataset must already be deployed. Benchmark commands
-only open a local Kubernetes port-forward and execute the local client:
+only open a local Kubernetes port-forward and execute the local client.
+DataFusion benchmarks use the same service name as deployment:
+`DEPLOYMENT_NAME`, or `datafusion-<USER>` with dots replaced by hyphens.
+Pass `--k8s-service` to override that selection.
 
 ```bash
 npm run datafusion-bench -- tpch/sf1 --iterations 1

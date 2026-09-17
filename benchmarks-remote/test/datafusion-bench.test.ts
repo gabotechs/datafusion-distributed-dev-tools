@@ -71,3 +71,22 @@ test("maps every DataFusion override to its session setting", () => {
     ],
   );
 });
+
+test("defaults to the same named service as datafusion-deploy", async () => {
+  const { dataFusionServiceName } = await import("../src/bin/datafusion-bench");
+  assert.equal(
+    dataFusionServiceName({ USER: "alice.example" }),
+    "datafusion-alice-example",
+  );
+  assert.equal(
+    dataFusionServiceName({
+      USER: "alice.example",
+      DEPLOYMENT_NAME: "custom-worker",
+    }),
+    "custom-worker",
+  );
+  assert.equal(
+    dataFusionServiceName({ USER: "alice.example", DEPLOYMENT_NAME: "" }),
+    "datafusion-alice-example",
+  );
+});
