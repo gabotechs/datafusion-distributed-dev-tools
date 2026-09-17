@@ -40,6 +40,8 @@ const TIMINGS = {
 const COMPARISON = `=== Comparing tpch/sf1 results 'base' [prev] with 'head' [new] ===
       q1: prev= 100 ms, new= 120 ms, diff=1.20 slower ✖
       q2: prev= 200 ms, new= 150 ms, diff=1.33 faster ✔
+q3: Previously succeeded, but now failed ❌: Execution failed: <worker> & Broken pipe
+q4: Previously failed, and now also failed ❌: Connection refused
    TASKS: prev=20.0, new=18.0, diff=2.0 fewer (10.0%) (sum of per-query averages)
    TOTAL: prev=300 ms, new=270 ms, diff=1.11 faster ✅`;
 
@@ -93,6 +95,14 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[2]!, /TASKS: prev=20\.0, new=18\.0/);
     assert.match(comments[2]!, /TASKS:.*TOTAL:.*<\/pre>\s*<details>/s);
     assert.match(comments[2]!, /Show full query output/);
+    assert.match(
+      comments[2]!,
+      /q3: Previously succeeded, but now failed ❌: Execution failed: &lt;worker&gt; &amp; Broken pipe/,
+    );
+    assert.match(
+      comments[2]!,
+      /q4: Previously failed, and now also failed ❌: Connection refused/,
+    );
     assert.equal(comments[2]!.match(/=== Comparing/g)?.length, 1);
     assert.equal(comments[2]!.match(/TOTAL:/g)?.length, 1);
     assert.match(comments[2]!, /q1: prev= 100 ms/);
@@ -244,7 +254,7 @@ test("keeps escaped multi-dataset output within GitHub's comment limit", async (
       (
         dataset,
       ) => `=== Comparing ${dataset} results 'base' [prev] with 'head' [new] ===
-      q1: ${"&<>".repeat(30_000)}
+${Array.from({ length: 100 }, (_, index) => `q${index + 1}: Previously succeeded, but now failed ❌: ${"&<>".repeat(99)}…`).join("\n")}
    TOTAL: prev=300 ms, new=270 ms, diff=1.11 faster`,
     )
     .join("\n\n");
@@ -259,6 +269,24 @@ test("keeps escaped multi-dataset output within GitHub's comment limit", async (
 
     const result = comments[1]!;
     assert.ok(result.length <= 65_536);
+    assert.match(result, /earlier output truncated/);
+    assert.equal(
+      result.match(/<details>/g)?.length,
+      result.match(/<\/details>/g)?.length,
+    );
+    assert.equal(
+      result.match(/<pre>/g)?.length,
+      result.match(/<\/pre>/g)?.length,
+    );
+    for (const dataset of JOB.datasets) {
+      assert.ok(result.includes(`=== Comparing ${dataset}`));
+    }
+    assert.equal(
+      result.match(/TOTAL: prev=300 ms/g)?.length,
+      JOB.datasets.length,
+    );
+    assert.match(result, /Verification and run details/);
+    assert.match(result, /How to use the benchmark bot/);
     assert.match(result, /&amp;&lt;&gt;/);
     assert.doesNotMatch(result, /q1: &<>/);
   } finally {
