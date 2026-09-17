@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 import { z } from "zod";
 
@@ -13,6 +14,7 @@ export const RUN_MANIFEST_DIR = ".run";
 export const RUN_MANIFEST_FILE = "manifest.json";
 const QUERY_HIGHLIGHT_THRESHOLD = 1.5;
 const TOTAL_HIGHLIGHT_THRESHOLD = 1.1;
+const ERROR_SUMMARY_LIMIT = 300;
 
 export interface QueryIter {
   plan: string;
@@ -425,10 +427,10 @@ export class BenchResult {
       return `${this.id}: Previously failed, but now succeeded 🟠`;
     }
     if (!prevError && newError) {
-      return `${this.id}: Previously succeeded, but now failed ❌`;
+      return `${this.id}: Previously succeeded, but now failed ❌: ${summarizeError(newError)}`;
     }
     if (prevError && newError) {
-      return `${this.id}: Previously failed, and now also failed ❌`;
+      return `${this.id}: Previously failed, and now also failed ❌: ${summarizeError(newError)}`;
     }
 
     const p50Prev = prevQuery.p50();
@@ -586,6 +588,14 @@ export class BenchResult {
     results.sort((left, right) => compareQueryIds(left.id, right.id));
     return results;
   }
+}
+
+function summarizeError(error: string): string {
+  const summary = stripVTControlCharacters(error).replace(/\s+/g, " ").trim();
+  if (!summary) return "No error details available";
+  if (summary.length <= ERROR_SUMMARY_LIMIT) return summary;
+  // Keep the beginning of the error; full diagnostics remain in the result JSON.
+  return `${summary.slice(0, ERROR_SUMMARY_LIMIT - 1).trimEnd()}…`;
 }
 
 function qErrorComparison(

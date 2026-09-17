@@ -25,6 +25,13 @@ and completed step count. Every bot response includes a collapsible usage
 section documenting the available datasets, capacity controls, comparison and
 configuration options, and operational limits.
 
+In "Show full query output", failed queries include the first PR-head error on
+the same line as their failure status. Error summaries collapse whitespace and
+are limited to 300 characters, with an ellipsis for longer messages. Full errors
+remain in the saved benchmark results. The complete comment is capped at 65,536
+characters after HTML escaping; oversized query output is truncated with a notice
+while retaining dataset summaries and run details.
+
 ```text
 benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --instance-type m5.2xlarge --nodes 6
 ```
