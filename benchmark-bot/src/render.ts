@@ -64,7 +64,7 @@ export function renderResult(
 <details>
 <summary>Verification and run details</summary>
 
-Job \`${job.id}\` captured both immutable revisions when the request was queued. The bot fetched and checked out each full commit SHA in detached HEAD, then built and deployed the \`datafusion-distributed-benchmarks --bin worker\` target from that checkout.
+Job \`${job.id}\` captured both immutable revisions when the request was queued. The bot fetched and checked out each full commit SHA in detached HEAD, then built and deployed the \`datafusion-distributed-remote-worker --bin worker\` target from that checkout.
 
 | Identity | ${baseLabel(job)} | PR head |
 | --- | --- | --- |

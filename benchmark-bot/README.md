@@ -166,3 +166,13 @@ npm install
 npm run build
 npm test
 ```
+
+## Iceberg benchmarks
+
+The bot builds `datafusion-distributed-remote-worker --bin worker`
+from each selected revision. Both revisions must contain that target. It supports
+Parquet datasets and immutable Iceberg datasets, for example `tpch/sf1_iceberg`,
+using the same dataset arguments. Generate datasets directly at their final S3
+locations using the source project's preparation commands before requesting a
+benchmark. The bot validates the existing dataset prefix and leaves table
+discovery to the shared harness; it does not generate or upload datasets.

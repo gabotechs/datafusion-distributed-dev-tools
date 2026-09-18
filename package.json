@@ -18,7 +18,6 @@
     "controller-ssh": "npm --prefix benchmark-bot run controller-ssh",
     "foundation-deploy": "npm --prefix benchmarks-remote run foundation-deploy",
     "foundation-destroy": "npm --prefix benchmarks-remote run foundation-destroy",
-    "sync-bucket": "npm --prefix benchmarks-remote run sync-bucket --",
     "dataset-destroy": "npm --prefix benchmarks-remote run dataset-destroy --",
     "compare": "npm --prefix benchmarks-remote run compare --",
     "datafusion-deploy": "npm --prefix benchmarks-remote run datafusion-deploy",

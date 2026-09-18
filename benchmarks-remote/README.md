@@ -11,13 +11,18 @@ to run distributed benchmarks on Kubernetes.
 
 ## Source checkout
 
-Use the [repository checkout layout](../README.md#checkout-layout). Datasets and
-benchmark queries are read from the DataFusion Distributed checkout's
-`testdata/` directory.
+Use the [repository checkout layout](../README.md#checkout-layout). Benchmark
+queries are read from the DataFusion Distributed checkout's `testdata/` directory,
+and dataset tables are discovered in S3. No local dataset copy is required.
 
-DataFusion deployments also build the `worker` binary from that checkout's
-`benchmarks` crate. This keeps the worker on the same DataFusion and DataFusion
-Distributed APIs as the revision being benchmarked.
+DataFusion deployments build the `worker` binary from that checkout's
+`benchmarks/remote-worker` crate (`datafusion-distributed-remote-worker`).
+Iceberg is enabled by the worker itself. This keeps the
+worker on the same DataFusion and DataFusion Distributed APIs as the revision
+being benchmarked.
+
+The engine deployment calls `k8s/publish-datafusion.sh` to build and publish the
+worker. The bot runs the build in its isolated service after fetching dependencies.
 
 For a source worktree elsewhere, set `DATAFUSION_DISTRIBUTED_ROOT` to that
 checkout. `BENCHMARK_TESTDATA_ROOT` is a more specific override for a custom
@@ -26,7 +31,7 @@ testdata directory. Relative source-checkout paths are resolved from the
 
 ```bash
 DATAFUSION_DISTRIBUTED_ROOT=../datafusion-distributed-pr \
-  npm run sync-bucket -- tpch/sf1
+  npm run datafusion-bench -- tpch/sf1
 ```
 
 The foundation, engine workloads, datasets, and benchmark runs have independent
@@ -70,26 +75,47 @@ results, and published engine artifacts.
 
 ## Dataset lifecycle
 
-List and upload local datasets independently from engines and benchmark runs:
+Generate datasets directly at their final S3 locations using the DataFusion
+Distributed checkout. Use a source revision whose preparation commands support
+S3 `--output`, and the foundation's `datasetBucketName` output as `<dataset-bucket>`.
+From that source checkout:
 
 ```bash
-npm run sync-bucket -- --list
-npm run sync-bucket -- tpch/sf1
-npm run sync-bucket -- tpch/sf1 tpcds/sf10
+SCALE_FACTOR=1 PARTITIONS=16 ./benchmarks/gen-tpch.sh --output "s3://<dataset-bucket>/tpch/sf1"
 ```
 
-Running `npm run sync-bucket` without a dataset uploads every locally
-available benchmark dataset. Delete selected datasets explicitly with:
+To create an Iceberg dataset from an existing local Parquet dataset:
+
+```bash
+cargo run -p datafusion-distributed-iceberg-benchmarks --release -- prepare \
+  --input testdata/tpch/sf1 --output "s3://<dataset-bucket>/tpch/sf1_iceberg"
+```
+
+Use an empty destination and wait for generation to finish before benchmarking.
+The upstream generator writes Iceberg metadata and manifests with their final S3
+paths. This repository consumes those files without parsing or rewriting them.
+
+Dataset names are literal S3 prefixes such as `tpch/sf10` or `clickbench/0-100`.
+Table formats are detected automatically from S3 directory listings. The
+DataFusion client registers Iceberg tables through each table's `metadata.json`;
+other engine clients currently support only Parquet datasets. SQL queries remain
+in the source checkout's suite `queries/` directory. Results are saved locally
+under the selected dataset path, which is created as needed.
+
+From this development-tools checkout:
+
+```bash
+npm run datafusion-bench -- tpch/sf1_iceberg --queries q6 --iterations 1
+```
+
+Delete selected S3 datasets explicitly with:
 
 ```bash
 npm run dataset-destroy -- tpch/sf1 --yes
 ```
 
-Dataset names are paths relative to the sibling source checkout's `testdata/`,
-such as `tpch/sf10` or `clickbench/0-100`.
-
-Dataset sync and destroy commands can be rerun after interruption to converge
-the contents stored in S3.
+Dataset deletion leaves local query files, benchmark results, and deployments
+unchanged. Stop benchmark readers before removing or replacing a dataset.
 
 ## Engine lifecycle
 

@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readdirSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -354,7 +360,7 @@ test("rejects dataset paths that could escape testdata", () => {
   assert.throws(() => safeDatasetPath("/testdata", "tpch/sf1/extra"));
 });
 
-test("recreates table placeholders from the selected dataset", async () => {
+test("validates remote tables and leaves discovery to the harness", async () => {
   const { config } = fixture();
   const datasetRoot = path.join(config.sourceRoot, "testdata/tpch/sf1");
   mkdirSync(path.join(datasetRoot, "stale"), { recursive: true });
@@ -375,12 +381,7 @@ test("recreates table placeholders from the selected dataset", async () => {
   );
 
   assert.equal(existsSync(path.join(datasetRoot, "stale")), false);
-  assert.ok(
-    existsSync(path.join(datasetRoot, "customer/.remote-layout.parquet")),
-  );
-  assert.ok(
-    existsSync(path.join(datasetRoot, "orders/.remote-layout.parquet")),
-  );
+  assert.deepEqual(readdirSync(datasetRoot), []);
 });
 
 test("rejects non-SHA Git revisions", async () => {

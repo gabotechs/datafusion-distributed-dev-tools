@@ -117,7 +117,7 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[2]!, /detached HEAD/);
     assert.match(
       comments[2]!,
-      /datafusion-distributed-benchmarks --bin worker/,
+      /datafusion-distributed-remote-worker --bin worker/,
     );
     assert.match(comments[2]!, /1 warmup \+ 5 measured iterations per query/);
     assert.match(

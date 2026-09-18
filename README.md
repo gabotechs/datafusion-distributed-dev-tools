@@ -22,8 +22,8 @@ harness can evolve independently of DataFusion Distributed source revisions.
 ## Checkout layout
 
 Keep this repository beside a DataFusion Distributed source checkout. The
-remote benchmark commands read datasets and queries from the source checkout's
-`testdata/` directory.
+remote benchmark commands read datasets from S3 and SQL queries from the source
+checkout's `testdata/` directory. Benchmark results are saved locally under `testdata/`.
 
 ```text
 <parent>/
@@ -49,12 +49,13 @@ npm run build
 npm test
 ```
 
+Prepare datasets directly in S3 using the source project’s generation commands
+(see [dataset preparation](benchmarks-remote/README.md#dataset-lifecycle)).
 Root npm commands forward operational commands to the owning component. For
 example:
 
 ```bash
 npm run foundation-deploy
-npm run sync-bucket -- tpch/sf1
 npm run datafusion-deploy
 npm run datafusion-bench -- tpch/sf1 --iterations 1
 npm run controller-deploy

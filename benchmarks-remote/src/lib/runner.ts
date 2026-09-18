@@ -5,6 +5,7 @@ export interface TableSpec {
   schema: string;
   name: string;
   s3Path: string;
+  fileType: string;
 }
 
 export interface ExecuteQueryResult {
@@ -18,6 +19,7 @@ export interface ExecuteQueryResult {
 
 export interface BenchmarkRunner {
   readonly defaultService?: string;
+  readonly supportedFileTypes?: readonly string[];
   readonly deployment: string;
 
   readonly resultName: string;

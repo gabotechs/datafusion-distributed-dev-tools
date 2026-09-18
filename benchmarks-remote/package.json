@@ -13,7 +13,6 @@
     "format:check": "prettier --check src test package.json tsconfig.json && npm --workspace pulumi run format:check",
     "foundation-deploy": "./pulumi/deploy.sh",
     "foundation-destroy": "./pulumi/destroy.sh",
-    "sync-bucket": "tsx src/bin/sync-bucket.ts",
     "dataset-destroy": "tsx src/bin/destroy-dataset.ts",
     "compare": "tsx src/bin/compare.ts",
     "datafusion-bench": "tsx src/bin/datafusion-bench.ts",

@@ -10,7 +10,7 @@ Operate from `benchmarks-remote`. Benchmark execution is local and connects to t
 ## Preconditions
 
 1. Use the caller-selected `AWS_PROFILE` and `AWS_REGION`; never hardcode an account, profile, or `aws-vault` wrapper.
-2. Require an existing foundation, deployed engine, and synchronized dataset. Do not deploy infrastructure, install an engine, or sync data as part of a benchmark command.
+2. Require an existing foundation, deployed engine, and completed dataset in S3. Do not deploy infrastructure, install an engine, or generate or upload data as part of a benchmark command.
 3. Use literal dataset paths such as `tpch/sf10` or `clickbench/0-100`; never translate them to underscore aliases.
 
 ## Run
@@ -48,7 +48,7 @@ For performance claims, prefer the full suite total. Treat a single run or isola
 ## Diagnose failures
 
 - If the engine service is absent, use `$remote-engine-deployment`; do not add lazy deployment to the runner.
-- If data is missing, use `$remote-datasets`; the runner intentionally does not scan S3 before execution.
+- If data is missing, use `$remote-datasets`; the runner discovers table formats from S3 listings before execution.
 - If the port-forward fails, inspect the engine namespace, service, and pods with the generated kubeconfig.
 - If a query fails, preserve the query error and inspect the relevant engine logs. Do not add a separate health-check system.
 

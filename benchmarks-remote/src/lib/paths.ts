@@ -1,7 +1,4 @@
-import fs from "node:fs";
 import path from "node:path";
-
-import { errorMessage, isNotFoundError } from "./filesystem";
 
 function findDevToolsRoot(): string {
   for (const start of [__dirname, process.cwd()]) {
@@ -58,38 +55,9 @@ export function datasetParts(dataset: string): [string, string] {
   return [match[1], match[2]];
 }
 
-export function testdataRoots(): string[] {
-  if (process.env.BENCHMARK_TESTDATA_ROOT) {
-    return [path.resolve(process.env.BENCHMARK_TESTDATA_ROOT)];
-  }
-
-  return [path.join(datafusionDistributedRoot(), "testdata")];
-}
-
 export function datasetPath(
   dataset: string,
   testdataRoot = path.join(datafusionDistributedRoot(), "testdata"),
 ): string {
-  const relative = path.join(...datasetParts(dataset));
-  const candidates = [path.join(testdataRoot, relative)];
-  for (const candidate of candidates) {
-    try {
-      if (!fs.statSync(candidate).isDirectory()) {
-        throw new Error(`Dataset path is not a directory: ${candidate}`);
-      }
-      return candidate;
-    } catch (error: unknown) {
-      if (isNotFoundError(error)) {
-        continue;
-      }
-      throw new Error(
-        `Could not inspect dataset '${dataset}' at ${candidate}: ${errorMessage(error)}`,
-        { cause: error },
-      );
-    }
-  }
-
-  throw new Error(
-    `Dataset '${dataset}' was not found. Looked in: ${candidates.join(", ")}`,
-  );
+  return path.join(testdataRoot, ...datasetParts(dataset));
 }
