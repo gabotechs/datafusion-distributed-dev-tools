@@ -7,19 +7,19 @@ Kubernetes engine workloads, and engine-specific runtime sources. Keep its four
 lifecycles independent:
 
 - foundation creation and destruction;
-- dataset synchronization and removal;
+- dataset consumption and explicit removal;
 - persistent engine deployment and teardown; and
 - benchmark execution from the developer machine.
 
-Never make a benchmark command provision infrastructure, synchronize data,
+Never make a benchmark command provision infrastructure, generate or upload data,
 deploy an engine, or tear one down.
 
 ## Operational skills
 
 Use the matching scoped skill before operating live infrastructure:
 
-- [remote-datasets](./.agents/skills/remote-datasets/SKILL.md): discover, sync,
-  and explicitly remove datasets.
+- [remote-datasets](./.agents/skills/remote-datasets/SKILL.md): consume datasets
+  generated directly in S3 and explicitly remove selected datasets.
 - [remote-foundation](./.agents/skills/remote-foundation/SKILL.md): inspect,
   deploy, destroy, or recreate the Pulumi/EKS foundation.
 - [remote-engine-deployment](./.agents/skills/remote-engine-deployment/SKILL.md):

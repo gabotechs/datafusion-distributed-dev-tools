@@ -8,7 +8,6 @@ import {
   DEV_TOOLS_ROOT,
   datasetParts,
   datasetPath,
-  testdataRoots,
 } from "../src/lib/paths";
 
 test("uses the sibling DataFusion Distributed checkout for testdata", () => {
@@ -16,9 +15,6 @@ test("uses the sibling DataFusion Distributed checkout for testdata", () => {
     DEFAULT_DATAFUSION_DISTRIBUTED_ROOT,
     path.resolve(DEV_TOOLS_ROOT, "../datafusion-distributed"),
   );
-  assert.deepEqual(testdataRoots(), [
-    path.join(DEFAULT_DATAFUSION_DISTRIBUTED_ROOT, "testdata"),
-  ]);
 });
 
 test("rejects dataset path dot components", () => {
@@ -36,7 +32,6 @@ test("allows a source worktree to override the sibling checkout", () => {
       "../datafusion-distributed-pr",
     );
     assert.equal(datafusionDistributedRoot(), sourceRoot);
-    assert.deepEqual(testdataRoots(), [path.join(sourceRoot, "testdata")]);
   } finally {
     if (previous === undefined) {
       delete process.env.DATAFUSION_DISTRIBUTED_ROOT;
@@ -46,9 +41,9 @@ test("allows a source worktree to override the sibling checkout", () => {
   }
 });
 
-test("reports every searched location when a dataset is absent", () => {
-  assert.throws(
-    () => datasetPath("tpch/sf1", "/missing-benchmark-testdata"),
-    /Dataset 'tpch\/sf1' was not found\. Looked in: \/missing-benchmark-testdata\/tpch\/sf1/,
+test("resolves result paths without requiring a local dataset", () => {
+  assert.equal(
+    datasetPath("tpch/sf1", "/benchmark-testdata"),
+    "/benchmark-testdata/tpch/sf1",
   );
 });

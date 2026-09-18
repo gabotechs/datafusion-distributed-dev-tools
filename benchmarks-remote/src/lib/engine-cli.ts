@@ -23,7 +23,8 @@ import {
 } from "@optique/core";
 
 import { getLocalFoundationConfiguration } from "./pulumi-output";
-import { errorMessage, isNotFoundError } from "./filesystem";
+import { errorMessage } from "./filesystem";
+import { discoverDatasetTables, type ReadDirectory } from "./dataset-formats";
 import {
   datasetParts,
   datasetPath,
@@ -145,29 +146,6 @@ export const CommonOptions = object({
 
 export type CommonOptions = InferValue<typeof CommonOptions>;
 
-async function isNonEmptyParquetDirectory(directory: string): Promise<boolean> {
-  let entries: string[];
-  try {
-    entries = await fs.readdir(directory);
-  } catch (error: unknown) {
-    if (
-      isNotFoundError(error) ||
-      (error instanceof Error &&
-        "code" in error &&
-        (error as NodeJS.ErrnoException).code === "ENOTDIR")
-    ) {
-      return false;
-    }
-    throw new Error(
-      `Could not inspect possible table directory ${directory}: ${errorMessage(error)}`,
-      { cause: error },
-    );
-  }
-  return (
-    entries.length > 0 && entries.every((file) => file.endsWith(".parquet"))
-  );
-}
-
 function s3BucketAndPrefix(bucket: string): {
   bucketName: string;
   prefix: string;
@@ -186,86 +164,66 @@ function s3BucketAndPrefix(bucket: string): {
   };
 }
 
-async function remoteTableNames(
-  dataset: string,
+export function readS3Directory(
+  client: S3Client,
   bucket: string,
-  region: string,
-): Promise<string[]> {
-  const { bucketName, prefix: bucketPrefix } = s3BucketAndPrefix(bucket);
-  const datasetPrefix = `${bucketPrefix}${dataset}/`;
-  const client = new S3Client({ region });
-  let prefixes: { Prefix?: string | undefined }[] | undefined;
-  try {
-    ({ CommonPrefixes: prefixes } = await client.send(
-      new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: datasetPrefix,
-        Delimiter: "/",
-      }),
-    ));
-  } catch (error: unknown) {
-    throw new Error(
-      `Could not list remote dataset '${dataset}' in s3://${bucketName}/${datasetPrefix}: ${errorMessage(error)}`,
-      { cause: error },
-    );
-  }
-
-  return (prefixes ?? []).flatMap(({ Prefix }) => {
-    if (Prefix === undefined) return [];
-    const name = Prefix.slice(datasetPrefix.length).replace(/\/$/, "");
-    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? [name] : [];
-  });
+): ReadDirectory {
+  return async (directory) => {
+    const entries: string[] = [];
+    const prefix = `${directory}/`;
+    let continuationToken: string | undefined;
+    do {
+      const response = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          Delimiter: "/",
+          ContinuationToken: continuationToken,
+        }),
+      );
+      for (const { Key } of response.Contents ?? []) {
+        if (Key && Key !== prefix) entries.push(Key.slice(prefix.length));
+      }
+      for (const { Prefix } of response.CommonPrefixes ?? []) {
+        if (Prefix) entries.push(Prefix.slice(prefix.length));
+      }
+      continuationToken = response.NextContinuationToken;
+    } while (continuationToken);
+    return entries;
+  };
 }
 
 export async function tablePathsForDataset(
   dataset: string,
-  testdataRoot: string,
   bucket: string,
   region: string,
 ): Promise<TableSpec[]> {
-  const localDatasetPath = datasetPath(dataset, testdataRoot);
   const bucketUri = `s3://${bucket.replace(/^s3:\/\//, "").replace(/\/+$/, "")}`;
   const [suite] = datasetParts(dataset);
   const schema = dataset.replaceAll("/", "_");
-
-  let entries: string[];
+  const { bucketName, prefix } = s3BucketAndPrefix(bucket);
+  const client = new S3Client({ region });
+  let tables;
   try {
-    entries = await fs.readdir(localDatasetPath);
-  } catch (error: unknown) {
-    throw new Error(
-      `Could not list dataset '${dataset}' at ${localDatasetPath}: ${errorMessage(error)}`,
-      { cause: error },
+    tables = await discoverDatasetTables(
+      `${prefix}${dataset}`,
+      readS3Directory(client, bucketName),
     );
-  }
-
-  const tables: TableSpec[] = [];
-  for (const entryName of entries) {
-    const directory = path.join(localDatasetPath, entryName);
-    if (await isNonEmptyParquetDirectory(directory)) {
-      tables.push({
-        suite,
-        name: entryName,
-        schema,
-        s3Path: `${bucketUri}/${dataset}/${entryName}/`,
-      });
-    }
-  }
-  if (tables.length === 0) {
-    for (const name of await remoteTableNames(dataset, bucket, region)) {
-      tables.push({
-        suite,
-        name,
-        schema,
-        s3Path: `${bucketUri}/${dataset}/${name}/`,
-      });
-    }
+  } finally {
+    client.destroy();
   }
   if (tables.length === 0) {
     throw new Error(
-      `Dataset '${dataset}' contains no table directories locally or in ${bucketUri}`,
+      `Dataset '${dataset}' contains no supported tables in ${bucketUri}`,
     );
   }
-  return tables;
+  return tables.map(({ name, format }) => ({
+    suite,
+    schema,
+    name,
+    fileType: format.fileType,
+    s3Path: `${bucketUri}/${dataset}/${name}/${format.entryPoint}`,
+  }));
 }
 
 interface QuerySpec {
@@ -389,10 +347,17 @@ export async function runEngineBenchmark(
       console.error("Creating tables...");
       const tableSpecs = await tablePathsForDataset(
         dataset,
-        options.testdataRoot,
         options.bucket,
         options.region,
       );
+      const formats = runner.supportedFileTypes ?? ["PARQUET"];
+      for (const table of tableSpecs) {
+        if (!formats.includes(table.fileType)) {
+          throw new Error(
+            `${runner.deployment} does not support ${table.fileType} benchmark tables`,
+          );
+        }
+      }
       await runner.createTables(tableSpecs);
 
       for (const { id, sql } of availableQueries) {

@@ -149,6 +149,7 @@ export function dataFusionServiceName(
 
 export class DataFusionRunner implements BenchmarkRunner {
   readonly defaultService = dataFusionServiceName();
+  readonly supportedFileTypes = ["PARQUET", "ICEBERG"] as const;
   readonly deployment = "datafusion";
   readonly resultName: string;
 
@@ -200,7 +201,7 @@ export class DataFusionRunner implements BenchmarkRunner {
     for (const table of tables) {
       statement += `
     DROP TABLE IF EXISTS ${table.name};
-    CREATE EXTERNAL TABLE IF NOT EXISTS ${table.name} STORED AS PARQUET LOCATION '${table.s3Path}';
+    CREATE EXTERNAL TABLE IF NOT EXISTS ${table.name} STORED AS ${table.fileType} LOCATION '${table.s3Path.replaceAll("'", "''")}';
  `;
     }
     await this.query(statement);

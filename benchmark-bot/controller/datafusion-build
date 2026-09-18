@@ -2,7 +2,7 @@
 set -euo pipefail
 
 source_root=/opt/datafusion-pr-bot/datafusion-distributed
-manifest=${source_root}/benchmarks/Cargo.toml
+manifest=${source_root}/Cargo.toml
 source_lockfile=${source_root}/Cargo.lock
 target=/var/cache/datafusion-pr-build/target
 cargo_home=/var/cache/datafusion-pr-build/cargo
@@ -85,8 +85,8 @@ systemd-run --quiet --wait --pipe --collect \
   --setenv=AWS_EC2_METADATA_DISABLED=true \
   /var/lib/datafusion-pr-build/.cargo/bin/cargo zigbuild \
   --offline \
-  --manifest-path "${manifest}" \
-  --package datafusion-distributed-benchmarks \
+  --manifest-path "${source_root}/benchmarks/remote-worker/Cargo.toml" \
+  --package datafusion-distributed-remote-worker \
   --release \
   --bin worker \
   --target x86_64-unknown-linux-gnu

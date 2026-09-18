@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { runSync } from "@optique/run";
+import { S3Client } from "@aws-sdk/client-s3";
 
 import {
   CommonOptions,
@@ -75,14 +76,19 @@ test("rejects explicitly empty query selections", async () => {
   }
 });
 
-test("writes progress to stderr and only explicit comparisons to stdout", async () => {
+test("writes progress to stderr and only explicit comparisons to stdout", async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-output-"));
-  const dataset = path.join(root, "tpch", "sf1", "table");
   const queries = path.join(root, "tpch", "queries");
-  fs.mkdirSync(dataset, { recursive: true });
   fs.mkdirSync(queries, { recursive: true });
-  fs.writeFileSync(path.join(dataset, "1.parquet"), "fixture");
   fs.writeFileSync(path.join(queries, "q1.sql"), "select 1");
+  context.mock.method(
+    S3Client.prototype,
+    "send",
+    async (command: { input: { Prefix: string } }) =>
+      command.input.Prefix === "tpch/sf1/"
+        ? { CommonPrefixes: [{ Prefix: "tpch/sf1/table/" }] }
+        : { Contents: [{ Key: "tpch/sf1/table/1.parquet" }] },
+  );
   const kubeconfig = path.join(root, "kubeconfig");
   const kubectl = path.join(root, "kubectl");
   fs.writeFileSync(kubeconfig, "");

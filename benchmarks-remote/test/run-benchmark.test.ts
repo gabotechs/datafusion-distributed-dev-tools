@@ -93,11 +93,9 @@ test("publishes the DataFusion worker from the adjacent source checkout", () => 
     path.resolve(__dirname, "../k8s/publish-datafusion.sh"),
     "utf8",
   );
-  assert.match(
-    publisher,
-    /--manifest-path "\$\{source_root\}\/benchmarks\/Cargo\.toml"/,
-  );
-  assert.match(publisher, /--package datafusion-distributed-benchmarks/);
+  assert.match(publisher, /--package datafusion-distributed-remote-worker/);
+  assert.match(publisher, /--bin worker/);
+  assert.doesNotMatch(publisher, /--features/);
   assert.match(
     publisher,
     /target_dir=\$\{CARGO_TARGET_DIR:-\$\{source_root\}\/target\}/,

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 
@@ -298,9 +298,6 @@ export class BenchmarkExecutor {
       if (!/^[a-zA-Z0-9._-]+$/.test(table)) {
         throw new Error(`Invalid S3 table name ${table}`);
       }
-      const tableDirectory = path.join(datasetDirectory, table);
-      mkdirSync(tableDirectory, { recursive: true });
-      writeFileSync(path.join(tableDirectory, ".remote-layout.parquet"), "");
     }
   }
 

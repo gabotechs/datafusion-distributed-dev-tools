@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
 
 import { dataFusionSettingStatements } from "../src/bin/datafusion-bench";
 
@@ -70,6 +72,105 @@ test("maps every DataFusion override to its session setting", () => {
       "SET distributed.collect_dynamic_filters=false;",
     ],
   );
+});
+
+test("registers Iceberg metadata and Parquet directories with the worker", async (t) => {
+  const { createServer } = await import("node:http");
+  const { DataFusionRunner } = await import("../src/bin/datafusion-bench");
+  let sql = "";
+  const server = createServer((request, response) => {
+    sql = new URL(request.url!, "http://localhost").searchParams.get("sql")!;
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify({
+        count: 0,
+        plan: "",
+        elapsed_ms: 0,
+        tasks: 0,
+        stats_q_error_p50: null,
+        stats_q_error_p95: null,
+      }),
+    );
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => server.close());
+  const address = server.address() as AddressInfo;
+  const runner = new DataFusionRunner({
+    url: `http://127.0.0.1:${address.port}`,
+    configs: [],
+  } as unknown as ConstructorParameters<typeof DataFusionRunner>[0]);
+  await runner.createTables([
+    {
+      suite: "tpch",
+      schema: "tpch_sf1",
+      name: "orders",
+      fileType: "PARQUET",
+      s3Path: "s3://bucket/tpch/sf1/orders/",
+    },
+    {
+      suite: "tpch",
+      schema: "tpch_sf1_iceberg",
+      name: "lineitem",
+      fileType: "ICEBERG",
+      s3Path: "s3://bucket/tpch/sf1_iceberg/lineitem/metadata.json",
+    },
+  ]);
+  assert.match(
+    sql,
+    /orders STORED AS PARQUET LOCATION 's3:\/\/bucket\/tpch\/sf1\/orders\/'/,
+  );
+  assert.match(
+    sql,
+    /lineitem STORED AS ICEBERG LOCATION 's3:\/\/bucket\/tpch\/sf1_iceberg\/lineitem\/metadata.json'/,
+  );
+});
+
+test("discovers Iceberg table metadata in S3 and reuses the suite queries", async (t) => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { tablePathsForDataset, queriesForDataset } =
+    await import("../src/lib/engine-cli");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "iceberg-tables-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "tpch/queries"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, "tpch/queries/q6.sql"),
+    "SELECT count(*) FROM lineitem",
+  );
+  const { S3Client } = await import("@aws-sdk/client-s3");
+  t.mock.method(
+    S3Client.prototype,
+    "send",
+    async (command: { input: { Prefix: string } }) =>
+      command.input.Prefix === "prefix/tpch/sf1_iceberg/"
+        ? { CommonPrefixes: [{ Prefix: "prefix/tpch/sf1_iceberg/lineitem/" }] }
+        : {
+            Contents: [
+              { Key: "prefix/tpch/sf1_iceberg/lineitem/metadata.json" },
+            ],
+          },
+  );
+  assert.deepEqual(
+    await tablePathsForDataset(
+      "tpch/sf1_iceberg",
+      "s3://bucket/prefix",
+      "us-east-1",
+    ),
+    [
+      {
+        suite: "tpch",
+        schema: "tpch_sf1_iceberg",
+        name: "lineitem",
+        fileType: "ICEBERG",
+        s3Path: "s3://bucket/prefix/tpch/sf1_iceberg/lineitem/metadata.json",
+      },
+    ],
+  );
+  assert.deepEqual(await queriesForDataset("tpch/sf1_iceberg", root), [
+    { id: "q6", sql: "SELECT count(*) FROM lineitem" },
+  ]);
 });
 
 test("defaults to the same named service as datafusion-deploy", async () => {

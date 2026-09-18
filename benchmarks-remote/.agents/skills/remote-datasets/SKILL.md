@@ -1,11 +1,11 @@
 ---
 name: remote-datasets
-description: Manage datasets for the DataFusion Distributed remote benchmark foundation. Use when an agent needs to discover local datasets, selectively synchronize Parquet data to the benchmark S3 bucket, diagnose dataset discovery or upload behavior, or explicitly remove a remote dataset.
+description: Manage datasets for the DataFusion Distributed remote benchmark foundation. Use when an agent needs to inspect S3 dataset layouts, explain upstream dataset preparation, or explicitly remove a remote dataset.
 ---
 
 # Remote Datasets
 
-Operate from `benchmarks-remote` and use its npm commands. Do not reproduce dataset-to-directory mappings or call S3 with a guessed bucket name.
+Operate from `benchmarks-remote`. Resolve the bucket from the foundation outputs; never guess its name.
 
 ## Authenticate
 
@@ -13,28 +13,13 @@ Operate from `benchmarks-remote` and use its npm commands. Do not reproduce data
 2. Run `aws sts get-caller-identity` before a mutating operation.
 3. If SSO has expired and `AWS_PROFILE` is set, run `aws sso login --profile "$AWS_PROFILE"` once. Stop and request authentication if it does not succeed.
 
-## Discover datasets
+## Prepare and consume datasets
 
-Run:
+Dataset generation belongs to the DataFusion Distributed source checkout. Use its preparation commands with `--output s3://<dataset-bucket>/<dataset>` and wait for completion before benchmarking. See the dataset lifecycle examples in `benchmarks-remote/README.md`.
 
-```bash
-npm run sync-bucket -- --list
-```
+Treat dataset names as literal S3 prefixes, for example `tpch/sf10` or `clickbench/0-100`. Do not invent aliases such as `tpch_sf10`. The benchmark harness discovers table formats from S3 listings and reads SQL queries from the source checkout. A local dataset copy is not required.
 
-Treat dataset names as literal paths relative to `testdata/`, for example `tpch/sf10` or `clickbench/0-100`. The command discovers datasets in the current checkout, the primary checkout for a linked worktree, or `BENCHMARK_TESTDATA_ROOT`. Do not invent aliases such as `tpch_sf10`.
-
-## Synchronize datasets
-
-Prefer explicit selection because datasets can be large:
-
-```bash
-npm run sync-bucket -- tpch/sf10
-npm run sync-bucket -- tpch/sf10 clickbench/0-100
-```
-
-Run `npm run sync-bucket` without a dataset only when the user explicitly wants every discovered dataset uploaded. Sync requires at least one Parquet file and mirrors only Parquet files with `aws s3 sync --delete`. It is safe to rerun after interruption.
-
-Do not create readiness markers. Benchmark execution intentionally assumes the requested S3 data exists.
+Iceberg datasets must be generated at their final S3 location. The source project writes their metadata and manifests; this repository must not copy local datasets to S3 or rewrite embedded paths. Do not create additional readiness markers. Benchmark execution assumes the requested dataset has finished generation.
 
 ## Remove datasets
 
@@ -54,5 +39,3 @@ When changing dataset tooling, run:
 npm run build
 npm test
 ```
-
-Exercise `--list` before any live sync. Use the command's printed source and destination paths as the upload evidence.

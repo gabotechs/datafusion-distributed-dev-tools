@@ -16,8 +16,8 @@ else
   ZIG_GLOBAL_CACHE_DIR=${ZIG_GLOBAL_CACHE_DIR:-${TMPDIR:-/tmp}/datafusion-distributed-zig-global} \
   ZIG_LOCAL_CACHE_DIR=${ZIG_LOCAL_CACHE_DIR:-${TMPDIR:-/tmp}/datafusion-distributed-zig-local} \
     cargo zigbuild \
-    --manifest-path "${source_root}/benchmarks/Cargo.toml" \
-    --package datafusion-distributed-benchmarks \
+    --manifest-path "${source_root}/benchmarks/remote-worker/Cargo.toml" \
+    --package datafusion-distributed-remote-worker \
     --release \
     --bin worker \
     --target x86_64-unknown-linux-gnu >&2

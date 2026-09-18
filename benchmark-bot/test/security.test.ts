@@ -81,8 +81,11 @@ test("isolates the shared harness build from controller credentials", () => {
   assert.match(build, /--offline/);
   assert.match(build, /BindPaths="\$\{lockfile\}:\$\{source_lockfile\}"/);
   assert.doesNotMatch(build, /--locked/);
-  assert.match(build, /source_root\}\/benchmarks\/Cargo\.toml/);
-  assert.match(build, /datafusion-distributed-benchmarks/);
+  assert.match(build, /source_root\}\/Cargo\.toml/);
+  assert.match(build, /cargo zigbuild/);
+  assert.match(build, /--package datafusion-distributed-remote-worker/);
+  assert.match(build, /--bin worker/);
+  assert.doesNotMatch(build, /--features/);
   for (const obsolete of [
     "cache-paths",
     "prepare-cache",

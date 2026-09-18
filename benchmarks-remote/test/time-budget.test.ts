@@ -59,13 +59,19 @@ setInterval(() => {}, 1_000);
 
 test("runs each query until both its iteration and time minimums are met", async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-time-budget-"));
-  const datasetDirectory = path.join(root, "tpch", "sf1", "table");
   const queries = path.join(root, "tpch", "queries");
-  fs.mkdirSync(datasetDirectory, { recursive: true });
   fs.mkdirSync(queries, { recursive: true });
-  fs.writeFileSync(path.join(datasetDirectory, "1.parquet"), "fixture");
   fs.writeFileSync(path.join(queries, "q1.sql"), "select 1");
   const restorePath = installFakeKubectl(root);
+
+  context.mock.method(
+    S3Client.prototype,
+    "send",
+    async (command: { input: { Prefix: string } }) =>
+      command.input.Prefix === "tpch/sf1/"
+        ? { CommonPrefixes: [{ Prefix: "tpch/sf1/table/" }] }
+        : { Contents: [{ Key: "tpch/sf1/table/1.parquet" }] },
+  );
 
   let elapsedMs = 0;
   let calls = 0;
@@ -94,19 +100,23 @@ test("runs each query until both its iteration and time minimums are met", async
 test("discovers remote table directories when benchmark data is not stored locally", async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-empty-table-"));
   const queries = path.join(root, "custom", "queries");
-  fs.mkdirSync(path.join(root, "custom", "scale"), { recursive: true });
   fs.mkdirSync(queries, { recursive: true });
   fs.writeFileSync(path.join(queries, "custom.sql"), "select 1");
   const restorePath = installFakeKubectl(root);
   context.mock.method(
     S3Client.prototype as unknown as { send: () => unknown },
     "send",
-    async () => ({
-      CommonPrefixes: [
-        { Prefix: "custom/scale/events/" },
-        { Prefix: "custom/scale/users/" },
-      ],
-    }),
+    async (command: { input: { Prefix: string } }) => {
+      const prefix = command.input.Prefix;
+      return prefix === "custom/scale/"
+        ? {
+            CommonPrefixes: [
+              { Prefix: "custom/scale/events/" },
+              { Prefix: "custom/scale/users/" },
+            ],
+          }
+        : { Contents: [{ Key: `${prefix}part.parquet` }] };
+    },
   );
 
   try {
