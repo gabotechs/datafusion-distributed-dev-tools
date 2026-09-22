@@ -1,6 +1,5 @@
 import type { Job } from "./database.js";
 import {
-  BENCHMARK_ITERATIONS,
   BENCHMARK_WARMUP,
   type BenchmarkTiming,
   type ExecutionProgress,
@@ -13,7 +12,7 @@ const TRUNCATION_NOTICE = "... earlier output truncated\n";
 
 export function renderQueued(job: Job): string {
   return appendUsage(
-    `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.${configSummary(job)}`,
+    `${requestLink(job)}\n\nBenchmark job ${job.id} queued for ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}. Workload: ${workload(job)} for both revisions.${configSummary(job)}`,
   );
 }
 
@@ -76,7 +75,7 @@ Job \`${job.id}\` captured both immutable revisions when the request was queued.
 | All benchmarks | ${formatDuration(baseBenchmarkMs)} | ${formatDuration(headBenchmarkMs)} |
 ${benchmarkRows}
 
-**Workload:** ${formatDatasets(job.datasets)} · all queries · ${BENCHMARK_WARMUP ? "1 warmup + " : ""}${BENCHMARK_ITERATIONS} measured iterations per query
+**Workload:** ${formatDatasets(job.datasets)} · all queries · ${workload(job)} for both revisions
 
 **Capacity:** ${capacity(job)} for both revisions${configDetails(job)}
 
@@ -97,7 +96,11 @@ ${renderUsage()}`;
 }
 
 function renderRunningSummary(job: Job): string {
-  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}.${configSummary(job)}`;
+  return `${requestLink(job)}\n\nRunning ${formatDatasets(job.datasets)} on ${capacity(job)}. Baseline: ${baseLabel(job)}. Workload: ${workload(job)} for both revisions.${configSummary(job)}`;
+}
+
+function workload(job: Job): string {
+  return `${BENCHMARK_WARMUP ? "1 warmup + " : ""}${job.benchmarkIterations} measured iteration${job.benchmarkIterations === 1 ? "" : "s"} per query`;
 }
 
 function revisionLink(job: Job, label: string, sha: string): string {

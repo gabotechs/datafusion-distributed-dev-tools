@@ -17,6 +17,7 @@ export interface NewJob {
   datasets: string[];
   benchmarkInstanceType: string;
   benchmarkNodeCount: number;
+  benchmarkIterations: number;
   headConfigs?: string[];
   baseKind: BaseKind;
   baseSha: string;
@@ -138,6 +139,12 @@ export class JobDatabase {
     ) {
       throw new Error("A benchmark job must contain at least one dataset");
     }
+    if (
+      !Number.isSafeInteger(job.benchmarkIterations) ||
+      job.benchmarkIterations <= 0
+    ) {
+      throw new Error("Benchmark iterations must be a positive safe integer");
+    }
     const timestamp = now.toISOString();
     this.#database.exec("BEGIN IMMEDIATE");
     try {
@@ -162,10 +169,10 @@ export class JobDatabase {
           `INSERT OR IGNORE INTO jobs(
              comment_id, repository, pull_request_number, pull_request_url,
              requested_by, datasets_json,
-             benchmark_instance_type, benchmark_node_count,
+             benchmark_instance_type, benchmark_node_count, benchmark_iterations,
              head_configs_json,
              base_kind, base_sha, head_sha, status, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
         )
         .run(
           job.commentId,
@@ -176,6 +183,7 @@ export class JobDatabase {
           JSON.stringify(job.datasets),
           job.benchmarkInstanceType,
           job.benchmarkNodeCount,
+          job.benchmarkIterations,
           JSON.stringify(job.headConfigs ?? []),
           job.baseKind,
           job.baseSha,
@@ -440,6 +448,7 @@ function jobFromRow(row: Record<string, unknown>): Job {
     datasets: parseDatasets(row.datasets_json),
     benchmarkInstanceType: String(row.benchmark_instance_type),
     benchmarkNodeCount: Number(row.benchmark_node_count),
+    benchmarkIterations: Number(row.benchmark_iterations),
     ...parseHeadConfigs(row.head_configs_json),
     baseKind: String(row.base_kind) as BaseKind,
     baseSha: String(row.base_sha),

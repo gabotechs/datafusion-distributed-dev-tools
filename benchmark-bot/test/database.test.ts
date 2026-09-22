@@ -17,6 +17,7 @@ const JOB: NewJob = {
   datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
   benchmarkInstanceType: "c7i.2xlarge",
   benchmarkNodeCount: 12,
+  benchmarkIterations: 5,
   baseKind: "pull-request",
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
@@ -84,9 +85,50 @@ test("deduplicates comments while preserving immutable refs", () => {
     assert.deepEqual(queued?.datasets, JOB.datasets);
     assert.equal(queued?.benchmarkInstanceType, "c7i.2xlarge");
     assert.equal(queued?.benchmarkNodeCount, 12);
+    assert.equal(queued?.benchmarkIterations, 5);
     assert.equal(queued?.baseKind, "pull-request");
     assert.equal(queued?.baseSha, JOB.baseSha);
     assert.equal(queued?.headSha, JOB.headSha);
+  } finally {
+    database.close();
+  }
+});
+
+test("retains the iteration count across database reopen and job recovery", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "job-database-iterations-"));
+  const databasePath = path.join(root, "jobs.db");
+  const database = new JobDatabase(databasePath);
+  try {
+    const id = database.enqueue({ ...JOB, benchmarkIterations: 20 })!;
+    database.setStatusCommentId(id, 77);
+    assert.equal(database.claimNextPending()?.benchmarkIterations, 20);
+  } finally {
+    database.close();
+  }
+
+  const reopened = new JobDatabase(databasePath);
+  try {
+    assert.equal(
+      reopened.getJobForComment(JOB.commentId)?.benchmarkIterations,
+      20,
+    );
+    assert.deepEqual(reopened.recoverRunningJobs(), { retried: 1, failed: [] });
+    assert.equal(reopened.claimNextPending()?.benchmarkIterations, 20);
+  } finally {
+    reopened.close();
+  }
+});
+
+test("rejects invalid iteration counts without consuming the comment", () => {
+  const database = new JobDatabase(":memory:");
+  try {
+    for (const benchmarkIterations of [0, -1, 1.5, NaN, Infinity, 2 ** 53]) {
+      assert.throws(
+        () => database.enqueue({ ...JOB, benchmarkIterations }),
+        /positive safe integer/,
+      );
+      assert.equal(database.isCommentSeen(JOB.commentId), false);
+    }
   } finally {
     database.close();
   }
@@ -196,6 +238,10 @@ test("migrates an unversioned database away from the legacy dataset column", () 
       12,
     );
     assert.equal(
+      database.getJobForComment(JOB.commentId)?.benchmarkIterations,
+      5,
+    );
+    assert.equal(
       database.getJobForComment(JOB.commentId)?.baseKind,
       "pull-request",
     );
@@ -223,13 +269,22 @@ test("migrates an unversioned database away from the legacy dataset column", () 
           .prepare("SELECT version FROM schema_version ORDER BY version")
           .all() as { version: number }[]
       ).map(({ version }) => version),
-      [1, 2, 3, 4],
+      [1, 2, 3, 4, 5],
     );
     assert.throws(() =>
       migrated
         .prepare("UPDATE jobs SET datasets_json = ? WHERE comment_id = ?")
         .run("not-json", JOB.commentId),
     );
+    for (const iterations of [0, -1, 1.5, 2 ** 53]) {
+      assert.throws(() =>
+        migrated
+          .prepare(
+            "UPDATE jobs SET benchmark_iterations = ? WHERE comment_id = ?",
+          )
+          .run(iterations, JOB.commentId),
+      );
+    }
   } finally {
     migrated.close();
   }
@@ -260,7 +315,7 @@ test("does not reapply completed database migrations", () => {
             .get() as { count: number }
         ).count,
       ),
-      4,
+      5,
     );
   } finally {
     database.close();

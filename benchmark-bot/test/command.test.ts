@@ -10,6 +10,7 @@ test("parses the requested dataset and capacity", () => {
       datasets: ["tpch/sf1"],
       instanceType: "c5n.4xlarge",
       nodeCount: 12,
+      iterations: 5,
     },
   });
   assert.deepEqual(
@@ -20,6 +21,7 @@ test("parses the requested dataset and capacity", () => {
         datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
         instanceType: "c5n.4xlarge",
         nodeCount: 6,
+        iterations: 5,
       },
     },
   );
@@ -33,6 +35,7 @@ test("parses the requested dataset and capacity", () => {
         datasets: ["tpch/sf1"],
         instanceType: "m5.2xlarge",
         nodeCount: 12,
+        iterations: 5,
       },
     },
   );
@@ -46,6 +49,7 @@ test("parses the requested dataset and capacity", () => {
         datasets: ["tpch/sf1"],
         instanceType: "m5.2xlarge",
         nodeCount: 12,
+        iterations: 5,
       },
     },
   );
@@ -55,6 +59,7 @@ test("parses the requested dataset and capacity", () => {
       datasets: ["tpch/sf1"],
       instanceType: "c5n.4xlarge",
       nodeCount: 4,
+      iterations: 5,
     },
   });
   assert.deepEqual(
@@ -65,9 +70,58 @@ test("parses the requested dataset and capacity", () => {
         datasets: ["tpch/sf1"],
         instanceType: "m5.2xlarge",
         nodeCount: 12,
+        iterations: 5,
       },
     },
   );
+});
+
+test("accepts a measured iteration count with a main baseline", () => {
+  for (const iterations of [1, 20, Number.MAX_SAFE_INTEGER]) {
+    assert.deepEqual(
+      parseComment(
+        `benchmarks run clickbench/0-100-date32 --base main --iterations ${iterations}`,
+      ),
+      {
+        kind: "request",
+        request: {
+          datasets: ["clickbench/0-100-date32"],
+          instanceType: "c5n.4xlarge",
+          nodeCount: 12,
+          iterations,
+          base: "main",
+        },
+      },
+    );
+  }
+});
+
+test("rejects invalid, missing, and duplicate iteration counts", () => {
+  for (const value of [
+    "0",
+    "-1",
+    "1.5",
+    "NaN",
+    "Infinity",
+    "1e2",
+    "0x10",
+    "9007199254740992",
+    "20;whoami",
+  ]) {
+    assert.deepEqual(
+      parseComment(`benchmarks run tpch/sf1 --iterations ${value}`),
+      {
+        kind: "invalid",
+        message: `Invalid iteration count \`${value}\`; expected a positive safe integer.`,
+      },
+    );
+  }
+  for (const options of ["--iterations", "--iterations 5 --iterations 20"]) {
+    assert.equal(
+      parseComment(`benchmarks run tpch/sf1 ${options}`).kind,
+      "invalid",
+    );
+  }
 });
 
 test("accepts repeatable head-only configs", () => {
@@ -81,6 +135,7 @@ test("accepts repeatable head-only configs", () => {
         datasets: ["tpch/sf1"],
         instanceType: "c5n.4xlarge",
         nodeCount: 12,
+        iterations: 5,
         base: "main",
         configs: [
           "distributed.collect_dynamic_filters=false",
@@ -116,6 +171,7 @@ test("sanitizes benchmark capacity", () => {
         datasets: ["tpch/sf1"],
         instanceType: "m5.2xlarge",
         nodeCount: 60,
+        iterations: 5,
       },
     },
   );
@@ -163,6 +219,7 @@ test("accepts only main as an explicit comparison base", () => {
       datasets: ["tpch/sf100"],
       instanceType: "c5n.4xlarge",
       nodeCount: 12,
+      iterations: 5,
       base: "main",
     },
   });
@@ -194,7 +251,7 @@ test("rejects aliases and extra arguments", () => {
     {
       kind: "invalid",
       message:
-        "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main] [--config <key=value>]...`.",
+        "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...`.",
     },
   );
   assert.deepEqual(parseComment("benchmarks run tpch/sf1 tpch/sf1"), {

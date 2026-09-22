@@ -43,6 +43,16 @@ By default, the bot compares against the pull request's configured base. Use
 benchmarks run tpch/sf100 --base main
 ```
 
+Use `--iterations <count>` to set the number of measured iterations per query
+for both the base and PR head. The count must be a positive safe integer and
+defaults to 5. Each query also runs one warmup iteration, which is excluded
+from the measured count. The count is saved with the job and retained across
+controller restarts.
+
+```text
+benchmarks run clickbench/0-100-date32 --base main --iterations 20
+```
+
 Repeat `--config <key=value>` to apply DataFusion session settings to the PR
 head only; the comparison base keeps its defaults:
 
