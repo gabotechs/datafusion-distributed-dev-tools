@@ -21,6 +21,22 @@ if [[ ! -d ${release} ]]; then
 fi
 chmod 0755 "${release}"
 
+toolchain=$(<"${release}/controller/rust-toolchain")
+[[ ${toolchain} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "Invalid Rust toolchain ${toolchain}" >&2
+  exit 2
+}
+install --directory --mode 0755 /etc/datafusion-pr-bot
+install --owner root --group root --mode 0644 \
+  "${release}/controller/rust-toolchain" /etc/datafusion-pr-bot/rust-toolchain
+if ! runuser --user benchmark-build -- env HOME=/var/lib/datafusion-pr-build \
+  /var/lib/datafusion-pr-build/.cargo/bin/rustup run "${toolchain}" rustc --version \
+  >/dev/null 2>&1; then
+  runuser --user benchmark-build -- env HOME=/var/lib/datafusion-pr-build \
+    /var/lib/datafusion-pr-build/.cargo/bin/rustup toolchain install "${toolchain}" \
+    --profile minimal
+fi
+
 install --owner root --group root --mode 0755 \
   "${release}/controller/datafusion-build" /usr/local/sbin/datafusion-pr-build
 cat > /etc/sudoers.d/datafusion-pr-bot <<'SUDOERS'

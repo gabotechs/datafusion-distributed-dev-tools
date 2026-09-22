@@ -15,7 +15,7 @@ export const controllerToolVersions = {
     version: "1.28.2",
     sha256: "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c",
   },
-  rust: "1.94.0",
+  rust: "1.95.0",
   zig: {
     version: "0.14.1",
     sha256: "24aeeec8af16c381934a6cd7d95c807a8cb2cf7df9fa40d359aa884195c4716c",

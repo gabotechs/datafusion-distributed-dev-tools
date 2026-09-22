@@ -2,6 +2,7 @@
 set -euo pipefail
 
 source_root=/opt/datafusion-pr-bot/datafusion-distributed
+toolchain_file=/etc/datafusion-pr-bot/rust-toolchain
 manifest=${source_root}/Cargo.toml
 source_lockfile=${source_root}/Cargo.lock
 target=/var/cache/datafusion-pr-build/target
@@ -10,9 +11,15 @@ lockfile=/var/cache/datafusion-pr-build/Cargo.lock
 dns_server=$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)
 
 [[ -f ${manifest} ]] || { echo "Missing ${manifest}" >&2; exit 2; }
+[[ -f ${toolchain_file} ]] || { echo "Missing ${toolchain_file}" >&2; exit 2; }
 [[ -f ${source_lockfile} ]] || { echo "Missing ${source_lockfile}" >&2; exit 2; }
 [[ -d ${source_root}/.git ]] || { echo "Missing ${source_root}" >&2; exit 2; }
 [[ -n ${dns_server} ]] || { echo "No DNS resolver configured" >&2; exit 1; }
+toolchain=$(<"${toolchain_file}")
+[[ ${toolchain} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "Invalid Rust toolchain ${toolchain}" >&2
+  exit 2
+}
 
 install --owner benchmark-build --group benchmark-cache --mode 0660 \
   "${source_lockfile}" "${lockfile}"
@@ -46,7 +53,7 @@ systemd-run --quiet --wait --pipe --collect \
   --property=IPAddressDeny=fd00:ec2::254/128 \
   --setenv=HOME=/var/lib/datafusion-pr-build \
   --setenv=PATH=/var/lib/datafusion-pr-build/.cargo/bin:/usr/local/bin:/usr/bin \
-  --setenv=RUSTUP_TOOLCHAIN=1.94.0 \
+  --setenv=RUSTUP_TOOLCHAIN="${toolchain}" \
   --setenv=CARGO_HOME="${cargo_home}" \
   --setenv=CARGO_TARGET_DIR="${target}" \
   --setenv=XDG_CACHE_HOME="${cargo_home}" \
@@ -76,7 +83,7 @@ systemd-run --quiet --wait --pipe --collect \
   --property=PrivateNetwork=yes \
   --setenv=HOME=/var/lib/datafusion-pr-build \
   --setenv=PATH=/var/lib/datafusion-pr-build/.cargo/bin:/usr/local/bin:/usr/bin \
-  --setenv=RUSTUP_TOOLCHAIN=1.94.0 \
+  --setenv=RUSTUP_TOOLCHAIN="${toolchain}" \
   --setenv=CARGO_HOME="${cargo_home}" \
   --setenv=CARGO_TARGET_DIR="${target}" \
   --setenv=ZIG_GLOBAL_CACHE_DIR="${cargo_home}/zig-global" \

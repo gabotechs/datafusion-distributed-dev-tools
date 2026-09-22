@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { controllerSetupFiles } from "../infra/setup.js";
+import { controllerToolVersions } from "../infra/versions.js";
 
 function controllerScript(name: string): string {
   return readFileSync(
@@ -41,6 +42,9 @@ test("keeps the shared release installer valid", () => {
   const script = readFileSync(installer, "utf8");
   assert.match(script, /sha256sum/);
   assert.match(script, /chmod 0755 "\$\{release\}"/);
+  assert.match(script, /controller\/rust-toolchain/);
+  assert.match(script, /rustup run "\$\{toolchain\}" rustc --version/);
+  assert.match(script, /rustup toolchain install "\$\{toolchain\}"/);
   assert.match(script, /controller\/datafusion-build/);
   assert.match(script, /\/etc\/sudoers\.d\/datafusion-pr-bot/);
   assert.match(script, /git clone -- "\$\{repository_url\}"/);
@@ -73,7 +77,11 @@ test("isolates the shared harness build from controller credentials", () => {
     build,
     /PATH=\/var\/lib\/datafusion-pr-build\/\.cargo\/bin:\/usr\/local\/bin:\/usr\/bin/,
   );
-  assert.match(build, /RUSTUP_TOOLCHAIN=1\.94\.0/);
+  assert.match(
+    build,
+    /toolchain_file=\/etc\/datafusion-pr-bot\/rust-toolchain/,
+  );
+  assert.match(build, /RUSTUP_TOOLCHAIN="\$\{toolchain\}"/);
   assert.match(build, /XDG_CACHE_HOME="\$\{cargo_home\}"/);
   assert.match(build, /nameserver.*\/etc\/resolv\.conf/);
   assert.match(build, /IPAddressAllow="\$\{dns_server\}"/);
@@ -99,4 +107,10 @@ test("isolates the shared harness build from controller credentials", () => {
       false,
     );
   }
+});
+
+test("keeps the release and bootstrap Rust toolchain pins synchronized", () => {
+  const toolchain = controllerScript("rust-toolchain").trim();
+  assert.equal(toolchain, controllerToolVersions.rust);
+  assert.match(toolchain, /^\d+\.\d+\.\d+$/);
 });
