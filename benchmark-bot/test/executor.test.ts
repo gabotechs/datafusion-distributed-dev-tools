@@ -34,6 +34,7 @@ const JOB: Job = {
   datasets: ["tpch/sf1"],
   benchmarkInstanceType: "m5.2xlarge",
   benchmarkNodeCount: 12,
+  benchmarkIterations: 5,
   baseKind: "pull-request",
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
@@ -98,9 +99,12 @@ test("checks out and deploys base then head through the shared harness", async (
     override async runBenchmark(
       dataset: string,
       resultName: string,
+      iterations: number,
       configs: readonly string[] = [],
     ): Promise<void> {
-      events.push(`run:${dataset}:${resultName}:${configs.join(",")}`);
+      events.push(
+        `run:${dataset}:${resultName}:${iterations}:${configs.join(",")}`,
+      );
     }
     override async compareResults(dataset: string): Promise<string> {
       events.push(`compare:${dataset}`);
@@ -117,6 +121,7 @@ test("checks out and deploys base then head through the shared harness", async (
     {
       ...JOB,
       datasets,
+      benchmarkIterations: 20,
       headConfigs: ["distributed.collect_dynamic_filters=false"],
     },
     async ({ step, totalSteps, message }) => {
@@ -153,13 +158,13 @@ test("checks out and deploys base then head through the shared harness", async (
     "prepare-dataset:tpch/sf1",
     "prepare-dataset:tpch/sf10",
     "deploy:m5.2xlarge:12",
-    "run:tpch/sf1:datafusion-benchmark-base:",
-    "run:tpch/sf10:datafusion-benchmark-base:",
+    "run:tpch/sf1:datafusion-benchmark-base:20:",
+    "run:tpch/sf10:datafusion-benchmark-base:20:",
     "checkout:b",
     "deploy:m5.2xlarge:12",
-    "run:tpch/sf1:datafusion-benchmark-head:distributed.collect_dynamic_filters=false",
+    "run:tpch/sf1:datafusion-benchmark-head:20:distributed.collect_dynamic_filters=false",
     "compare:tpch/sf1",
-    "run:tpch/sf10:datafusion-benchmark-head:distributed.collect_dynamic_filters=false",
+    "run:tpch/sf10:datafusion-benchmark-head:20:distributed.collect_dynamic_filters=false",
     "compare:tpch/sf10",
     "cleanup-deployment",
   ]);
@@ -309,13 +314,14 @@ test("runs benchmarks against the shared deployment and adjacent testdata", asyn
   await new BenchmarkExecutor(config, processes).runBenchmark(
     "tpch/sf1",
     "datafusion-benchmark-head",
+    20,
     ["distributed.collect_dynamic_filters=false"],
   );
 
   const argument = (name: string): string | undefined =>
     arguments_[arguments_.indexOf(name) + 1];
   assert.equal(argument("--k8s-service"), "datafusion-benchmark-bot");
-  assert.equal(argument("--iterations"), "5");
+  assert.equal(argument("--iterations"), "20");
   assert.equal(argument("--warmup"), "true");
   assert.equal(
     argument("--testdata-root"),

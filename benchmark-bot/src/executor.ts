@@ -13,7 +13,6 @@ interface FoundationOutputs {
 }
 
 const DEPLOYMENT_NAME = "datafusion-benchmark-bot";
-export const BENCHMARK_ITERATIONS = 5;
 export const BENCHMARK_WARMUP = true;
 
 export interface ExecutorConfig {
@@ -121,6 +120,7 @@ export class BenchmarkExecutor {
         progressPlan.baseBenchmarks,
         reportProgress,
         "datafusion-benchmark-base",
+        job.benchmarkIterations,
       );
 
       await reportProgress(progressPlan.headCheckout);
@@ -182,12 +182,13 @@ export class BenchmarkExecutor {
     progressMessages: readonly string[],
     reportProgress: (message: string) => Promise<void>,
     resultName: string,
+    iterations: number,
   ): Promise<BenchmarkTiming[]> {
     const timings: BenchmarkTiming[] = [];
     for (const [index, dataset] of datasets.entries()) {
       await reportProgress(progressMessages[index]!);
       const started = performance.now();
-      await this.runBenchmark(dataset, resultName);
+      await this.runBenchmark(dataset, resultName, iterations);
       timings.push({ dataset, durationMs: performance.now() - started });
     }
     return timings;
@@ -206,6 +207,7 @@ export class BenchmarkExecutor {
       await this.runBenchmark(
         dataset,
         "datafusion-benchmark-head",
+        job.benchmarkIterations,
         job.headConfigs,
       );
       timings.push({ dataset, durationMs: performance.now() - started });
@@ -319,6 +321,7 @@ export class BenchmarkExecutor {
   async runBenchmark(
     dataset: string,
     resultName: string,
+    iterations: number,
     configs: readonly string[] = [],
   ): Promise<void> {
     const outputs = loadOutputs(this.config.foundationOutputsFile);
@@ -330,7 +333,7 @@ export class BenchmarkExecutor {
       "--k8s-cluster",
       outputs.clusterName,
       "--iterations",
-      String(BENCHMARK_ITERATIONS),
+      String(iterations),
       "--warmup",
       String(BENCHMARK_WARMUP),
       "--result-name",

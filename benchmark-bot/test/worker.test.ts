@@ -15,6 +15,7 @@ const JOB: NewJob = {
   datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
   benchmarkInstanceType: "m5.2xlarge",
   benchmarkNodeCount: 12,
+  benchmarkIterations: 5,
   baseKind: "pull-request",
   baseSha: "a".repeat(40),
   headSha: "b".repeat(40),
@@ -127,14 +128,15 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[2]!, /Build and deployment \| 2m 2s \| 2m 5s/);
     assert.match(comments[2]!, /Benchmark `tpch\/sf100` \| 30s \| 31s/);
     assert.match(comments[2]!, /Total 7m 0s/);
-    assert.match(comments[2]!, /Query selection and iteration overrides/);
+    assert.match(comments[2]!, /Query selection is not supported/);
+    assert.doesNotMatch(comments[2]!, /iteration overrides are not supported/);
     assert.deepEqual(commentIds, [77, 77, 77]);
   } finally {
     database.close();
   }
 });
 
-test("labels an explicitly selected main baseline", async () => {
+test("reports the selected main baseline and iteration count", async () => {
   const database = new JobDatabase(":memory:");
   const comments: string[] = [];
   const github = {
@@ -143,7 +145,11 @@ test("labels an explicitly selected main baseline", async () => {
     },
   } as GitHubApi;
   try {
-    const jobId = database.enqueue({ ...JOB, baseKind: "main" })!;
+    const jobId = database.enqueue({
+      ...JOB,
+      baseKind: "main",
+      benchmarkIterations: 20,
+    })!;
     database.setStatusCommentId(jobId, 77);
     const worker = new JobWorker(database, github, {
       execute: async () => ({ comparison: COMPARISON, timings: TIMINGS }),
@@ -151,6 +157,14 @@ test("labels an explicitly selected main baseline", async () => {
 
     await worker.runOnce();
     assert.match(comments[0]!, /Baseline: Main/);
+    assert.match(
+      comments[0]!,
+      /Workload: 1 warmup \+ 20 measured iterations per query/,
+    );
+    assert.match(
+      comments[1]!,
+      /1 warmup \+ 20 measured iterations per query for both revisions/,
+    );
     assert.match(comments[1]!, /Main `aaaaaaaaaaaa`.*PR head `bbbbbbbbbbbb`/s);
     assert.match(comments[1]!, /\| Identity \| Main \| PR head \|/);
   } finally {

@@ -1,9 +1,10 @@
 import {
   DEFAULT_BENCHMARK_INSTANCE_TYPE,
+  DEFAULT_BENCHMARK_ITERATIONS,
   DEFAULT_BENCHMARK_NODE_COUNT,
   MAX_BENCHMARK_NODES,
 } from "./command.js";
-import { BENCHMARK_ITERATIONS, BENCHMARK_WARMUP } from "./executor.js";
+import { BENCHMARK_WARMUP } from "./executor.js";
 import {
   SUPPORTED_BENCHMARK_INSTANCES,
   SUPPORTED_BENCHMARK_INSTANCE_TYPES,
@@ -20,7 +21,7 @@ const AVAILABLE_DATASETS = [
 ] as const;
 
 export function renderUsage(): string {
-  const workload = `${BENCHMARK_WARMUP ? "1 warmup and " : ""}${BENCHMARK_ITERATIONS} measured iterations`;
+  const workload = `${BENCHMARK_WARMUP ? "1 warmup and " : ""}${DEFAULT_BENCHMARK_ITERATIONS} measured iterations`;
   const datasets = AVAILABLE_DATASETS.map((dataset) => `\`${dataset}\``).join(
     ", ",
   );
@@ -35,11 +36,11 @@ export function renderUsage(): string {
 
 Post a comment whose first non-empty line is:
 
-\`benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main] [--config <key=value>]...\`
+\`benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...\`
 
 For example:
 
-\`benchmarks run tpch/sf10 tpch/sf100 --instance-type m5.2xlarge --nodes 24 --base main --config distributed.collect_dynamic_filters=false\`
+\`benchmarks run tpch/sf10 tpch/sf100 --instance-type m5.2xlarge --nodes 24 --iterations 20 --base main --config distributed.collect_dynamic_filters=false\`
 
 **Currently available datasets:** ${datasets}. Request one or more, without duplicates. The bot validates availability before provisioning and runs every query in each dataset.
 
@@ -47,6 +48,7 @@ For example:
 | --- | --- | --- |
 | \`--instance-type <type>\` | \`${DEFAULT_BENCHMARK_INSTANCE_TYPE}\` | One of the supported instance types listed below, subject to availability within the cluster's availability zones and quota. |
 | \`--nodes <count>\` | \`${DEFAULT_BENCHMARK_NODE_COUNT}\` | An integer from 1 to ${MAX_BENCHMARK_NODES}. The deployment uses one benchmark worker per node. |
+| \`--iterations <count>\` | \`${DEFAULT_BENCHMARK_ITERATIONS}\` | A positive safe integer. Measured iterations per query for both revisions; warmup is excluded. |
 | \`--base main\` | PR base | Compare against a snapshot of \`main\`; no other explicit base is supported. |
 | \`--config <key=value>\` | none | Apply a safe DataFusion session setting to the PR head only. Repeat for distinct keys; spaces and shell syntax are not supported. |
 
@@ -58,7 +60,7 @@ ${instances}
 
 Each node runs one worker. The worker allocation reserves 1 vCPU and 4 GiB for Kubernetes and system processes, then makes the rest of the selected instance available to the benchmark.
 
-**Limits:** Only authorized users can enqueue jobs. Jobs run serially, the queue holds ${MAX_QUEUE_DEPTH} active jobs, and each requester may have ${MAX_ACTIVE_JOBS_PER_REQUESTER}. Query selection and iteration overrides are not supported; every query uses ${workload} for both revisions.
+**Limits:** Only authorized users can enqueue jobs. Jobs run serially, the queue holds ${MAX_QUEUE_DEPTH} active jobs, and each requester may have ${MAX_ACTIVE_JOBS_PER_REQUESTER}. Query selection is not supported. By default, every query uses ${workload} for both revisions.
 
 </details>`;
 }

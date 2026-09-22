@@ -140,6 +140,11 @@ test("creates one persisted status comment for an accepted benchmark", async () 
     assert.equal(queued?.statusCommentId, 321);
     assert.equal(queued?.baseKind, "pull-request");
     assert.equal(queued?.baseSha, "a".repeat(40));
+    assert.equal(queued?.benchmarkIterations, 5);
+    assert.match(
+      posted[0]!,
+      /Workload: 1 warmup \+ 5 measured iterations per query/,
+    );
   } finally {
     database.close();
   }
@@ -173,12 +178,13 @@ test("includes usage instructions when rejecting an invalid command", async () =
   }
 });
 
-test("snapshots main when explicitly requested", async () => {
+test("snapshots main and saves the requested iteration count", async () => {
   const database = new JobDatabase(":memory:");
   const request = comment(1, "maintainer");
   request.body =
-    "benchmarks run tpch/sf100 --base main --config distributed.collect_dynamic_filters=false";
+    "benchmarks run clickbench/0-100-date32 --base main --iterations 20 --config distributed.collect_dynamic_filters=false";
   const branchRequests: [string, string][] = [];
+  const posted: string[] = [];
   const github = {
     getPullRequest: async () => ({
       number: 1,
@@ -190,7 +196,10 @@ test("snapshots main when explicitly requested", async () => {
       branchRequests.push([repository, branch]);
       return "c".repeat(40);
     },
-    postComment: async () => 321,
+    postComment: async (_repository: string, _pr: number, body: string) => {
+      posted.push(body);
+      return 321;
+    },
   } as unknown as GitHubApi;
   try {
     await new CommentPoller(
@@ -205,6 +214,12 @@ test("snapshots main when explicitly requested", async () => {
     assert.equal(queued?.baseKind, "main");
     assert.equal(queued?.baseSha, "c".repeat(40));
     assert.equal(queued?.headSha, "b".repeat(40));
+    assert.equal(queued?.benchmarkIterations, 20);
+    assert.match(
+      posted[0]!,
+      /Workload: 1 warmup \+ 20 measured iterations per query/,
+    );
+    assert.match(posted[0]!, /`--iterations <count>`/);
     assert.deepEqual(queued?.headConfigs, [
       "distributed.collect_dynamic_filters=false",
     ]);

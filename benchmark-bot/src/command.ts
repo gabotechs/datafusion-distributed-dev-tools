@@ -8,6 +8,7 @@ export interface BenchmarkRequest {
   datasets: string[];
   instanceType: string;
   nodeCount: number;
+  iterations: number;
   base?: "main";
   configs?: string[];
 }
@@ -24,9 +25,10 @@ export const MAX_BENCHMARK_NODES = 60;
 export const DEFAULT_BENCHMARK_INSTANCE_TYPE: SupportedBenchmarkInstanceType =
   "c5n.4xlarge";
 export const DEFAULT_BENCHMARK_NODE_COUNT = 12;
+export const DEFAULT_BENCHMARK_ITERATIONS = 5;
 
 const USAGE =
-  "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--base main] [--config <key=value>]...`.";
+  "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...`.";
 
 export function parseComment(body: string): ParseResult {
   const line = body
@@ -90,7 +92,9 @@ export function parseComment(body: string): ParseResult {
       continue;
     }
     if (
-      !["--instance-type", "--nodes", "--base"].includes(option) ||
+      !["--instance-type", "--nodes", "--iterations", "--base"].includes(
+        option,
+      ) ||
       options.has(option)
     ) {
       return { kind: "invalid", message: USAGE };
@@ -124,6 +128,18 @@ export function parseComment(body: string): ParseResult {
       message: `Invalid node count \`${nodeCountText}\`; expected an integer from 1 to ${MAX_BENCHMARK_NODES}.`,
     };
   }
+  const iterationsText =
+    options.get("--iterations") ?? String(DEFAULT_BENCHMARK_ITERATIONS);
+  const iterations = Number(iterationsText);
+  if (
+    !/^[1-9][0-9]*$/.test(iterationsText) ||
+    !Number.isSafeInteger(iterations)
+  ) {
+    return {
+      kind: "invalid",
+      message: `Invalid iteration count \`${iterationsText}\`; expected a positive safe integer.`,
+    };
+  }
   const base = options.get("--base");
   if (base !== undefined && base !== "main") {
     return {
@@ -137,6 +153,7 @@ export function parseComment(body: string): ParseResult {
       datasets,
       instanceType,
       nodeCount,
+      iterations,
       ...(base === "main" ? { base } : {}),
       ...(configs.length === 0 ? {} : { configs }),
     },
