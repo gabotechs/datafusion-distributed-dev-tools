@@ -105,6 +105,7 @@ test("associates pod identity with every engine namespace", () => {
     associations.map((association) => association.inputs.namespace).sort(),
     [
       "benchmark-ballista",
+      "benchmark-clickhouse",
       "benchmark-datafusion",
       "benchmark-spark",
       "benchmark-trino",

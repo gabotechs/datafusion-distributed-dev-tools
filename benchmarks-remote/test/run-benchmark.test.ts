@@ -56,6 +56,7 @@ test("all benchmark clients use the same local port", () => {
     "trino-bench.ts",
     "spark-bench.ts",
     "ballista-bench.ts",
+    "clickhouse-bench.ts",
   ]) {
     const source = fs.readFileSync(
       path.resolve(__dirname, "../src/bin", client),
@@ -83,7 +84,13 @@ test("benchmark npm commands execute their TypeScript clients directly", () => {
     "utf8",
   );
   assert.doesNotMatch(packageJson, /run-benchmark\.sh|runner:/);
-  for (const engine of ["datafusion", "trino", "spark", "ballista"]) {
+  for (const engine of [
+    "datafusion",
+    "trino",
+    "spark",
+    "ballista",
+    "clickhouse",
+  ]) {
     assert.match(packageJson, new RegExp(`tsx src/bin/${engine}-bench\\.ts`));
   }
 });

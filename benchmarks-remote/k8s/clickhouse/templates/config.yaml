@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-config
+  namespace: benchmark-clickhouse
+data:
+  config.xml: |
+    <clickhouse>
+      <logger>
+        <level>warning</level>
+        <console>1</console>
+      </logger>
+      <remote_servers replace="true">
+        <benchmark>
+          {{- range $index := until (int .Values.workerReplicas) }}
+          <shard>
+            <replica>
+              <host>clickhouse-worker-{{ $index }}.clickhouse-workers</host>
+              <port>9000</port>
+            </replica>
+          </shard>
+          {{- end }}
+        </benchmark>
+      </remote_servers>
+      <s3>
+        <use_environment_credentials>true</use_environment_credentials>
+      </s3>
+    </clickhouse>
+  users.xml: |
+    <clickhouse>
+      <profiles>
+        <default>
+          <!-- Use standard SQL semantics for the shared benchmark queries. -->
+          <join_use_nulls>1</join_use_nulls>
+          <union_default_mode>DISTINCT</union_default_mode>
+          <cast_keep_nullable>1</cast_keep_nullable>
+          <!-- Read benchmark datasets with the pod identity's credentials. -->
+          <s3_allow_server_credentials_in_user_queries>1</s3_allow_server_credentials_in_user_queries>
+        </default>
+      </profiles>
+    </clickhouse>

@@ -126,6 +126,7 @@ npm run datafusion-deploy
 npm run trino-deploy
 npm run spark-deploy
 npm run ballista-deploy
+npm run clickhouse-deploy
 ```
 
 Set `DEPLOYMENT_NAME` to operate a separate named DataFusion release with the
@@ -145,6 +146,7 @@ npm run datafusion-destroy
 npm run trino-destroy
 npm run spark-destroy
 npm run ballista-destroy
+npm run clickhouse-destroy
 ```
 
 Helm upgrades are atomic and clean up failed revisions. Content-addressed
@@ -166,6 +168,7 @@ npm run datafusion-bench -- tpch/sf1 --config distributed.collect_dynamic_filter
 npm run trino-bench -- tpch/sf1 --iterations 1
 npm run spark-bench -- tpch/sf1 --iterations 1
 npm run ballista-bench -- tpch/sf1 --iterations 1
+npm run clickhouse-bench -- tpch/sf1 --iterations 1
 ```
 
 `--bucket` and `--k8s-cluster` default to the values in

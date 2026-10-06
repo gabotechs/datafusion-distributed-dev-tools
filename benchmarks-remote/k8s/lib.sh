@@ -18,7 +18,7 @@ init_environment() {
 validate_engine() {
   local engine=$1
   case ${engine} in
-    datafusion | trino | spark | ballista) ;;
+    datafusion | trino | spark | ballista | clickhouse) ;;
     *)
       echo "Unknown benchmark engine '${engine}'" >&2
       return 2
@@ -39,7 +39,7 @@ benchmark_worker_selector() {
   validate_engine "${engine}" || return
   case ${engine} in
     datafusion) echo 'app.kubernetes.io/name=datafusion-worker' ;;
-    trino | spark) echo "app.kubernetes.io/name=${engine},app.kubernetes.io/component=worker" ;;
+    trino | spark | clickhouse) echo "app.kubernetes.io/name=${engine},app.kubernetes.io/component=worker" ;;
     ballista) echo 'app.kubernetes.io/name=ballista,app.kubernetes.io/component=executor' ;;
   esac
 }

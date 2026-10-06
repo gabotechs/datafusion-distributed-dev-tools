@@ -1,0 +1,91 @@
+# Every worker can initiate s3Cluster queries; the benchmark service targets the
+# first worker so query initiation runs on measured benchmark capacity.
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: benchmark-clickhouse
+spec:
+  selector:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: worker
+    statefulset.kubernetes.io/pod-name: clickhouse-worker-0
+  ports:
+    - name: http
+      port: 9000
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-workers
+  namespace: benchmark-clickhouse
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: worker
+  ports:
+    - {name: native, port: 9000, targetPort: native}
+    - {name: interserver, port: 9009, targetPort: interserver}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse-worker
+  namespace: benchmark-clickhouse
+spec:
+  serviceName: clickhouse-workers
+  podManagementPolicy: Parallel
+  replicas: {{ .Values.workerReplicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+      labels:
+        app.kubernetes.io/name: clickhouse
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: benchmark-engine
+      nodeSelector:
+        karpenter.sh/nodepool: general-purpose
+        node.kubernetes.io/instance-type: {{ .Values.workerInstanceType | quote }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: clickhouse
+                  app.kubernetes.io/component: worker
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: clickhouse
+          image: {{ .Values.image | quote }}
+          env:
+            - {name: CLICKHOUSE_SKIP_USER_SETUP, value: "1"}
+          ports:
+            - {name: http, containerPort: 8123}
+            - {name: native, containerPort: 9000}
+            - {name: interserver, containerPort: 9009}
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            {{- toYaml (required "workerResources is required" .Values.workerResources) | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/clickhouse-server/config.d/benchmark.xml, subPath: config.xml}
+            - {name: config, mountPath: /etc/clickhouse-server/users.d/benchmark.xml, subPath: users.xml}
+            - {name: data, mountPath: /var/lib/clickhouse}
+      volumes:
+        - name: config
+          configMap: {name: clickhouse-config}
+        - name: data
+          emptyDir: {}

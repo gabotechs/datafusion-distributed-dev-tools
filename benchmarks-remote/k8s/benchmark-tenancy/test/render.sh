@@ -8,7 +8,7 @@ trap 'rm -f "${rendered}"' EXIT
 helm lint "${chart_dir}"
 helm template benchmark "${chart_dir}" >"${rendered}"
 
-for engine in datafusion ballista spark trino; do
+for engine in datafusion ballista spark trino clickhouse; do
   rg --quiet "name: benchmark-${engine}" "${rendered}"
   rg --quiet "benchmark.datafusion.apache.org/engine: ${engine}" "${rendered}"
 done

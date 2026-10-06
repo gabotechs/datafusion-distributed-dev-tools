@@ -76,6 +76,11 @@ case ${engine} in
     manifest_values+=(--set-string workerInstanceType="${benchmark_instance_type}")
     manifest_values+=(--set-string coordinatorInstanceType="${coordinator_instance_type}")
     ;;
+  clickhouse)
+    benchmark_instance_type=$(jq -er '.benchmarkInstanceType' "${outputs_file}")
+    manifest_values+=(--set-string workerReplicas="${node_count}")
+    manifest_values+=(--set-string workerInstanceType="${benchmark_instance_type}")
+    ;;
 esac
 
 HELM_CACHE_HOME=/tmp/datafusion-distributed-helm-cache \

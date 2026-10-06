@@ -5,6 +5,7 @@ export const engineNames = [
   "ballista",
   "spark",
   "trino",
+  "clickhouse",
 ] as const;
 
 export type EngineName = (typeof engineNames)[number];
