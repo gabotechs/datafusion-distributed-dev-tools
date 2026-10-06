@@ -61,10 +61,13 @@ Optional configuration:
 | `eksVersion`                | `1.36`             | Exact EKS Kubernetes minor release. |
 | `kubernetesApiAllowedCidrs` | none               | Persistent trusted EKS API CIDRs.   |
 
-`KUBERNETES_API_ALLOWED_CIDRS` can provide a comma-separated list. When it is
-unset, `npm run foundation-deploy` combines the current public IP with the
-persistent CIDRs stored in the selected stack. Configure a controller's stable
-public IP once without committing it:
+`KUBERNETES_API_ALLOWED_CIDRS` can provide a comma-separated list, which
+replaces the cluster's allowlist exactly. When it is unset,
+`npm run foundation-deploy` combines the current public IP with the persistent
+CIDRs stored in the selected stack and the CIDRs the cluster already allows, so
+a deploy never removes another caller's access. Remove a stale CIDR by running
+the deploy with an explicit `KUBERNETES_API_ALLOWED_CIDRS` that omits it.
+Configure a controller's stable public IP once without committing it:
 
 ```bash
 pulumi config set --path 'kubernetesApiAllowedCidrs[0]' '<controller-public-ip>/32'

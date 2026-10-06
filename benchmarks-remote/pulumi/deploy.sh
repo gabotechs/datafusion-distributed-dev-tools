@@ -18,9 +18,19 @@ fi
 if [[ -z ${KUBERNETES_API_ALLOWED_CIDRS:-} ]]; then
   public_ip=$(curl --fail --silent --show-error https://checkip.amazonaws.com)
   configured_cidrs=$("${pulumi_bin}" config get kubernetesApiAllowedCidrs --json 2>/dev/null || echo '[]')
+  # Keep CIDRs that earlier deploys added for other callers' public IPs.
+  cluster_name=$("${pulumi_bin}" stack output clusterName --stack "${stack}" 2>/dev/null || true)
+  live_cidrs='[]'
+  if [[ -n ${cluster_name} ]]; then
+    live_cidrs=$(AWS_PAGER='' aws --region "${AWS_REGION}" eks describe-cluster \
+      --name "${cluster_name}" \
+      --query 'cluster.resourcesVpcConfig.publicAccessCidrs' \
+      --output json 2>/dev/null || echo '[]')
+  fi
   export KUBERNETES_API_ALLOWED_CIDRS
   KUBERNETES_API_ALLOWED_CIDRS=$(jq -r \
     --arg current "${public_ip}/32" \
+    --argjson live "${live_cidrs}" \
     '
       if type == "array" then .
       elif type == "object" and (.value | type) == "array" then .value
@@ -28,7 +38,8 @@ if [[ -z ${KUBERNETES_API_ALLOWED_CIDRS:-} ]]; then
       elif type == "string" then fromjson
       else []
       end
-      | . + [$current] | unique | join(",")
+      | . + ($live // []) + [$current]
+      | map(select(. != "0.0.0.0/0")) | unique | join(",")
     ' <<<"${configured_cidrs}")
 fi
 "${pulumi_bin}" up --stack "${stack}" --yes
