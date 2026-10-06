@@ -32,7 +32,14 @@ same 7 CPUs and 17 GiB of memory, reserving the available benchmark capacity of
 one `c5n.2xlarge` node per pod while leaving capacity for Kubernetes system
 overhead. Every engine defaults to 12 worker replicas. Engine coordinators run
 on the separate system-node type and are not part of the measured worker
-capacity.
+capacity. ClickHouse has no separate coordinator: every worker belongs to the
+`benchmark` cluster, and the `clickhouse` service sends queries to the first
+worker. The ClickHouse client replaces each table in a query with an
+`s3Cluster` read, so every worker scans Parquet files and applies filters and
+partial aggregation. ClickHouse joins those reads on the first worker, and runs
+queries with correlated subqueries through per-table views. The deployment uses
+default ClickHouse settings apart from standard SQL semantics and has no
+filesystem cache, so every query reads from S3.
 
 The scripts use `k8s/.kubeconfig`. Export it to connect directly:
 

@@ -19,6 +19,7 @@
     "trino-bench": "tsx src/bin/trino-bench.ts",
     "spark-bench": "tsx src/bin/spark-bench.ts",
     "ballista-bench": "tsx src/bin/ballista-bench.ts",
+    "clickhouse-bench": "tsx src/bin/clickhouse-bench.ts",
     "datafusion-deploy": "bash ./k8s/deploy-engine.sh datafusion",
     "datafusion-destroy": "bash ./k8s/destroy-engine.sh datafusion",
     "trino-deploy": "bash ./k8s/deploy-engine.sh trino",
@@ -27,6 +28,8 @@
     "spark-destroy": "bash ./k8s/destroy-engine.sh spark",
     "ballista-deploy": "bash ./k8s/deploy-engine.sh ballista",
     "ballista-destroy": "bash ./k8s/destroy-engine.sh ballista",
+    "clickhouse-deploy": "bash ./k8s/deploy-engine.sh clickhouse",
+    "clickhouse-destroy": "bash ./k8s/destroy-engine.sh clickhouse",
     "command": "bash ./k8s/command.sh"
   },
   "dependencies": {

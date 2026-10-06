@@ -31,6 +31,7 @@ test("all engine workers consume the same node-filling resources", () => {
     "k8s/trino/templates/workload.yaml",
     "k8s/spark/templates/workload.yaml",
     "k8s/ballista/templates/workload.yaml",
+    "k8s/clickhouse/templates/workload.yaml",
   ]) {
     const contents = fs.readFileSync(path.join(root, template), "utf8");
     assert.equal(
@@ -68,6 +69,7 @@ test("all engine charts default to twelve workers", () => {
     ["k8s/trino/values.yaml", /^workerReplicas: 12$/m],
     ["k8s/spark/values.yaml", /^workerReplicas: 12$/m],
     ["k8s/ballista/values.yaml", /^workerReplicas: 12$/m],
+    ["k8s/clickhouse/values.yaml", /^workerReplicas: 12$/m],
   ] as const;
   for (const [valuesPath, expected] of defaults) {
     assert.match(

@@ -1,6 +1,6 @@
 ---
 name: remote-benchmark-run
-description: Run and assess remote DataFusion Distributed benchmarks against an already deployed DataFusion, Trino, Spark, or Ballista Kubernetes engine. Use when an agent needs to execute TPC-H, TPC-DS, ClickBench, selected queries, repeated iterations, debugging plans, result comparison, interruption recovery, or benchmark failure diagnosis.
+description: Run and assess remote DataFusion Distributed benchmarks against an already deployed DataFusion, Trino, Spark, Ballista, or ClickHouse Kubernetes engine. Use when an agent needs to execute TPC-H, TPC-DS, ClickBench, selected queries, repeated iterations, debugging plans, result comparison, interruption recovery, or benchmark failure diagnosis.
 ---
 
 # Remote Benchmark Run
@@ -22,6 +22,7 @@ npm run datafusion-bench -- tpch/sf10
 npm run trino-bench -- tpch/sf10
 npm run spark-bench -- tpch/sf10
 npm run ballista-bench -- tpch/sf10
+npm run clickhouse-bench -- tpch/sf10
 ```
 
 Common options are:

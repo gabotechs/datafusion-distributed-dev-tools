@@ -1,11 +1,11 @@
 ---
 name: remote-engine-deployment
-description: Manage persistent Kubernetes deployments for the DataFusion, Trino, Spark, and Ballista remote benchmark engines. Use when an agent needs to publish engine code or images, deploy or update an engine, inspect its Helm release and pods, run a diagnostic command, recover an interrupted deployment, or explicitly tear down an engine.
+description: Manage persistent Kubernetes deployments for the DataFusion, Trino, Spark, Ballista, and ClickHouse remote benchmark engines. Use when an agent needs to publish engine code or images, deploy or update an engine, inspect its Helm release and pods, run a diagnostic command, recover an interrupted deployment, or explicitly tear down an engine.
 ---
 
 # Remote Engine Deployment
 
-Operate from `benchmarks-remote`. Supported engine names are `datafusion`, `trino`, `spark`, and `ballista`.
+Operate from `benchmarks-remote`. Supported engine names are `datafusion`, `trino`, `spark`, `ballista`, and `clickhouse`.
 
 ## Preconditions
 
@@ -22,9 +22,10 @@ npm run datafusion-deploy
 npm run trino-deploy
 npm run spark-deploy
 npm run ballista-deploy
+npm run clickhouse-deploy
 ```
 
-Deploy commands publish content-addressed artifacts when required and perform an atomic Helm install or upgrade. DataFusion and Ballista publish Linux binaries, Spark publishes an ECR image through CodeBuild, and Trino uses its chart image directly. Rerun the same deploy command after interruption.
+Deploy commands publish content-addressed artifacts when required and perform an atomic Helm install or upgrade. DataFusion and Ballista publish Linux binaries, Spark publishes an ECR image through CodeBuild, and Trino and ClickHouse use their chart images directly. Rerun the same deploy command after interruption.
 
 Keep the default 12 measured workers. Do not set `NODE_COUNT` or alter `worker-resources.yaml` unless the user requests a different benchmark shape. Every measured worker must use the shared node-filling resource configuration and one worker per benchmark node.
 
@@ -58,6 +59,7 @@ npm run datafusion-destroy
 npm run trino-destroy
 npm run spark-destroy
 npm run ballista-destroy
+npm run clickhouse-destroy
 ```
 
 Resolve the exact engine and obtain authorization before teardown. The command refuses to destroy an engine while a benchmark owns the cluster run lock. EKS Auto Mode removes empty capacity asynchronously.

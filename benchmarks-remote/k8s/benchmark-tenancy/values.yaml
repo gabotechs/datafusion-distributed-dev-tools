@@ -9,3 +9,4 @@ engines:
   - ballista
   - spark
   - trino
+  - clickhouse
