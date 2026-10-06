@@ -101,7 +101,15 @@ test("associates pod identity with every engine namespace", () => {
     (resource) =>
       resource.type === "aws:eks/podIdentityAssociation:PodIdentityAssociation",
   );
-  assert.equal(associations.length, 4);
+  assert.deepEqual(
+    associations.map((association) => association.inputs.namespace).sort(),
+    [
+      "benchmark-ballista",
+      "benchmark-datafusion",
+      "benchmark-spark",
+      "benchmark-trino",
+    ],
+  );
   assert.ok(
     associations.every(
       (association) => association.inputs.serviceAccount === "benchmark-engine",
