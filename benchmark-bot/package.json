@@ -9,10 +9,10 @@
   "scripts": {
     "build": "tsc --noEmit && npm run pulumi:build && npm run application:build",
     "application:build": "tsc --project tsconfig.controller.json && npm --prefix ../benchmarks-remote run application:build",
-    "controller-deploy": "npm run application:build && npm run pulumi:build && pulumi up --stack controller",
-    "controller-destroy": "pulumi destroy",
-    "controller-outputs": "pulumi stack output --json",
-    "controller-ssh": "aws ssm start-session --target $(pulumi stack output controllerInstanceId)",
+    "bot-deploy": "tsx src/bin/bot-deploy.ts",
+    "bot-destroy": "tsx src/bin/bot-destroy.ts",
+    "bot-outputs": "tsx src/bin/bot-outputs.ts",
+    "bot-session": "tsx src/bin/bot-session.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "start": "node dist/application/src/main.js",
@@ -26,6 +26,8 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
+    "@optique/core": "^1.3.3",
+    "@optique/run": "^1.3.3",
     "@pulumi/aws": "^7.41.0",
     "@pulumi/pulumi": "^3.256.0"
   }

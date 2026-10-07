@@ -21,6 +21,11 @@
 
 ## Commands
 
+Local operations use `bot-deploy`, `bot-destroy`, `bot-outputs`, and
+`bot-session`, with TypeScript entry points under `src/bin/`. All default to
+the `controller` Pulumi stack and accept `--stack`; session access uses AWS SSM.
+Keep root npm forwarding and README examples in sync with these commands.
+
 ```bash
 npm run format:check
 npm run build

@@ -104,7 +104,7 @@ pulumi config set datasetBucketName your-dataset-bucket
 pulumi config set benchmarkWorkloadRoleArn arn:aws:iam::YOUR_ACCOUNT:role/YOUR_BENCHMARK_WORKLOAD_ROLE
 pulumi config set githubRepository datafusion-contrib/datafusion-distributed
 pulumi config set sourceRepositoryUrl https://github.com/datafusion-contrib/datafusion-distributed.git
-npm run controller-deploy
+npm run bot-deploy
 ```
 
 The authorized GitHub users are committed in
@@ -115,6 +115,21 @@ By default the controller uses a subnet from the account's default VPC. Set
 `controllerSubnetId` when it should use another public subnet. The security
 group has no inbound rules; administration uses AWS Systems Manager Session
 Manager.
+
+Bot lifecycle and access commands use Optique and default to the `controller`
+Pulumi stack. Select another stack with `--stack <name>` on any command:
+
+```bash
+npm run bot-deploy -- --stack controller
+npm run bot-outputs -- --stack controller
+npm run bot-session -- --stack controller
+npm run bot-destroy -- --stack controller
+```
+
+`bot-session` opens an interactive AWS Systems Manager session; it uses the
+caller's AWS configuration unless `--region <region>` is supplied. Deploy and
+destroy accept `--yes` to skip Pulumi's confirmation prompt. All four commands
+accept `--pulumi-bin <path>` and provide command-specific `--help`.
 
 The deployment outputs `controllerPublicIp`, `controllerRoleArn`, and
 `artifactBucketName`. A human must add the public IP as a `/32` to the benchmark
