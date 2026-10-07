@@ -167,7 +167,11 @@ be configured again after replacement.
 
 The controller bundle is compiled before deployment and installed root-owned;
 the service does not install development dependencies or transpile TypeScript at
-runtime.
+runtime. It invokes the bundled `datafusion-deploy.cjs` and
+`datafusion-destroy.cjs` from `benchmarks-remote/dist/` directly with Node.js,
+passing the release name and connection settings as command-line arguments.
+Deployment also passes the requested worker capacity, isolated build wrapper,
+source and target directories, and the bot's worker artifact bucket and prefix.
 
 ## Development
 

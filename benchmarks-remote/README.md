@@ -3,9 +3,12 @@
 This directory contains the local benchmark clients and the infrastructure used
 to run distributed benchmarks on Kubernetes.
 
-- `src/` contains the local TypeScript benchmark clients.
+- `src/bin/` contains the local TypeScript commands, including each engine's
+  deploy, destroy, and benchmark entry points.
+- `src/lib/` contains shared deployment mechanics, publishing, and benchmark
+  support.
 - `pulumi/` provisions the AWS and EKS foundation.
-- `k8s/` contains the engine charts and lifecycle scripts.
+- `k8s/` contains the engine charts and measured worker resource settings.
 - `engines/` contains runtime sources for engines that do not own their benchmark
   worker upstream.
 
@@ -21,17 +24,15 @@ Iceberg is enabled by the worker itself. This keeps the
 worker on the same DataFusion and DataFusion Distributed APIs as the revision
 being benchmarked.
 
-The engine deployment calls `k8s/publish-datafusion.sh` to build and publish the
-worker. The bot runs the build in its isolated service after fetching dependencies.
+Engine deployment builds and publishes the worker through `src/lib/publishing.ts`.
+The bot runs the build in its isolated service after fetching dependencies.
 
-For a source worktree elsewhere, set `DATAFUSION_DISTRIBUTED_ROOT` to that
-checkout. `BENCHMARK_TESTDATA_ROOT` is a more specific override for a custom
-testdata directory. Relative source-checkout paths are resolved from the
-`datafusion-distributed-dev-tools` root:
+For a source worktree elsewhere, pass `--source-root` when deploying and
+`--testdata-root` when benchmarking:
 
 ```bash
-DATAFUSION_DISTRIBUTED_ROOT=../datafusion-distributed-pr \
-  npm run datafusion-bench -- tpch/sf1
+npm run datafusion-deploy -- --source-root ../datafusion-distributed-pr
+npm run datafusion-bench -- tpch/sf1 --testdata-root ../datafusion-distributed-pr/testdata
 ```
 
 The foundation, engine workloads, datasets, and benchmark runs have independent
@@ -51,7 +52,9 @@ aws sts get-caller-identity
 ```
 
 Add the two `export` lines to `~/.zshrc` to make that profile and region the
-defaults for new zsh sessions. SSO sessions still expire, so rerun
+defaults for AWS CLI calls in new zsh sessions. Project commands default to
+`us-east-1`; pass `--region <region>` when operating in another region.
+SSO sessions still expire, so rerun
 `aws sso login` when AWS reports missing or expired credentials.
 
 ## Foundation lifecycle
@@ -119,6 +122,11 @@ unchanged. Stop benchmark readers before removing or replacing a dataset.
 
 ## Engine lifecycle
 
+Each `<engine>-deploy` and `<engine>-destroy` npm command invokes its own
+`src/bin/<engine>-deploy.ts` or `src/bin/<engine>-destroy.ts`. Options are parsed
+with Optique; the engine is fixed by the command and takes no positional
+argument. Shared lifecycle mechanics live in `src/lib/deployment.ts`.
+
 Deploy only the engines needed for a benchmark session:
 
 ```bash
@@ -129,12 +137,12 @@ npm run ballista-deploy
 npm run clickhouse-deploy
 ```
 
-Set `DEPLOYMENT_NAME` to operate a separate named DataFusion release with the
+Pass `--deployment-name` to operate a separate named DataFusion release with the
 same commands:
 
 ```bash
-DEPLOYMENT_NAME=my-datafusion npm run datafusion-deploy
-DEPLOYMENT_NAME=my-datafusion npm run datafusion-destroy
+npm run datafusion-deploy -- --deployment-name my-datafusion
+npm run datafusion-destroy -- --deployment-name my-datafusion
 ```
 
 Each deploy command publishes any required engine artifacts and installs or
@@ -150,16 +158,15 @@ npm run clickhouse-destroy
 ```
 
 Helm upgrades are atomic and clean up failed revisions. Content-addressed
-artifacts and local deployment metadata are also written atomically, so an
-interrupted deploy can be rerun safely. Engine and foundation destroy commands
-are idempotent and can likewise be rerun after interruption.
+artifacts allow an interrupted deploy to be rerun safely. Engine and foundation
+destroy commands are idempotent and can likewise be rerun after interruption.
 
 ## Running benchmarks
 
 An engine and the requested dataset must already be deployed. Benchmark commands
 only open a local Kubernetes port-forward and execute the local client.
-DataFusion benchmarks use the same service name as deployment:
-`DEPLOYMENT_NAME`, or `datafusion-<USER>` with dots replaced by hyphens.
+DataFusion benchmarks default to `datafusion-<USER>` with dots replaced by hyphens,
+matching the default deployment name.
 Pass `--k8s-service` to override that selection.
 
 ```bash
@@ -181,8 +188,8 @@ five measured iterations and at least ten seconds of measured wall-clock time.
 Warmup is excluded from both minimums. Comparisons use the p50 latency for each
 query and sum those per-query p50 values for `TOTAL`.
 
-`npm run command -- <engine> <command>` runs a diagnostic command in a worker
-pod. `npm run compare` compares locally stored result sets.
+`npm run command -- <engine> -- <command> [arguments...]` runs a diagnostic
+command in a worker pod. `npm run compare` compares locally stored result sets.
 
 ### Interrupting a run
 
@@ -212,3 +219,18 @@ aws eks update-kubeconfig --region us-east-1 --name datafusion-bench-eks
 
 See [`pulumi/README.md`](./pulumi/README.md) for foundation details and
 [`k8s/README.md`](./k8s/README.md) for Kubernetes workload details.
+
+Sum task counts across successful iterations in a result directory with:
+
+```bash
+npm run sum-tasks -- /path/to/results
+```
+
+All lifecycle commands accept command-line options. Run a command with
+`--help` to inspect its options, for example:
+
+```bash
+npm run datafusion-deploy -- --help
+npm run datafusion-destroy -- --help
+npm run foundation-deploy -- --help
+```

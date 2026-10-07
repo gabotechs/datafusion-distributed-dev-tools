@@ -40,27 +40,6 @@ test("all engine workers consume the same node-filling resources", () => {
       template,
     );
   }
-
-  const deploy = fs.readFileSync(
-    path.join(root, "k8s/deploy-engine.sh"),
-    "utf8",
-  );
-  assert.match(deploy, /--values .*worker-resources\.yaml/);
-  for (const resource of [
-    "workerResources.requests.cpu",
-    "workerResources.requests.memory",
-    "workerResources.limits.cpu",
-    "workerResources.limits.memory",
-  ]) {
-    assert.match(
-      deploy,
-      new RegExp(`--set-string ${resource.replaceAll(".", "\\.")}`),
-    );
-  }
-  assert.match(
-    deploy,
-    /BENCHMARK_WORKER_CPU and BENCHMARK_WORKER_MEMORY must be set together/,
-  );
 });
 
 test("all engine charts default to twelve workers", () => {
@@ -78,28 +57,4 @@ test("all engine charts default to twelve workers", () => {
       valuesPath,
     );
   }
-});
-
-test("DataFusion deploy and destroy share the optional deployment name", () => {
-  const deploy = fs.readFileSync(
-    path.join(root, "k8s/deploy-engine.sh"),
-    "utf8",
-  );
-  const destroy = fs.readFileSync(
-    path.join(root, "k8s/destroy-engine.sh"),
-    "utf8",
-  );
-  const library = fs.readFileSync(path.join(root, "k8s/lib.sh"), "utf8");
-  assert.match(
-    deploy,
-    /deployment_name=\$\{DEPLOYMENT_NAME:-\$\{engine\}-\$\{USER\/\/\.\/-\}\}/,
-  );
-  assert.match(
-    destroy,
-    /deployment_name=\$\{DEPLOYMENT_NAME:-\$\{engine\}-\$\{USER\/\/\.\/-\}\}/,
-  );
-  assert.match(deploy, /helm upgrade --install "\$\{deployment_name\}"/);
-  assert.match(deploy, /--set-string name="\$\{deployment_name\}"/);
-  assert.match(destroy, /helm uninstall "\$\{deployment_name\}"/);
-  assert.match(library, /validate_deployment_name/);
 });

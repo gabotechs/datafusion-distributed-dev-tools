@@ -18,7 +18,7 @@ npm run datafusion-bench -- tpch/sf1 --iterations 1
 npm run datafusion-destroy
 ```
 
-Use `DEPLOYMENT_NAME` with both commands to deploy an independently named
+Pass `--deployment-name <name>` with both commands to deploy an independently named
 DataFusion release.
 
 Benchmark commands require the engine release and dataset to exist. They do not
@@ -54,3 +54,42 @@ and cluster should also be removed:
 ```bash
 npm run foundation-destroy
 ```
+
+Deploy and destroy commands accept `--region`, `--outputs-file`, `--kubeconfig`,
+and `--refresh-kubeconfig`. Deploy commands also accept `--nodes` and
+`--instance-type`. DataFusion accepts `--worker-cpu` and `--worker-memory`
+together, `--source-root`, `--target-dir`, `--artifact-bucket`,
+`--artifact-prefix`, `--build-wrapper`, and `--worker-artifact`.
+Ballista accepts `--target-dir` for its build artifacts.
+Spark accepts `--spark-image` to deploy an existing image. Each engine's deploy
+and destroy commands invoke separate TypeScript entry points under `src/bin/`.
+Destroy commands accept only connection options and `--deployment-name`;
+run any command with `--help` for its options.
+
+```bash
+npm run datafusion-deploy -- --deployment-name my-worker --nodes 12
+npm run datafusion-bench -- tpch/sf1 --k8s-service my-worker
+npm run datafusion-destroy -- --deployment-name my-worker
+npm run command -- --region us-east-1 datafusion -- df -h
+npm run test-render
+```
+
+Publish artifacts independently with `npm run publish-datafusion`,
+`npm run publish-ballista`, or `npm run publish-image -- spark`.
+Application options are command-line arguments; AWS authentication and
+standard Cargo/Zig settings use the caller's tool configuration.
+
+Helm also inherits the caller's `HELM_DRIVER`, which defaults to `secret` when
+unset. Use the same storage backend for deployment, inspection, and teardown.
+A release stored in secrets is invisible to the `configmap` backend, and an
+uninstall with `--ignore-not-found` can succeed without removing its pods.
+To inspect and remove a release stored in secrets, use:
+
+```bash
+HELM_DRIVER=secret helm list --all-namespaces
+HELM_DRIVER=secret npm run datafusion-destroy -- --deployment-name my-worker
+```
+
+Check the release's namespace and workload names before teardown. Pods may
+remain terminating briefly after their deployment is removed; empty EKS nodes
+are reclaimed asynchronously.

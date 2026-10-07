@@ -141,10 +141,7 @@ export interface DataFusionSettingOptions {
 export function dataFusionServiceName(
   environment: NodeJS.ProcessEnv = process.env,
 ): string {
-  return (
-    environment.DEPLOYMENT_NAME ||
-    `datafusion-${(environment.USER || userInfo().username).replaceAll(".", "-")}`
-  );
+  return `datafusion-${(environment.USER || userInfo().username).replaceAll(".", "-")}`;
 }
 
 export class DataFusionRunner implements BenchmarkRunner {

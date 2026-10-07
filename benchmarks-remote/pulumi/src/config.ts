@@ -107,11 +107,6 @@ export function validateFoundationConfig(
 export function loadFoundationConfig(): FoundationConfig {
   const config = new pulumi.Config();
   const awsConfig = new pulumi.Config("aws");
-  const apiCidrsFromEnvironment =
-    process.env.KUBERNETES_API_ALLOWED_CIDRS?.split(",")
-      .map((cidr) => cidr.trim())
-      .filter(Boolean);
-
   return validateFoundationConfig({
     namePrefix: config.get("namePrefix") ?? "datafusion-bench",
     region: awsConfig.require("region"),
@@ -134,9 +129,8 @@ export function loadFoundationConfig(): FoundationConfig {
     benchmarkNodeCount: config.getNumber("benchmarkNodeCount") ?? 12,
     systemInstanceType: config.get("systemInstanceType") ?? "m6i.large",
     eksVersion: config.get("eksVersion") ?? "1.36",
-    kubernetesApiAllowedCidrs:
-      apiCidrsFromEnvironment && apiCidrsFromEnvironment.length > 0
-        ? apiCidrsFromEnvironment
-        : config.requireObject<string[]>("kubernetesApiAllowedCidrs"),
+    kubernetesApiAllowedCidrs: config.requireObject<string[]>(
+      "kubernetesApiAllowedCidrs",
+    ),
   });
 }

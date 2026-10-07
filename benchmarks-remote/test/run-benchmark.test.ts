@@ -21,7 +21,7 @@ test("benchmark runs do not create cluster state", () => {
     "utf8",
   );
   const library = fs.readFileSync(
-    path.resolve(__dirname, "../k8s/lib.sh"),
+    path.resolve(__dirname, "../src/lib/operations.ts"),
     "utf8",
   );
   assert.doesNotMatch(runner, /benchmark_lock|heartbeat|configmap/);
@@ -29,25 +29,23 @@ test("benchmark runs do not create cluster state", () => {
 });
 
 test("engine publishers return artifacts directly without runtime files", () => {
-  const files = [
-    "lib.sh",
-    "deploy-engine.sh",
-    "publish-datafusion.sh",
-    "publish-ballista.sh",
-    "publish-image.sh",
-  ].map((file) =>
-    fs.readFileSync(path.resolve(__dirname, "../k8s", file), "utf8"),
-  );
-  for (const source of files) {
+  for (const file of [
+    "lib/operations.ts",
+    "lib/deployment.ts",
+    "bin/datafusion-deploy.ts",
+    "bin/ballista-deploy.ts",
+    "bin/spark-deploy.ts",
+    "lib/publishing.ts",
+  ]) {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, "../src", file),
+      "utf8",
+    );
     assert.doesNotMatch(
       source,
       /runtime_file|K8S_RUNTIME_FILE|update_runtime_file|output_value/,
     );
   }
-  const deploy = files[1]!;
-  assert.match(deploy, /worker_artifact=.*publish-datafusion\.sh/);
-  assert.match(deploy, /spark_image=.*publish-image\.sh/);
-  assert.match(deploy, /ballista_artifacts=.*publish-ballista\.sh/);
 });
 
 test("all benchmark clients use the same local port", () => {
@@ -93,22 +91,4 @@ test("benchmark npm commands execute their TypeScript clients directly", () => {
   ]) {
     assert.match(packageJson, new RegExp(`tsx src/bin/${engine}-bench\\.ts`));
   }
-});
-
-test("publishes the DataFusion worker from the adjacent source checkout", () => {
-  const publisher = fs.readFileSync(
-    path.resolve(__dirname, "../k8s/publish-datafusion.sh"),
-    "utf8",
-  );
-  assert.match(publisher, /--package datafusion-distributed-remote-worker/);
-  assert.match(publisher, /--bin worker/);
-  assert.doesNotMatch(publisher, /--features/);
-  assert.match(
-    publisher,
-    /target_dir=\$\{CARGO_TARGET_DIR:-\$\{source_root\}\/target\}/,
-  );
-  assert.match(
-    publisher,
-    /worker_binary="\$\{target_dir\}\/x86_64-unknown-linux-gnu\/release\/worker"/,
-  );
 });

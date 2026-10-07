@@ -184,7 +184,7 @@ test("defaults to the same named service as datafusion-deploy", async () => {
       USER: "alice.example",
       DEPLOYMENT_NAME: "custom-worker",
     }),
-    "custom-worker",
+    "datafusion-alice-example",
   );
   assert.equal(
     dataFusionServiceName({ USER: "alice.example", DEPLOYMENT_NAME: "" }),

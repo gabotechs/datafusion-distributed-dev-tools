@@ -31,8 +31,9 @@ checkout's `testdata/` directory. Benchmark results are saved locally under `tes
   datafusion-distributed-dev-tools/
 ```
 
-Set `DATAFUSION_DISTRIBUTED_ROOT` when running commands against a source
-worktree outside this default layout.
+For a source worktree outside this layout, pass `--source-root` to
+`datafusion-deploy` and `--testdata-root` to `datafusion-bench`. Benchmark clients
+also accept `DATAFUSION_DISTRIBUTED_ROOT` for source checkout discovery.
 
 ## Development
 
@@ -51,12 +52,15 @@ npm test
 
 Prepare datasets directly in S3 using the source project’s generation commands
 (see [dataset preparation](benchmarks-remote/README.md#dataset-lifecycle)).
-Root npm commands forward operational commands to the owning component. For
-example:
+Root npm commands forward operational commands and command-line options to the
+owning component. Each engine has its own TypeScript deploy, destroy, and
+benchmark entry points under `benchmarks-remote/src/bin/`, with Optique parsing
+and command-specific `--help`. For example:
 
 ```bash
 npm run foundation-deploy
 npm run datafusion-deploy
+npm run datafusion-destroy -- --help
 npm run datafusion-bench -- tpch/sf1 --iterations 1
 npm run controller-deploy
 npm run controller-ssh

@@ -33,11 +33,13 @@ that existing namespace.
 ### GitHub integration
 
 The controller polls PR comments through the GitHub REST API using a manually
-provisioned `GH_TOKEN`. It deduplicates comment IDs, validates the commenter's
-repository permission, and accepts `benchmarks run <suite>/<variant>...`
-commands with optional `--instance-type`, `--nodes`, `--base main`, and
-repeatable `--config` arguments. Omitted capacity uses `c5n.4xlarge` and 12
-nodes. It validates every dataset, accepts only cataloged instance types,
+provisioned `GH_TOKEN`. It deduplicates comment IDs, checks the commenter's
+entry in `authorized-github-logins.txt`, and accepts
+`benchmarks run <suite>/<variant>...`
+commands with optional `--instance-type`, `--nodes`, `--iterations`,
+`--base main`, and repeatable `--config` arguments. Measured iterations default
+to 5 per query, with one excluded warmup iteration. Omitted capacity uses
+`c5n.4xlarge` and 12 nodes. It validates every dataset, accepts only cataloged instance types,
 derives node-filling worker CPU and memory resources from that catalog, rejects
 duplicate datasets, and limits requests to 60 nodes. Polling keeps the EC2
 instance private with no inbound internet listener. GitHub authentication is
@@ -52,17 +54,22 @@ not managed by Pulumi.
    clone.
 3. Validate every requested dataset against S3 and recreate its local table
    placeholders under that checkout's normal `testdata/` tree.
-4. Run `DEPLOYMENT_NAME=datafusion-benchmark-bot npm run datafusion-deploy`
-   from `benchmarks-remote`. The shared command builds the checked-out
-   `benchmarks` crate's `worker` binary, publishes it, installs the named Helm
-   release, and waits for it to become ready.
+4. Run `node dist/datafusion-deploy.cjs` from the installed `benchmarks-remote`
+   harness, with `--deployment-name datafusion-benchmark-bot`, connection
+   options, requested worker capacity, source and target paths, the isolated
+   `--build-wrapper`, and the bot's artifact bucket and prefix. This bundled
+   entry point comes from `src/bin/datafusion-deploy.ts`. It builds the selected
+   revision's `datafusion-distributed-remote-worker` binary in isolation,
+   publishes it, installs the named Helm release, and waits for readiness.
 5. Run every requested dataset against the base deployment in order and retain
    its local results.
 6. Fetch and check out the immutable head SHA in the same source clone, then run
    the same named deployment command to upgrade the release.
 7. Run the same ordered dataset list against the head deployment, combine the
-   comparison stdout, and update the existing status comment in place.
-8. Run the shared `datafusion-destroy` command for the bot-owned deployment.
+   comparison stdout, and retain it for the completed status comment.
+8. Run `node dist/datafusion-destroy.cjs` with the bot's release name and
+   connection options to remove its deployment, then publish the completed
+   comparison. Teardown also runs when deployment or benchmarking fails.
 
 ## Security boundary
 
@@ -82,8 +89,8 @@ Cargo build scripts and the resulting worker can execute arbitrary code.
   deployment and benchmark harness bundled with the controller. The Rust worker
   target is part of the untrusted DataFusion Distributed source and runs only
   inside the isolated build and benchmark environments.
-- Restrict triggers to trusted repository roles and keep an auditable job
-  record.
+- Restrict triggers to the committed authorized GitHub login list and keep an
+  auditable job record.
 
 ## Cache strategy
 

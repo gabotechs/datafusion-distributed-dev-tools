@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "build": "tsc --noEmit",
-    "foundation-deploy": "./deploy.sh",
-    "foundation-destroy": "./destroy.sh",
+    "foundation-deploy": "tsx ../src/bin/deploy-foundation.ts",
+    "foundation-destroy": "tsx ../src/bin/destroy-foundation.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "tsx --test test/*.test.ts"
