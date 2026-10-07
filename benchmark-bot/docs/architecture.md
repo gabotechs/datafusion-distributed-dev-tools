@@ -52,7 +52,7 @@ not managed by Pulumi.
    clone.
 3. Validate every requested dataset against S3 and recreate its local table
    placeholders under that checkout's normal `testdata/` tree.
-4. Run `DEPLOYMENT_NAME=datafusion-benchmark-bot npm run datafusion-deploy`
+4. Run `npm run datafusion-deploy -- --deployment-name datafusion-benchmark-bot`
    from `benchmarks-remote`. The shared command builds the checked-out
    `benchmarks` crate's `worker` binary, publishes it, installs the named Helm
    release, and waits for it to become ready.

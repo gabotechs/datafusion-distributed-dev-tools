@@ -51,7 +51,6 @@ From `benchmarks-remote/pulumi`, run:
 ```bash
 npm run build
 npm test
-bash -n deploy.sh destroy.sh
 ```
 
 Use a live Pulumi preview for networking, IAM, EKS, storage, or provider changes. Never apply a replacement preview to a long-lived cluster unless that replacement is explicitly intended.

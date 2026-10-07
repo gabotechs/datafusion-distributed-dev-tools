@@ -51,7 +51,7 @@ generic benchmark wrapper:
 7. Implement the local client under `src/bin/` and reusable support under
    `src/lib/`; keep results local and use literal dataset paths.
 8. Add the engine and its worker selector to the shared validation in
-   `k8s/lib.sh`, declare its deployment in `src/lib/engine-cli.ts`, then extend
+   `src/lib/operations.ts`, declare its deployment in `src/lib/engine-cli.ts`, then extend
    the focused tests. Do not add per-engine port selection or lazy readiness,
    dataset, or deployment logic to the generic benchmark connection path.
 
@@ -64,7 +64,7 @@ npm run build
 npm test
 ```
 
-Render affected Helm charts with `k8s/worker-resources.yaml`, check changed
-shell scripts with `bash -n`, and run a live single-query benchmark for every
+Render affected Helm charts with `k8s/worker-resources.yaml`, type-check changed
+TypeScript commands, and run a live single-query benchmark for every
 affected engine. Infrastructure destruction always requires explicit user
 authorization.

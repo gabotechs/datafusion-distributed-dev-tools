@@ -27,7 +27,7 @@ npm run clickhouse-deploy
 
 Deploy commands publish content-addressed artifacts when required and perform an atomic Helm install or upgrade. DataFusion and Ballista publish Linux binaries, Spark publishes an ECR image through CodeBuild, and Trino and ClickHouse use their chart images directly. Rerun the same deploy command after interruption.
 
-Keep the default 12 measured workers. Do not set `NODE_COUNT` or alter `worker-resources.yaml` unless the user requests a different benchmark shape. Every measured worker must use the shared node-filling resource configuration and one worker per benchmark node.
+Keep the default 12 measured workers. Do not set `--nodes` or alter `worker-resources.yaml` unless the user requests a different benchmark shape. Every measured worker must use the shared node-filling resource configuration and one worker per benchmark node.
 
 Deployment is persistent. Do not destroy the engine after deployment unless teardown was requested.
 
@@ -45,7 +45,7 @@ kubectl get nodes -o wide
 Run a diagnostic command in a worker with:
 
 ```bash
-npm run command -- <engine> <command> [arguments...]
+npm run command -- <engine> -- <command> [arguments...]
 ```
 
 Prefer pod status, events, and relevant container logs when a Helm readiness wait fails. Do not add permanent health-check orchestration to the deployment scripts.
@@ -66,4 +66,4 @@ Resolve the exact engine and obtain authorization before teardown. The command r
 
 ## Validate changes
 
-Render every affected Helm chart with `k8s/worker-resources.yaml`, run `bash -n` for changed shell scripts, and run `npm test`. For runtime changes, deploy the affected engine and leave it installed unless teardown is part of the request.
+Render every affected Helm chart with `k8s/worker-resources.yaml`, type-check changed TypeScript commands, and run `npm test`. For runtime changes, deploy the affected engine and leave it installed unless teardown is part of the request.

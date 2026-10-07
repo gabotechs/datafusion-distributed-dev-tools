@@ -21,17 +21,15 @@ Iceberg is enabled by the worker itself. This keeps the
 worker on the same DataFusion and DataFusion Distributed APIs as the revision
 being benchmarked.
 
-The engine deployment calls `k8s/publish-datafusion.sh` to build and publish the
-worker. The bot runs the build in its isolated service after fetching dependencies.
+Engine deployment builds and publishes the worker through `src/lib/publishing.ts`.
+The bot runs the build in its isolated service after fetching dependencies.
 
-For a source worktree elsewhere, set `DATAFUSION_DISTRIBUTED_ROOT` to that
-checkout. `BENCHMARK_TESTDATA_ROOT` is a more specific override for a custom
-testdata directory. Relative source-checkout paths are resolved from the
-`datafusion-distributed-dev-tools` root:
+For a source worktree elsewhere, pass `--source-root` when deploying and
+`--testdata-root` when benchmarking:
 
 ```bash
-DATAFUSION_DISTRIBUTED_ROOT=../datafusion-distributed-pr \
-  npm run datafusion-bench -- tpch/sf1
+npm run datafusion-deploy -- --source-root ../datafusion-distributed-pr
+npm run datafusion-bench -- tpch/sf1 --testdata-root ../datafusion-distributed-pr/testdata
 ```
 
 The foundation, engine workloads, datasets, and benchmark runs have independent
@@ -129,12 +127,12 @@ npm run ballista-deploy
 npm run clickhouse-deploy
 ```
 
-Set `DEPLOYMENT_NAME` to operate a separate named DataFusion release with the
+Pass `--deployment-name` to operate a separate named DataFusion release with the
 same commands:
 
 ```bash
-DEPLOYMENT_NAME=my-datafusion npm run datafusion-deploy
-DEPLOYMENT_NAME=my-datafusion npm run datafusion-destroy
+npm run datafusion-deploy -- --deployment-name my-datafusion
+npm run datafusion-destroy -- --deployment-name my-datafusion
 ```
 
 Each deploy command publishes any required engine artifacts and installs or
@@ -150,16 +148,15 @@ npm run clickhouse-destroy
 ```
 
 Helm upgrades are atomic and clean up failed revisions. Content-addressed
-artifacts and local deployment metadata are also written atomically, so an
-interrupted deploy can be rerun safely. Engine and foundation destroy commands
-are idempotent and can likewise be rerun after interruption.
+artifacts allow an interrupted deploy to be rerun safely. Engine and foundation
+destroy commands are idempotent and can likewise be rerun after interruption.
 
 ## Running benchmarks
 
 An engine and the requested dataset must already be deployed. Benchmark commands
 only open a local Kubernetes port-forward and execute the local client.
-DataFusion benchmarks use the same service name as deployment:
-`DEPLOYMENT_NAME`, or `datafusion-<USER>` with dots replaced by hyphens.
+DataFusion benchmarks default to `datafusion-<USER>` with dots replaced by hyphens,
+matching the default deployment name.
 Pass `--k8s-service` to override that selection.
 
 ```bash
@@ -212,3 +209,17 @@ aws eks update-kubeconfig --region us-east-1 --name datafusion-bench-eks
 
 See [`pulumi/README.md`](./pulumi/README.md) for foundation details and
 [`k8s/README.md`](./k8s/README.md) for Kubernetes workload details.
+
+Sum task counts across successful iterations in a result directory with:
+
+```bash
+npm run sum-tasks -- /path/to/results
+```
+
+All lifecycle commands accept command-line options. Run a command with
+`--help` to inspect its options, for example:
+
+```bash
+npm run datafusion-deploy -- --help
+npm run foundation-deploy -- --help
+```

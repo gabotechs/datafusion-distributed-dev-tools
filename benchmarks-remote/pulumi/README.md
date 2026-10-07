@@ -19,10 +19,10 @@ them.
 
 ## Prerequisites
 
-- Node.js 22 or newer.
+- Node.js 24 or newer.
 - Pulumi CLI matching the `@pulumi/pulumi` major version in `package.json`.
 - AWS CLI credentials with permission to manage the stack resources.
-- A selected Pulumi backend, or `PULUMI_BACKEND_URL` pointing to an S3 backend
+- A selected Pulumi backend, or `--backend-url <url>` pointing to an S3 backend
   or Pulumi Cloud organization.
 - The AWS KMS alias `alias/datafusion-bench-pulumi-state` for encrypting Pulumi
   state when using an object-storage backend.
@@ -34,7 +34,7 @@ npm install
 npm run foundation-deploy
 ```
 
-`PULUMI_BIN` may point to a downloaded Pulumi binary when it is not on `PATH`.
+`--pulumi-bin <path>` may point to a downloaded Pulumi binary when it is not on `PATH`.
 The deploy script uses the caller's existing AWS credentials and Pulumi backend,
 writes ignored stack outputs to `.pulumi-outputs.json`, installs the stable
 Kubernetes tenancy resources after EKS is ready, and writes the ignored
@@ -47,7 +47,7 @@ Copy `Pulumi.benchmark.example.yaml` to the ignored
 endpoint allowlists, the secrets-provider key, and other operational stack
 configuration local. Credentials, account selection, and state backend choices
 also stay in the caller's AWS and Pulumi configuration. Object-storage stacks use the KMS alias
-`alias/datafusion-bench-pulumi-state` by default. `PULUMI_SECRETS_PROVIDER` can
+`alias/datafusion-bench-pulumi-state` by default. `--secrets-provider <uri>` can
 select a different Pulumi secrets provider.
 
 Optional configuration:
@@ -61,12 +61,12 @@ Optional configuration:
 | `eksVersion`                | `1.36`             | Exact EKS Kubernetes minor release. |
 | `kubernetesApiAllowedCidrs` | none               | Persistent trusted EKS API CIDRs.   |
 
-`KUBERNETES_API_ALLOWED_CIDRS` can provide a comma-separated list, which
-replaces the cluster's allowlist exactly. When it is unset,
+`--allowed-cidrs <cidrs>` can provide a comma-separated list, which
+replaces the cluster's allowlist exactly. When it is omitted,
 `npm run foundation-deploy` combines the current public IP with the persistent
 CIDRs stored in the selected stack and the CIDRs the cluster already allows, so
 a deploy never removes another caller's access. Remove a stale CIDR by running
-the deploy with an explicit `KUBERNETES_API_ALLOWED_CIDRS` that omits it.
+the deploy with an explicit `--allowed-cidrs <cidrs>` that omits it.
 Configure a controller's stable public IP once without committing it:
 
 ```bash
@@ -77,14 +77,14 @@ pulumi config set --path 'kubernetesApiAllowedCidrs[0]' '<controller-public-ip>/
 
 `benchmark` is the default stack used for interactive runs. A human can
 provision an isolated foundation for automation by creating and configuring a
-second stack, then selecting it through `PULUMI_STACK`:
+second stack, then selecting it through `--stack <name>`:
 
 ```bash
 cd benchmarks-remote/pulumi
 pulumi stack init pr-bot --secrets-provider awskms://alias/datafusion-bench-pulumi-state?region=us-east-1
 pulumi config set --stack pr-bot namePrefix datafusion-pr-bot
 cd ..
-PULUMI_STACK=pr-bot npm run foundation-deploy
+npm run foundation-deploy -- --stack pr-bot
 ```
 
 Non-default stacks write ignored, stack-specific files such as
@@ -93,11 +93,11 @@ replace the interactive stack's local configuration. Use the same stack name
 for explicit teardown:
 
 ```bash
-PULUMI_STACK=pr-bot npm run foundation-destroy
+npm run foundation-destroy -- --stack pr-bot
 ```
 
 The state backend is a bootstrap dependency and cannot be owned by the stack
-whose state it holds. Set `PULUMI_BACKEND_URL` to have the lifecycle scripts log
+whose state it holds. Pass `--backend-url <url>` to have the lifecycle scripts log
 in explicitly, or select a backend with `pulumi login` beforehand.
 
 Stack resources are protected during normal operation. To intentionally delete
@@ -118,3 +118,6 @@ npm run format:check
 npm run build
 npm test
 ```
+
+The lifecycle commands also accept `--region`, `--outputs-file`, and
+`--kubeconfig`. Inspect all options with `npm run foundation-deploy -- --help`.

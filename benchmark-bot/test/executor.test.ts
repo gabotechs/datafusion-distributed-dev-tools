@@ -227,27 +227,34 @@ test("uses the shared named deployment command for deploy and cleanup", async ()
   await executor.deploy(outputs, JOB);
   await executor.cleanupDeployment(outputs);
 
-  assert.deepEqual(
-    calls.map(({ program, arguments_ }) => [program, ...arguments_]),
-    [
-      ["npm", "run", "datafusion-deploy"],
-      ["npm", "run", "datafusion-destroy"],
-    ],
+  assert.equal(calls[0]?.program, "node");
+  assert.equal(calls[1]?.program, "node");
+  assert.equal(
+    calls[0]?.arguments_[0],
+    path.join(config.harnessRoot, "dist", "deploy-engine.cjs"),
+  );
+  assert.equal(
+    calls[1]?.arguments_[0],
+    path.join(config.harnessRoot, "dist", "destroy-engine.cjs"),
   );
   assert.equal(calls[0]?.options?.cwd, config.harnessRoot);
-  assert.equal(
-    calls[0]?.options?.env?.DEPLOYMENT_NAME,
-    "datafusion-benchmark-bot",
-  );
-  assert.equal(calls[0]?.options?.env?.NODE_COUNT, "12");
-  assert.equal(calls[0]?.options?.env?.BENCHMARK_INSTANCE_TYPE, "m5.2xlarge");
-  assert.equal(calls[0]?.options?.env?.BENCHMARK_WORKER_CPU, "7");
-  assert.equal(calls[0]?.options?.env?.BENCHMARK_WORKER_MEMORY, "28Gi");
-  assert.equal(calls[0]?.options?.env?.WORKER_ARTIFACT_BUCKET, "artifacts");
-  assert.equal(
-    calls[0]?.options?.env?.DATAFUSION_BUILD_WRAPPER,
-    "/usr/local/sbin/datafusion-pr-build",
-  );
+  const args = calls[0]!.arguments_;
+  for (const [flag, expected] of [
+    ["--deployment-name", "datafusion-benchmark-bot"],
+    ["--nodes", "12"],
+    ["--instance-type", "m5.2xlarge"],
+    ["--worker-cpu", "7"],
+    ["--worker-memory", "28Gi"],
+    ["--artifact-bucket", "artifacts"],
+    ["--build-wrapper", "/usr/local/sbin/datafusion-pr-build"],
+    ["--source-root", config.sourceRoot],
+    ["--outputs-file", config.foundationOutputsFile],
+  ]) {
+    assert.equal(args[args.indexOf(flag!) + 1], expected, flag);
+  }
+  assert.equal(calls[0]?.options?.env, undefined);
+  assert.ok(calls[1]!.arguments_.includes("--deployment-name"));
+  assert.ok(!calls[1]!.arguments_.includes("--build-wrapper"));
   assert.equal(calls[1]?.options?.allowFailure, true);
 });
 

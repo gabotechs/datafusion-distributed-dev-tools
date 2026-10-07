@@ -18,7 +18,7 @@ npm run datafusion-bench -- tpch/sf1 --iterations 1
 npm run datafusion-destroy
 ```
 
-Use `DEPLOYMENT_NAME` with both commands to deploy an independently named
+Pass `--deployment-name <name>` with both commands to deploy an independently named
 DataFusion release.
 
 Benchmark commands require the engine release and dataset to exist. They do not
@@ -54,3 +54,24 @@ and cluster should also be removed:
 ```bash
 npm run foundation-destroy
 ```
+
+Deploy and destroy commands accept `--region`, `--outputs-file`, `--kubeconfig`,
+and `--refresh-kubeconfig`. Deploy commands also accept `--nodes` and
+`--instance-type`. DataFusion accepts `--worker-cpu` and `--worker-memory`
+together, `--source-root`, `--target-dir`, `--artifact-bucket`,
+`--artifact-prefix`, `--build-wrapper`, and `--worker-artifact`.
+Spark accepts `--spark-image` to deploy an existing image. Run any command with
+`--help` for its options.
+
+```bash
+npm run datafusion-deploy -- --deployment-name my-worker --nodes 12
+npm run datafusion-bench -- tpch/sf1 --k8s-service my-worker
+npm run datafusion-destroy -- --deployment-name my-worker
+npm run command -- --region us-east-1 datafusion -- df -h
+npm run test-render
+```
+
+Publish artifacts independently with `npm run publish-datafusion`,
+`npm run publish-ballista`, or `npm run publish-image -- spark`.
+Application options are command-line arguments; AWS authentication and
+standard Cargo/Zig settings use the caller's tool configuration.

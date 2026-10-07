@@ -22,5 +22,5 @@ benchmark wrapper is responsible for run-scoped cleanup.
 Validate rendered resources locally with:
 
 ```bash
-./benchmarks-remote/k8s/benchmark-tenancy/test/render.sh
+npm --prefix benchmarks-remote run test-render -- benchmark-tenancy
 ```

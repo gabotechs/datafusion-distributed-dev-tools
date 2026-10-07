@@ -304,18 +304,27 @@ export class BenchmarkExecutor {
   }
 
   async deploy(outputs: FoundationOutputs, job: Job): Promise<void> {
-    await this.processes.run("npm", ["run", "datafusion-deploy"], {
-      cwd: this.config.harnessRoot,
-      env: this.deploymentEnvironment(outputs, job),
-    });
+    await this.processes.run(
+      "node",
+      [
+        path.join(this.config.harnessRoot, "dist", "deploy-engine.cjs"),
+        "datafusion",
+        ...this.deploymentArguments(outputs, job),
+      ],
+      { cwd: this.config.harnessRoot },
+    );
   }
 
   async cleanupDeployment(outputs: FoundationOutputs): Promise<void> {
-    await this.processes.run("npm", ["run", "datafusion-destroy"], {
-      allowFailure: true,
-      cwd: this.config.harnessRoot,
-      env: this.deploymentEnvironment(outputs),
-    });
+    await this.processes.run(
+      "node",
+      [
+        path.join(this.config.harnessRoot, "dist", "destroy-engine.cjs"),
+        "datafusion",
+        ...this.deploymentArguments(outputs),
+      ],
+      { allowFailure: true, cwd: this.config.harnessRoot },
+    );
   }
 
   async runBenchmark(
@@ -374,36 +383,45 @@ export class BenchmarkExecutor {
     return result.stdout;
   }
 
-  private deploymentEnvironment(
-    outputs: FoundationOutputs,
-    job?: Job,
-  ): NodeJS.ProcessEnv {
-    const environment: NodeJS.ProcessEnv = {
-      ...process.env,
-      AWS_REGION: this.config.region,
-      CARGO_TARGET_DIR: "/var/cache/datafusion-pr-build/target",
-      DATAFUSION_BUILD_WRAPPER: "/usr/local/sbin/datafusion-pr-build",
+  private deploymentArguments(outputs: FoundationOutputs, job?: Job): string[] {
+    const args = [
+      "--region",
+      this.config.region,
+      "--deployment-name",
       DEPLOYMENT_NAME,
-      KUBECONFIG: this.config.kubeconfig,
-      PULUMI_OUTPUTS_FILE: this.config.foundationOutputsFile,
-      WORKER_ARTIFACT_BUCKET: outputs.artifactBucketName,
-      WORKER_ARTIFACT_PREFIX: "workers/datafusion",
-    };
+      "--kubeconfig",
+      this.config.kubeconfig,
+      "--outputs-file",
+      this.config.foundationOutputsFile,
+    ];
     if (job) {
-      const workerResources = benchmarkWorkerResources(
-        job.benchmarkInstanceType,
-      );
-      if (!workerResources) {
+      const resources = benchmarkWorkerResources(job.benchmarkInstanceType);
+      if (!resources)
         throw new Error(
           `Unsupported benchmark instance type ${job.benchmarkInstanceType}`,
         );
-      }
-      environment.BENCHMARK_INSTANCE_TYPE = job.benchmarkInstanceType;
-      environment.BENCHMARK_WORKER_CPU = workerResources.cpu;
-      environment.BENCHMARK_WORKER_MEMORY = workerResources.memory;
-      environment.NODE_COUNT = String(job.benchmarkNodeCount);
+      args.push(
+        "--source-root",
+        this.config.sourceRoot,
+        "--target-dir",
+        "/var/cache/datafusion-pr-build/target",
+        "--build-wrapper",
+        "/usr/local/sbin/datafusion-pr-build",
+        "--artifact-bucket",
+        outputs.artifactBucketName,
+        "--artifact-prefix",
+        "workers/datafusion",
+        "--nodes",
+        String(job.benchmarkNodeCount),
+        "--instance-type",
+        job.benchmarkInstanceType,
+        "--worker-cpu",
+        resources.cpu,
+        "--worker-memory",
+        resources.memory,
+      );
     }
-    return environment;
+    return args;
   }
 
   private testdataRoot(): string {
