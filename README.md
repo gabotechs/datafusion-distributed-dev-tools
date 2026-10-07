@@ -62,8 +62,8 @@ npm run foundation-deploy
 npm run datafusion-deploy
 npm run datafusion-destroy -- --help
 npm run datafusion-bench -- tpch/sf1 --iterations 1
-npm run controller-deploy
-npm run controller-ssh
+npm run bot-deploy
+npm run bot-session
 ```
 
 Foundation, dataset, engine, benchmark, and controller teardown remain
