@@ -9,11 +9,17 @@ Operate from `benchmarks-remote`. Supported engine names are `datafusion`, `trin
 
 ## Preconditions
 
-1. Use the caller-selected `AWS_PROFILE` and `AWS_REGION`; never hardcode an account, profile, or `aws-vault` wrapper.
+1. Use the caller-selected `AWS_PROFILE`. Pass `--region <region>` to project commands when operating outside their `us-east-1` default; use `AWS_REGION` or `--region` for direct AWS CLI calls. Never hardcode an account, profile, or `aws-vault` wrapper.
 2. Run `aws sts get-caller-identity`. If SSO has expired and `AWS_PROFILE` is set, run `aws sso login --profile "$AWS_PROFILE"` once; stop if authentication still fails.
 3. Require `pulumi/.pulumi-outputs.json`. If it is missing, report that the foundation must be deployed; do not deploy it implicitly.
 
 ## Deploy or update
+
+Each engine has its own `src/bin/<engine>-deploy.ts` and
+`src/bin/<engine>-destroy.ts`, with shared mechanics in `src/lib/deployment.ts`.
+The npm command fixes the engine; do not supply a positional engine argument.
+Inspect its Optique options with `npm run <engine>-deploy -- --help` or
+`npm run <engine>-destroy -- --help`.
 
 Run the selected engine command:
 
@@ -62,7 +68,24 @@ npm run ballista-destroy
 npm run clickhouse-destroy
 ```
 
-Resolve the exact engine and obtain authorization before teardown. The command refuses to destroy an engine while a benchmark owns the cluster run lock. EKS Auto Mode removes empty capacity asynchronously.
+Resolve the exact engine and release, and obtain authorization before teardown.
+Use `--deployment-name <name>` for a named release. Stop benchmark readers of
+that release first; teardown does not check a benchmark lock.
+
+Helm inherits `HELM_DRIVER` from the caller. Use the backend that owns the
+release for both inspection and teardown; secrets and ConfigMaps contain
+independent release records. If pods remain after a successful command, check
+for a backend mismatch: `--ignore-not-found` makes a missing release a no-op.
+For a release stored in secrets, use:
+
+```bash
+HELM_DRIVER=secret helm list --all-namespaces
+HELM_DRIVER=secret npm run datafusion-destroy -- --deployment-name my-worker
+```
+
+Verify that the selected release's deployment and pods are removed. Pods may
+remain terminating briefly, and EKS Auto Mode removes empty capacity
+asynchronously.
 
 ## Validate changes
 

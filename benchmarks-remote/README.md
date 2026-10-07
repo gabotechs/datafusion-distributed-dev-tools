@@ -3,9 +3,12 @@
 This directory contains the local benchmark clients and the infrastructure used
 to run distributed benchmarks on Kubernetes.
 
-- `src/` contains the local TypeScript benchmark clients.
+- `src/bin/` contains the local TypeScript commands, including each engine's
+  deploy, destroy, and benchmark entry points.
+- `src/lib/` contains shared deployment mechanics, publishing, and benchmark
+  support.
 - `pulumi/` provisions the AWS and EKS foundation.
-- `k8s/` contains the engine charts and lifecycle scripts.
+- `k8s/` contains the engine charts and measured worker resource settings.
 - `engines/` contains runtime sources for engines that do not own their benchmark
   worker upstream.
 
@@ -49,7 +52,9 @@ aws sts get-caller-identity
 ```
 
 Add the two `export` lines to `~/.zshrc` to make that profile and region the
-defaults for new zsh sessions. SSO sessions still expire, so rerun
+defaults for AWS CLI calls in new zsh sessions. Project commands default to
+`us-east-1`; pass `--region <region>` when operating in another region.
+SSO sessions still expire, so rerun
 `aws sso login` when AWS reports missing or expired credentials.
 
 ## Foundation lifecycle
@@ -117,6 +122,11 @@ unchanged. Stop benchmark readers before removing or replacing a dataset.
 
 ## Engine lifecycle
 
+Each `<engine>-deploy` and `<engine>-destroy` npm command invokes its own
+`src/bin/<engine>-deploy.ts` or `src/bin/<engine>-destroy.ts`. Options are parsed
+with Optique; the engine is fixed by the command and takes no positional
+argument. Shared lifecycle mechanics live in `src/lib/deployment.ts`.
+
 Deploy only the engines needed for a benchmark session:
 
 ```bash
@@ -178,8 +188,8 @@ five measured iterations and at least ten seconds of measured wall-clock time.
 Warmup is excluded from both minimums. Comparisons use the p50 latency for each
 query and sum those per-query p50 values for `TOTAL`.
 
-`npm run command -- <engine> <command>` runs a diagnostic command in a worker
-pod. `npm run compare` compares locally stored result sets.
+`npm run command -- <engine> -- <command> [arguments...]` runs a diagnostic
+command in a worker pod. `npm run compare` compares locally stored result sets.
 
 ### Interrupting a run
 
@@ -221,5 +231,6 @@ All lifecycle commands accept command-line options. Run a command with
 
 ```bash
 npm run datafusion-deploy -- --help
+npm run datafusion-destroy -- --help
 npm run foundation-deploy -- --help
 ```

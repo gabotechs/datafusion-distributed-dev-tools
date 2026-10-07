@@ -31,7 +31,10 @@ test("benchmark runs do not create cluster state", () => {
 test("engine publishers return artifacts directly without runtime files", () => {
   for (const file of [
     "lib/operations.ts",
-    "bin/deploy-engine.ts",
+    "lib/deployment.ts",
+    "bin/datafusion-deploy.ts",
+    "bin/ballista-deploy.ts",
+    "bin/spark-deploy.ts",
     "lib/publishing.ts",
   ]) {
     const source = fs.readFileSync(

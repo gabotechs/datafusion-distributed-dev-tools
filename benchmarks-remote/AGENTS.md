@@ -51,9 +51,12 @@ generic benchmark wrapper:
 7. Implement the local client under `src/bin/` and reusable support under
    `src/lib/`; keep results local and use literal dataset paths.
 8. Add the engine and its worker selector to the shared validation in
-   `src/lib/operations.ts`, declare its deployment in `src/lib/engine-cli.ts`, then extend
-   the focused tests. Do not add per-engine port selection or lazy readiness,
-   dataset, or deployment logic to the generic benchmark connection path.
+   `src/lib/operations.ts`, implement its deployment in `src/bin/<engine>-deploy.ts`
+   and teardown in `src/bin/<engine>-destroy.ts`, using shared mechanics in
+   `src/lib/deployment.ts`, then extend the focused tests. Define each command
+   directly with Optique and expose only its relevant options. Do not add
+   per-engine port selection or lazy readiness, dataset, or deployment logic to
+   the generic benchmark connection path.
 
 ## Validation
 

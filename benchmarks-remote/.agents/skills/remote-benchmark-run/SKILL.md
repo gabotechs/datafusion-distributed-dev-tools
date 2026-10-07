@@ -9,7 +9,7 @@ Operate from `benchmarks-remote`. Benchmark execution is local and connects to t
 
 ## Preconditions
 
-1. Use the caller-selected `AWS_PROFILE` and `AWS_REGION`; never hardcode an account, profile, or `aws-vault` wrapper.
+1. Use the caller-selected `AWS_PROFILE`. Pass `--region <region>` to project commands when operating outside their `us-east-1` default; use `AWS_REGION` or `--region` for direct AWS CLI calls. Never hardcode an account, profile, or `aws-vault` wrapper.
 2. Require an existing foundation, deployed engine, and completed dataset in S3. Do not deploy infrastructure, install an engine, or generate or upload data as part of a benchmark command.
 3. Use literal dataset paths such as `tpch/sf10` or `clickbench/0-100`; never translate them to underscore aliases.
 
@@ -34,7 +34,7 @@ Common options are:
 --debug true|false
 ```
 
-Pass engine-specific DataFusion options only to `datafusion-bench`; inspect `src/datafusion-bench.ts --help` behavior before changing defaults.
+Pass engine-specific DataFusion options only to `datafusion-bench`; inspect `npm run datafusion-bench -- --help` and `src/bin/datafusion-bench.ts` before changing defaults.
 
 The TypeScript engine CLI opens `localhost:9000`, runs the local client, and
 cleans up the tunnel on exit. It does not upload results. Abrupt interruption

@@ -231,14 +231,16 @@ test("uses the shared named deployment command for deploy and cleanup", async ()
   assert.equal(calls[1]?.program, "node");
   assert.equal(
     calls[0]?.arguments_[0],
-    path.join(config.harnessRoot, "dist", "deploy-engine.cjs"),
+    path.join(config.harnessRoot, "dist", "datafusion-deploy.cjs"),
   );
   assert.equal(
     calls[1]?.arguments_[0],
-    path.join(config.harnessRoot, "dist", "destroy-engine.cjs"),
+    path.join(config.harnessRoot, "dist", "datafusion-destroy.cjs"),
   );
   assert.equal(calls[0]?.options?.cwd, config.harnessRoot);
   const args = calls[0]!.arguments_;
+  assert.ok(!args.includes("datafusion"));
+  assert.ok(!calls[1]!.arguments_.includes("datafusion"));
   for (const [flag, expected] of [
     ["--deployment-name", "datafusion-benchmark-bot"],
     ["--nodes", "12"],

@@ -9,7 +9,7 @@ Operate from `benchmarks-remote`. Keep the foundation lifecycle independent from
 
 ## Authenticate
 
-1. Use the caller-selected `AWS_PROFILE` and `AWS_REGION`; never hardcode an account, profile, or `aws-vault` wrapper.
+1. Use the caller-selected `AWS_PROFILE`. Pass `--region <region>` to project commands when operating outside their `us-east-1` default; use `AWS_REGION` or `--region` for direct AWS CLI calls. Never hardcode an account, profile, or `aws-vault` wrapper.
 2. Run `aws sts get-caller-identity` before Pulumi or Kubernetes operations.
 3. If SSO has expired and `AWS_PROFILE` is set, run `aws sso login --profile "$AWS_PROFILE"` once. Stop and request authentication if it does not succeed.
 4. Do not set `PULUMI_CONFIG_PASSPHRASE`. The committed stack metadata uses the AWS KMS secrets provider.
@@ -19,7 +19,9 @@ Operate from `benchmarks-remote`. Keep the foundation lifecycle independent from
 - Read `pulumi/README.md` before changing the foundation.
 - Treat `pulumi/.pulumi-outputs.json` and `k8s/.kubeconfig` as generated local files; never edit or commit them.
 - Use `pulumi preview --stack benchmark` for a read-only infrastructure diff when Pulumi is on `PATH` and the required API CIDR is configured.
-- Use `KUBECONFIG="$PWD/k8s/.kubeconfig" kubectl get nodes` and `helm list --all-namespaces` to inspect the deployed cluster.
+- Use `KUBECONFIG="$PWD/k8s/.kubeconfig" kubectl get nodes` and
+  `KUBECONFIG="$PWD/k8s/.kubeconfig" helm list --all-namespaces` to inspect the
+  deployed cluster.
 
 ## Create or update
 

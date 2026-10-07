@@ -28,8 +28,11 @@ and local benchmarks.
   request supplies DataFusion Distributed source, not deployment logic.
 - Preserve independent lifecycles for the foundation, datasets, persistent
   interactive engine deployments, benchmark runs, and the benchmark bot controller.
-- Prefer TypeScript for orchestration and infrastructure code. Engine adapters
-  may use the language required by the engine.
+- Use TypeScript and Optique for laptop-facing commands, with command-line
+  options and engine-specific entry points under `benchmarks-remote/src/bin/`.
+  Keep shared lifecycle mechanics under `benchmarks-remote/src/lib/`. EC2 startup and controller
+  setup scripts may remain shell scripts; engine adapters may use the language
+  required by the engine.
 - Do not commit account IDs, profile names, credentials, generated state,
   kubeconfig, or runtime artifact metadata.
 - Write documentation for the current system. Do not describe commands or

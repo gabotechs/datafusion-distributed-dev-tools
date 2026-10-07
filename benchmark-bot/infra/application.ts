@@ -25,11 +25,11 @@ export function applicationArchive(): pulumi.asset.AssetArchive {
         "compare.cjs": new pulumi.asset.FileAsset(
           path.join(benchmarkRoot, "dist", "compare.cjs"),
         ),
-        "deploy-engine.cjs": new pulumi.asset.FileAsset(
-          path.join(benchmarkRoot, "dist", "deploy-engine.cjs"),
+        "datafusion-deploy.cjs": new pulumi.asset.FileAsset(
+          path.join(benchmarkRoot, "dist", "datafusion-deploy.cjs"),
         ),
-        "destroy-engine.cjs": new pulumi.asset.FileAsset(
-          path.join(benchmarkRoot, "dist", "destroy-engine.cjs"),
+        "datafusion-destroy.cjs": new pulumi.asset.FileAsset(
+          path.join(benchmarkRoot, "dist", "datafusion-destroy.cjs"),
         ),
       }),
       k8s: new pulumi.asset.AssetArchive({

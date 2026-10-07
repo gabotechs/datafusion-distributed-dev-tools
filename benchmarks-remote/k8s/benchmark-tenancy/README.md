@@ -12,12 +12,13 @@ the authenticated infrastructure wrapper.
 Install or update the chart after the EKS cluster exists:
 
 ```bash
-helm upgrade --install benchmark-tenancy ./benchmarks-remote/k8s/benchmark-tenancy
+npm run install-tenancy
 ```
 
 The namespaces carry `helm.sh/resource-policy: keep`. Uninstalling the chart
-therefore does not implicitly delete engine workloads or logs; the local
-benchmark wrapper is responsible for run-scoped cleanup.
+therefore does not implicitly delete engine workloads or logs. Remove engine
+releases explicitly with their `<engine>-destroy` commands; benchmark clients
+do not perform teardown.
 
 Validate rendered resources locally with:
 

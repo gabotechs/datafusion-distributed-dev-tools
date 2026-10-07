@@ -307,8 +307,7 @@ export class BenchmarkExecutor {
     await this.processes.run(
       "node",
       [
-        path.join(this.config.harnessRoot, "dist", "deploy-engine.cjs"),
-        "datafusion",
+        path.join(this.config.harnessRoot, "dist", "datafusion-deploy.cjs"),
         ...this.deploymentArguments(outputs, job),
       ],
       { cwd: this.config.harnessRoot },
@@ -319,8 +318,7 @@ export class BenchmarkExecutor {
     await this.processes.run(
       "node",
       [
-        path.join(this.config.harnessRoot, "dist", "destroy-engine.cjs"),
-        "datafusion",
+        path.join(this.config.harnessRoot, "dist", "datafusion-destroy.cjs"),
         ...this.deploymentArguments(outputs),
       ],
       { allowFailure: true, cwd: this.config.harnessRoot },

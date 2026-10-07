@@ -77,8 +77,7 @@ function fixture() {
 test("deploy and destroy use explicit names and the same Kubernetes configuration", () => {
   const f = fixture();
   try {
-    let result = f.run("deploy-engine", [
-      "datafusion",
+    let result = f.run("datafusion-deploy", [
       "--deployment-name",
       "my-worker",
       "--nodes",
@@ -91,11 +90,7 @@ test("deploy and destroy use explicit names and the same Kubernetes configuratio
       "s3://artifacts/worker",
     ]);
     assert.equal(result.status, 0, result.stderr);
-    result = f.run("destroy-engine", [
-      "datafusion",
-      "--deployment-name",
-      "my-worker",
-    ]);
+    result = f.run("datafusion-destroy", ["--deployment-name", "my-worker"]);
     assert.equal(result.status, 0, result.stderr);
     const helm = f.calls().filter((call) => call.program === "helm");
     assert.deepEqual(helm[0]!.args.slice(0, 3), [
@@ -128,7 +123,7 @@ test("invalid deployment options fail before invoking external tools", () => {
   ]) {
     const f = fixture();
     try {
-      const result = f.run("deploy-engine", ["datafusion", ...args]);
+      const result = f.run("datafusion-deploy", args);
       assert.notEqual(result.status, 0);
       assert.deepEqual(f.calls(), []);
     } finally {
@@ -243,18 +238,40 @@ test("all engine charts deploy through the TypeScript CLI", () => {
         ])
           fs.writeFileSync(path.join(binaries, binary), binary);
       }
-      const result = f.run("deploy-engine", [
-        engine,
+      const result = f.run(`${engine}-deploy`, [
         "--deployment-name",
         "test-release",
-        "--target-dir",
-        target,
+        ...(engine === "ballista" ? ["--target-dir", target] : []),
         ...(engine === "spark" ? ["--spark-image", "test/image:tag"] : []),
       ]);
       assert.equal(result.status, 0, result.stderr);
       const helm = f.calls().find((call) => call.program === "helm")!;
       assert.ok(helm.args.includes(`benchmark-${engine}`));
       assert.ok(helm.args.includes("workerReplicas=12"));
+      assert.ok(helm.args.includes("workerInstanceType=c5n.2xlarge"));
+      assert.equal(
+        helm.args.includes("coordinatorInstanceType=m6i.large"),
+        engine !== "clickhouse",
+      );
+      if (engine === "trino") {
+        assert.ok(helm.args.includes("region=us-east-1"));
+        assert.ok(helm.args.includes("datasetBucket=test-datasets"));
+      }
+      if (engine === "spark")
+        assert.ok(helm.args.includes("image=test/image:tag"));
+      if (engine === "ballista") {
+        assert.ok(helm.args.includes("datasetBucket=test-datasets"));
+        for (const component of ["scheduler", "executor", "http"])
+          assert.ok(
+            helm.args.some(
+              (arg) =>
+                arg.startsWith(
+                  `artifacts.${component}=s3://test-datasets/.benchmark-artifacts/ballista/`,
+                ) && arg.endsWith(`/ballista-${component}`),
+            ),
+          );
+      }
+
       assert.ok(
         helm.args.includes(path.join(root, "k8s/worker-resources.yaml")),
       );
@@ -287,8 +304,16 @@ test("migrated commands use Optique help without invoking external tools", () =>
   try {
     for (const script of [
       "command",
-      "deploy-engine",
-      "destroy-engine",
+      "datafusion-deploy",
+      "trino-deploy",
+      "spark-deploy",
+      "ballista-deploy",
+      "clickhouse-deploy",
+      "datafusion-destroy",
+      "trino-destroy",
+      "spark-destroy",
+      "ballista-destroy",
+      "clickhouse-destroy",
       "deploy-foundation",
       "destroy-foundation",
       "install-tenancy",
@@ -320,5 +345,98 @@ test("migrated commands use Optique help without invoking external tools", () =>
     assert.deepEqual(f.calls(), []);
   } finally {
     f.close();
+  }
+});
+
+test("engine deployment help and accepted options are engine-specific", () => {
+  const f = fixture();
+  try {
+    for (const engine of [
+      "datafusion",
+      "trino",
+      "spark",
+      "ballista",
+      "clickhouse",
+    ]) {
+      const result = f.run(`${engine}-deploy`, ["--help"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, new RegExp(`${engine}-deploy.ts `));
+      assert.doesNotMatch(result.stdout, /\bTYPE\b/);
+      assert.equal(result.stdout.includes("--spark-image"), engine === "spark");
+      assert.equal(
+        result.stdout.includes("--worker-artifact"),
+        engine === "datafusion",
+      );
+      assert.equal(
+        result.stdout.includes("--source-root"),
+        engine === "datafusion",
+      );
+      assert.equal(
+        result.stdout.includes("--target-dir"),
+        engine === "datafusion" || engine === "ballista",
+      );
+      assert.equal(
+        result.stdout.includes("--build-wrapper"),
+        engine === "datafusion",
+      );
+      const invalid = f.run(`${engine}-deploy`, [
+        engine === "spark" ? "--worker-artifact" : "--spark-image",
+        "unused",
+      ]);
+      assert.notEqual(invalid.status, 0, engine);
+    }
+    assert.deepEqual(f.calls(), []);
+  } finally {
+    f.close();
+  }
+});
+
+test("each engine destroy CLI has specific help and uninstalls only its named release", () => {
+  for (const engine of [
+    "datafusion",
+    "trino",
+    "spark",
+    "ballista",
+    "clickhouse",
+  ]) {
+    const f = fixture();
+    try {
+      const help = f.run(`${engine}-destroy`, ["--help"]);
+      assert.equal(help.status, 0, help.stderr);
+      assert.match(help.stdout, new RegExp(`${engine}-destroy.ts `));
+      assert.doesNotMatch(
+        help.stdout,
+        /\bTYPE\b|--nodes|--instance-type|--source-root|--spark-image|--worker-artifact/,
+      );
+      for (const args of [
+        ["--deployment-name", "../oops"],
+        ["--nodes", "3"],
+        [engine],
+      ]) {
+        const invalid = f.run(`${engine}-destroy`, args);
+        assert.notEqual(invalid.status, 0, `${engine}: ${args.join(" ")}`);
+      }
+      assert.deepEqual(f.calls(), []);
+      const result = f.run(`${engine}-destroy`, [
+        "--deployment-name",
+        "my-release",
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      const helm = f.calls().find((call) => call.program === "helm")!;
+      assert.deepEqual(helm.args, [
+        "uninstall",
+        "my-release",
+        "--namespace",
+        `benchmark-${engine}`,
+        "--ignore-not-found",
+        "--wait",
+        "--timeout",
+        "10m",
+        "--kube-context",
+        "test-cluster",
+      ]);
+    } finally {
+      f.close();
+    }
   }
 });

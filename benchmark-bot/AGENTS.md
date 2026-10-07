@@ -9,6 +9,10 @@
 - Never expose GitHub or AWS credentials to a PR build process.
 - Use immutable base and head SHAs persisted when the comment is accepted.
 - Keep every job's Helm resources isolated from interactive benchmark releases.
+- Use the bundled `datafusion-deploy.cjs` and `datafusion-destroy.cjs` entry
+  points for lifecycle operations. Keep the executor arguments, application
+  archive, and `benchmarks-remote` bundle build in sync; the controller does not
+  install development dependencies or run TypeScript source at runtime.
 - Keep the bot's EKS cluster and artifact prefixes separate from interactive
   remote benchmarks.
 - Treat the EKS foundation as human-managed external infrastructure. Bot IaC may
