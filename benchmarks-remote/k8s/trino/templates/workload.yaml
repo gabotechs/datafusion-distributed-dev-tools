@@ -50,8 +50,8 @@ spec:
             periodSeconds: 5
             failureThreshold: 60
           resources:
-            requests: {cpu: "500m", memory: 2Gi}
-            limits: {cpu: "1", memory: 3Gi}
+            requests: {cpu: "500m", memory: "{{ .Values.coordinatorMemoryRequestGi }}Gi"}
+            limits: {cpu: "1", memory: "{{ .Values.coordinatorMemoryLimitGi }}Gi"}
           volumeMounts:
             - {name: config, mountPath: /etc/trino/node.properties, subPath: node.properties}
             - {name: config, mountPath: /etc/trino/jvm.config, subPath: coordinator-jvm.config}

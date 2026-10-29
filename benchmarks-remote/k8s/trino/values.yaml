@@ -4,3 +4,9 @@ datasetBucket: ""
 workerReplicas: 12
 workerInstanceType: c5n.2xlarge
 coordinatorInstanceType: m6i.large
+coordinatorHeapGb: 2
+coordinatorMemoryRequestGi: 2
+coordinatorMemoryLimitGi: 3
+queryMaxMemoryGb: 80
+workerHeapGb: 10
+workerQueryMemoryPerNodeGb: 8
