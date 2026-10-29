@@ -10,12 +10,12 @@ data:
     node.data-dir=/var/trino/data
   coordinator-jvm.config: |
     -server
-    -Xmx2G
+    -Xmx{{ .Values.coordinatorHeapGb }}G
     -XX:+UseG1GC
     -XX:+ExitOnOutOfMemoryError
   worker-jvm.config: |
     -server
-    -Xmx10G
+    -Xmx{{ .Values.workerHeapGb }}G
     -XX:+UseG1GC
     -XX:G1HeapRegionSize=32M
     -XX:+ExplicitGCInvokesConcurrent
@@ -27,17 +27,17 @@ data:
     node-scheduler.include-coordinator=false
     http-server.http.port=9000
     discovery.uri=http://trino:9000
-    query.max-memory=80GB
-    query.max-total-memory=80GB
+    query.max-memory={{ .Values.queryMaxMemoryGb }}GB
+    query.max-total-memory={{ .Values.queryMaxMemoryGb }}GB
     query.max-memory-per-node=1GB
     memory.heap-headroom-per-node=512MB
   worker.properties: |
     coordinator=false
     http-server.http.port=9000
     discovery.uri=http://trino:9000
-    query.max-memory=80GB
-    query.max-total-memory=80GB
-    query.max-memory-per-node=8GB
+    query.max-memory={{ .Values.queryMaxMemoryGb }}GB
+    query.max-total-memory={{ .Values.queryMaxMemoryGb }}GB
+    query.max-memory-per-node={{ .Values.workerQueryMemoryPerNodeGb }}GB
     memory.heap-headroom-per-node=1.5GB
   hive.properties: |
     connector.name=hive
