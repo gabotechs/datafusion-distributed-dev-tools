@@ -19,6 +19,14 @@ def get_spark():
             f'{spark_home}/jars/bundle-2.29.52.jar',
             f'{spark_home}/jars/aws-java-sdk-bundle-1.12.262.jar',
         ]))
+        # spark.driver.memory only takes effect if set before the driver JVM is
+        # launched, which happens lazily on first getOrCreate(); SparkConf.config()
+        # calls are too late for the driver itself (though fine for executors,
+        # which the cluster manager launches fresh per task).
+        driver_memory = os.environ.get('SPARK_DRIVER_MEMORY', '1g')
+        os.environ['PYSPARK_SUBMIT_ARGS'] = (
+            f'--conf spark.driver.memory={driver_memory} pyspark-shell'
+        )
         spark = SparkSession.builder \
             .appName("SparkHTTPServer") \
             .master(f"spark://{master_host}:7077") \
@@ -27,6 +35,8 @@ def get_spark():
             .config("spark.driver.port", "7078") \
             .config("spark.blockManager.port", "7079") \
             .config("spark.jars", spark_jars) \
+            .config("spark.executor.memory", os.environ.get('SPARK_EXECUTOR_MEMORY', '13g')) \
+            .config("spark.executor.cores", os.environ.get('SPARK_EXECUTOR_CORES', '7')) \
             .config("spark.sql.catalogImplementation", "hive") \
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
             .config("spark.hadoop.fs.s3a.aws.credentials.provider", "com.amazonaws.auth.InstanceProfileCredentialsProvider") \

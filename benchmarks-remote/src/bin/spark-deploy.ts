@@ -19,10 +19,30 @@ async function main(): Promise<void> {
     description: message`Deploy Spark`,
   });
   const env = new Deployment("spark", flags);
+
+  // The driver (the "http" container, which embeds the SparkSession) tracks query
+  // planning and shuffle/task bookkeeping across every executor, so its heap must grow
+  // with the worker count or it runs out of memory under a large cluster's query load.
+  const nodeCount = Number(env.nodes);
+  const driverHeapGb = Math.max(3, Math.floor((nodeCount + 5) / 6) + 1);
+  const driverMemoryOverheadGb = Math.max(1, Math.floor(driverHeapGb / 5));
+  const driverMemoryRequestGi = driverHeapGb;
+  const driverMemoryLimitGi = driverHeapGb + driverMemoryOverheadGb;
+  // The coordinator pod also runs the lightweight 2Gi Master container alongside the driver.
+  const coordinatorInstanceType =
+    nodeCount <= 12
+      ? env.output("coordinatorInstanceType")
+      : driverHeapGb <= 10
+        ? "m6i.xlarge"
+        : "m6i.2xlarge";
+
   env.deploy({
     workerReplicas: env.nodes,
     workerInstanceType: env.instance,
-    coordinatorInstanceType: env.output("coordinatorInstanceType"),
+    coordinatorInstanceType,
+    driverHeapGb: String(driverHeapGb),
+    driverMemoryRequestGi: String(driverMemoryRequestGi),
+    driverMemoryLimitGi: String(driverMemoryLimitGi),
     image: flags["spark-image"] ?? (await publishImage(env, "spark")),
   });
 }

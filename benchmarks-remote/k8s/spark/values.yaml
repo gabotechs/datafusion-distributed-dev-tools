@@ -2,3 +2,8 @@ image: ""
 workerReplicas: 12
 workerInstanceType: c5n.2xlarge
 coordinatorInstanceType: m6i.large
+driverHeapGb: 3
+driverMemoryRequestGi: 3
+driverMemoryLimitGi: 4
+executorMemoryGb: 13
+executorCores: 7
