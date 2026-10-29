@@ -52,6 +52,9 @@ spec:
             - {name: HTTP_PORT, value: "9000"}
             - {name: AWS_REGION, value: us-east-1}
             - {name: AWS_EC2_METADATA_DISABLED, value: "false"}
+            - {name: SPARK_DRIVER_MEMORY, value: "{{ .Values.driverHeapGb }}g"}
+            - {name: SPARK_EXECUTOR_MEMORY, value: "{{ .Values.executorMemoryGb }}g"}
+            - {name: SPARK_EXECUTOR_CORES, value: "{{ .Values.executorCores }}"}
           ports:
             - {name: http, containerPort: 9000}
             - {name: driver, containerPort: 7078}
@@ -61,8 +64,8 @@ spec:
             periodSeconds: 5
             failureThreshold: 60
           resources:
-            requests: {cpu: "250m", memory: 1Gi}
-            limits: {cpu: "1", memory: 2Gi}
+            requests: {cpu: "250m", memory: "{{ .Values.driverMemoryRequestGi }}Gi"}
+            limits: {cpu: "1", memory: "{{ .Values.driverMemoryLimitGi }}Gi"}
 ---
 apiVersion: apps/v1
 kind: Deployment
