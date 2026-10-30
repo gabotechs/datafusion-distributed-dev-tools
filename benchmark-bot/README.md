@@ -3,7 +3,7 @@
 This service listens for trusted pull-request comments in the form:
 
 ```text
-benchmarks run tpch/sf1
+benchmarks run tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false
 ```
 
 Each request may contain one or more datasets. The bot validates that every
@@ -33,14 +33,14 @@ characters after HTML escaping; oversized query output is truncated with a notic
 while retaining dataset summaries and run details.
 
 ```text
-benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --instance-type m5.2xlarge --nodes 6
+benchmarks run tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false tpch_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false --instance-type m5.2xlarge --nodes 6
 ```
 
 By default, the bot compares against the pull request's configured base. Use
 `--base main` to snapshot and compare against the current `main` commit instead:
 
 ```text
-benchmarks run tpch/sf100 --base main
+benchmarks run tpch_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false --base main
 ```
 
 Use `--iterations <count>` to set the number of measured iterations per query
@@ -50,14 +50,14 @@ from the measured count. The count is saved with the job and retained across
 controller restarts.
 
 ```text
-benchmarks run clickbench/0-100-date32 --base main --iterations 20
+benchmarks run clickbench_parquet/partition_start=0/partition_end=100 --base main --iterations 20
 ```
 
 Repeat `--config <key=value>` to apply DataFusion session settings to the PR
 head only; the comparison base keeps its defaults:
 
 ```text
-benchmarks run tpch/sf1 --base main --config distributed.collect_dynamic_filters=false
+benchmarks run tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --base main --config distributed.collect_dynamic_filters=false
 ```
 
 ## Architecture
@@ -200,8 +200,10 @@ npm test
 
 The bot builds `datafusion-distributed-remote-worker --bin worker`
 from each selected revision. Both revisions must contain that target. It supports
-Parquet datasets and immutable Iceberg datasets, for example `tpch/sf1_iceberg`,
+Parquet datasets and immutable Iceberg datasets, for example
+`tpch_iceberg/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false/target_file_size=67108864`,
 using the same dataset arguments. Generate datasets directly at their final S3
-locations using the source project's preparation commands before requesting a
-benchmark. The bot validates the existing dataset prefix and leaves table
-discovery to the shared harness; it does not generate or upload datasets.
+locations using the source project's `dfbench prepare-*` commands before
+requesting a benchmark. The bot validates the existing dataset prefix and
+leaves table discovery to the shared harness; it does not generate or upload
+datasets.

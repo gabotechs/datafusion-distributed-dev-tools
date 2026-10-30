@@ -132,6 +132,9 @@ test("discovers Iceberg table metadata in S3 and reuses the suite queries", asyn
   const path = await import("node:path");
   const { tablePathsForDataset, queriesForDataset } =
     await import("../src/lib/engine-cli");
+  const dataset =
+    "tpch_iceberg/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false/target_file_size=67108864";
+  const schema = dataset.replace(/[^a-zA-Z0-9_]+/g, "_");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "iceberg-tables-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, "tpch/queries"), { recursive: true });
@@ -144,31 +147,25 @@ test("discovers Iceberg table metadata in S3 and reuses the suite queries", asyn
     S3Client.prototype,
     "send",
     async (command: { input: { Prefix: string } }) =>
-      command.input.Prefix === "prefix/tpch/sf1_iceberg/"
-        ? { CommonPrefixes: [{ Prefix: "prefix/tpch/sf1_iceberg/lineitem/" }] }
+      command.input.Prefix === `prefix/${dataset}/`
+        ? { CommonPrefixes: [{ Prefix: `prefix/${dataset}/lineitem/` }] }
         : {
-            Contents: [
-              { Key: "prefix/tpch/sf1_iceberg/lineitem/metadata.json" },
-            ],
+            Contents: [{ Key: `prefix/${dataset}/lineitem/metadata.json` }],
           },
   );
   assert.deepEqual(
-    await tablePathsForDataset(
-      "tpch/sf1_iceberg",
-      "s3://bucket/prefix",
-      "us-east-1",
-    ),
+    await tablePathsForDataset(dataset, "s3://bucket/prefix", "us-east-1"),
     [
       {
         suite: "tpch",
-        schema: "tpch_sf1_iceberg",
+        schema,
         name: "lineitem",
         fileType: "ICEBERG",
-        s3Path: "s3://bucket/prefix/tpch/sf1_iceberg/lineitem/metadata.json",
+        s3Path: `s3://bucket/prefix/${dataset}/lineitem/metadata.json`,
       },
     ],
   );
-  assert.deepEqual(await queriesForDataset("tpch/sf1_iceberg", root), [
+  assert.deepEqual(await queriesForDataset(dataset, root), [
     { id: "q6", sql: "SELECT count(*) FROM lineitem" },
   ]);
 });

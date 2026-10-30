@@ -6,7 +6,7 @@ import type { Job } from "./database.js";
 import { benchmarkWorkerResources } from "./instance-types.js";
 import type { ProcessRunner } from "./process.js";
 
-interface FoundationOutputs {
+export interface FoundationOutputs {
   clusterName: string;
   datasetBucketName: string;
   artifactBucketName: string;
@@ -462,7 +462,7 @@ function createProgressPlan(datasets: readonly string[]): ProgressPlan {
   };
 }
 
-function loadOutputs(file: string): FoundationOutputs {
+export function loadOutputs(file: string): FoundationOutputs {
   const value = JSON.parse(
     readFileSync(file, "utf8"),
   ) as Partial<FoundationOutputs>;
@@ -476,8 +476,11 @@ function loadOutputs(file: string): FoundationOutputs {
   return value as FoundationOutputs;
 }
 
+const DATASET_SEGMENT = "[a-zA-Z0-9._=-]+";
+const DATASET = new RegExp(`^${DATASET_SEGMENT}(?:/${DATASET_SEGMENT})+$`);
+
 export function safeDatasetPath(root: string, dataset: string): string {
-  if (!/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(dataset)) {
+  if (!DATASET.test(dataset)) {
     throw new Error(`Invalid dataset ${dataset}`);
   }
   const resolvedRoot = path.resolve(root);

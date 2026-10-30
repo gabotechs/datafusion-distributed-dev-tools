@@ -3,12 +3,21 @@ import test from "node:test";
 
 import { JobDatabase } from "../src/database.js";
 import type { GitHubApi, IssueComment } from "../src/github.js";
-import { CommentPoller } from "../src/poller.js";
+import { CommentPoller, type ListAvailableDatasets } from "../src/poller.js";
+
+const TPCH_SF1 =
+  "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false";
+const CLICKBENCH = "clickbench_parquet/partition_start=0/partition_end=100";
+
+const availableDatasets: ListAvailableDatasets = async () => [
+  TPCH_SF1,
+  CLICKBENCH,
+];
 
 function comment(id: number, login: string): IssueComment {
   return {
     id,
-    body: "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 12",
+    body: `benchmarks run ${TPCH_SF1} --instance-type m5.2xlarge --nodes 12`,
     issue_url: `https://api.github.com/repos/owner/repository/issues/${id}`,
     html_url: `https://github.com/owner/repository/issues/${id}`,
     created_at: `2026-08-10T00:00:0${id}.000Z`,
@@ -40,6 +49,7 @@ test("a failing comment does not prevent later comments from being queued", asyn
       new Set(["deleted-user", "maintainer"]),
       database,
       github,
+      availableDatasets,
     ).poll(new Date("2026-08-10T00:10:00.000Z"));
     assert.equal(database.nextPending()?.commentId, 2);
     assert.equal(database.isCommentSeen(1), false);
@@ -65,6 +75,7 @@ test("drops a permanently failing comment after three attempts", async () => {
     new Set(["deleted-user"]),
     database,
     github,
+    availableDatasets,
   );
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -94,6 +105,7 @@ test("ignores benchmark commands from users outside the allowlist", async () => 
       new Set(["maintainer"]),
       database,
       github,
+      availableDatasets,
     );
     await poller.process(comment(1, "stranger"));
     assert.equal(database.isCommentSeen(1), true);
@@ -124,6 +136,7 @@ test("creates one persisted status comment for an accepted benchmark", async () 
       new Set(["maintainer"]),
       database,
       github,
+      availableDatasets,
     );
     await poller.process(comment(1, "maintainer"));
     await poller.process(comment(1, "maintainer"));
@@ -134,7 +147,10 @@ test("creates one persisted status comment for an accepted benchmark", async () 
     assert.match(posted[0]!, /pull\/1#issuecomment-1/);
     assert.match(posted[0]!, /How to use the benchmark bot/);
     assert.match(posted[0]!, /integer from 1 to 60/);
-    assert.match(posted[0]!, /`clickbench\/0-100`/);
+    assert.match(
+      posted[0]!,
+      /tpch_parquet\/scale_factor=1\/max_file_size=134217728\/dictionary=pages\/sorted=false/,
+    );
     assert.match(posted[0]!, /`c5n\.4xlarge` \| 16 vCPU, 42 GiB/);
     assert.match(posted[0]!, /15 vCPU, 38Gi/);
     assert.equal(queued?.statusCommentId, 321);
@@ -150,11 +166,45 @@ test("creates one persisted status comment for an accepted benchmark", async () 
   }
 });
 
-test("includes usage instructions when rejecting an invalid command", async () => {
+test("rejects a dataset that has not finished generating in the bucket", async () => {
   const database = new JobDatabase(":memory:");
   const posted: string[] = [];
   const request = comment(1, "maintainer");
-  request.body = "benchmarks run tpch/sf1 --nodes 61";
+  request.body = `benchmarks run ${TPCH_SF1}`;
+  const github = {
+    getPullRequest: async () => {
+      throw new Error("an unsupported dataset must not load the pull request");
+    },
+    postComment: async (_repository: string, _pr: number, body: string) => {
+      posted.push(body);
+      return 321;
+    },
+  } as unknown as GitHubApi;
+  try {
+    await new CommentPoller(
+      "owner/repository",
+      new Set(["maintainer"]),
+      database,
+      github,
+      async () => [CLICKBENCH],
+    ).process(request);
+
+    assert.equal(posted.length, 1);
+    assert.match(
+      posted[0]!,
+      /Unsupported dataset `tpch_parquet\/scale_factor=1\/max_file_size=134217728\/dictionary=pages\/sorted=false`; expected one of `clickbench_parquet\/partition_start=0\/partition_end=100`\./,
+    );
+    assert.match(posted[0]!, /How to use the benchmark bot/);
+    assert.equal(database.nextPending(), null);
+  } finally {
+    database.close();
+  }
+});
+
+test("reports no datasets available when the bucket has none generated", async () => {
+  const database = new JobDatabase(":memory:");
+  const posted: string[] = [];
+  const request = comment(1, "maintainer");
   const github = {
     postComment: async (_repository: string, _pr: number, body: string) => {
       posted.push(body);
@@ -167,6 +217,37 @@ test("includes usage instructions when rejecting an invalid command", async () =
       new Set(["maintainer"]),
       database,
       github,
+      async () => [],
+    ).process(request);
+
+    assert.equal(posted.length, 1);
+    assert.match(
+      posted[0]!,
+      /expected none; no dataset has finished generating\./,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("includes usage instructions when rejecting an invalid command", async () => {
+  const database = new JobDatabase(":memory:");
+  const posted: string[] = [];
+  const request = comment(1, "maintainer");
+  request.body = `benchmarks run ${TPCH_SF1} --nodes 61`;
+  const github = {
+    postComment: async (_repository: string, _pr: number, body: string) => {
+      posted.push(body);
+      return 321;
+    },
+  } as unknown as GitHubApi;
+  try {
+    await new CommentPoller(
+      "owner/repository",
+      new Set(["maintainer"]),
+      database,
+      github,
+      availableDatasets,
     ).process(request);
 
     assert.equal(posted.length, 1);
@@ -181,8 +262,7 @@ test("includes usage instructions when rejecting an invalid command", async () =
 test("snapshots main and saves the requested iteration count", async () => {
   const database = new JobDatabase(":memory:");
   const request = comment(1, "maintainer");
-  request.body =
-    "benchmarks run clickbench/0-100-date32 --base main --iterations 20 --config distributed.collect_dynamic_filters=false";
+  request.body = `benchmarks run ${CLICKBENCH} --base main --iterations 20 --config distributed.collect_dynamic_filters=false`;
   const branchRequests: [string, string][] = [];
   const posted: string[] = [];
   const github = {
@@ -207,6 +287,7 @@ test("snapshots main and saves the requested iteration count", async () => {
       new Set(["maintainer"]),
       database,
       github,
+      availableDatasets,
     ).process(request);
 
     const queued = database.getJobForComment(1);

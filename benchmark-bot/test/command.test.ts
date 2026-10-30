@@ -3,22 +3,32 @@ import test from "node:test";
 
 import { parseComment } from "../src/command.js";
 
+const TPCH_SF1 =
+  "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false";
+const TPCH_SF10 =
+  "tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false";
+const TPCH_SF100 =
+  "tpch_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false";
+const CLICKBENCH = "clickbench_parquet/partition_start=0/partition_end=100";
+
 test("parses the requested dataset and capacity", () => {
-  assert.deepEqual(parseComment("benchmarks run tpch/sf1"), {
+  assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF1}`), {
     kind: "request",
     request: {
-      datasets: ["tpch/sf1"],
+      datasets: [TPCH_SF1],
       instanceType: "c5n.4xlarge",
       nodeCount: 12,
       iterations: 5,
     },
   });
   assert.deepEqual(
-    parseComment("benchmarks run tpch/sf1 tpch/sf10 tpch/sf100 --nodes 6"),
+    parseComment(
+      `benchmarks run ${TPCH_SF1} ${TPCH_SF10} ${TPCH_SF100} --nodes 6`,
+    ),
     {
       kind: "request",
       request: {
-        datasets: ["tpch/sf1", "tpch/sf10", "tpch/sf100"],
+        datasets: [TPCH_SF1, TPCH_SF10, TPCH_SF100],
         instanceType: "c5n.4xlarge",
         nodeCount: 6,
         iterations: 5,
@@ -27,12 +37,12 @@ test("parses the requested dataset and capacity", () => {
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 12",
+      `benchmarks run ${TPCH_SF1} --instance-type m5.2xlarge --nodes 12`,
     ),
     {
       kind: "request",
       request: {
-        datasets: ["tpch/sf1"],
+        datasets: [TPCH_SF1],
         instanceType: "m5.2xlarge",
         nodeCount: 12,
         iterations: 5,
@@ -41,33 +51,33 @@ test("parses the requested dataset and capacity", () => {
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --nodes 12 --instance-type m5.2xlarge",
+      `benchmarks run ${TPCH_SF1} --nodes 12 --instance-type m5.2xlarge`,
     ),
     {
       kind: "request",
       request: {
-        datasets: ["tpch/sf1"],
+        datasets: [TPCH_SF1],
         instanceType: "m5.2xlarge",
         nodeCount: 12,
         iterations: 5,
       },
     },
   );
-  assert.deepEqual(parseComment("benchmarks run tpch/sf1 --nodes 4"), {
+  assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF1} --nodes 4`), {
     kind: "request",
     request: {
-      datasets: ["tpch/sf1"],
+      datasets: [TPCH_SF1],
       instanceType: "c5n.4xlarge",
       nodeCount: 4,
       iterations: 5,
     },
   });
   assert.deepEqual(
-    parseComment("benchmarks run tpch/sf1 --instance-type m5.2xlarge"),
+    parseComment(`benchmarks run ${TPCH_SF1} --instance-type m5.2xlarge`),
     {
       kind: "request",
       request: {
-        datasets: ["tpch/sf1"],
+        datasets: [TPCH_SF1],
         instanceType: "m5.2xlarge",
         nodeCount: 12,
         iterations: 5,
@@ -76,16 +86,58 @@ test("parses the requested dataset and capacity", () => {
   );
 });
 
+test("resolves pre-parameter-encoded dataset aliases", () => {
+  assert.deepEqual(parseComment(`benchmarks run tpch/sf100 --nodes 6`), {
+    kind: "request",
+    request: {
+      datasets: [TPCH_SF100],
+      instanceType: "c5n.4xlarge",
+      nodeCount: 6,
+      iterations: 5,
+    },
+  });
+  assert.deepEqual(parseComment(`benchmarks run clickbench/0-100 tpcds/sf1`), {
+    kind: "request",
+    request: {
+      datasets: [
+        CLICKBENCH,
+        "tpcds_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false",
+      ],
+      instanceType: "c5n.4xlarge",
+      nodeCount: 12,
+      iterations: 5,
+    },
+  });
+  assert.deepEqual(parseComment(`benchmarks run tpch/sf1 ${TPCH_SF1}`), {
+    kind: "invalid",
+    message: "Each dataset may be requested only once.",
+  });
+});
+
+test("accepts a well-formed dataset regardless of bucket availability", () => {
+  // parseComment only checks syntax; the caller checks availability against the
+  // dataset bucket (see dataset-availability.ts and poller.test.ts).
+  assert.deepEqual(parseComment("benchmarks run tpch_parquet/scale_factor=5"), {
+    kind: "request",
+    request: {
+      datasets: ["tpch_parquet/scale_factor=5"],
+      instanceType: "c5n.4xlarge",
+      nodeCount: 12,
+      iterations: 5,
+    },
+  });
+});
+
 test("accepts a measured iteration count with a main baseline", () => {
   for (const iterations of [1, 20, Number.MAX_SAFE_INTEGER]) {
     assert.deepEqual(
       parseComment(
-        `benchmarks run clickbench/0-100-date32 --base main --iterations ${iterations}`,
+        `benchmarks run ${CLICKBENCH} --base main --iterations ${iterations}`,
       ),
       {
         kind: "request",
         request: {
-          datasets: ["clickbench/0-100-date32"],
+          datasets: [CLICKBENCH],
           instanceType: "c5n.4xlarge",
           nodeCount: 12,
           iterations,
@@ -109,7 +161,7 @@ test("rejects invalid, missing, and duplicate iteration counts", () => {
     "20;whoami",
   ]) {
     assert.deepEqual(
-      parseComment(`benchmarks run tpch/sf1 --iterations ${value}`),
+      parseComment(`benchmarks run ${TPCH_SF1} --iterations ${value}`),
       {
         kind: "invalid",
         message: `Invalid iteration count \`${value}\`; expected a positive safe integer.`,
@@ -118,7 +170,7 @@ test("rejects invalid, missing, and duplicate iteration counts", () => {
   }
   for (const options of ["--iterations", "--iterations 5 --iterations 20"]) {
     assert.equal(
-      parseComment(`benchmarks run tpch/sf1 ${options}`).kind,
+      parseComment(`benchmarks run ${TPCH_SF1} ${options}`).kind,
       "invalid",
     );
   }
@@ -127,12 +179,12 @@ test("rejects invalid, missing, and duplicate iteration counts", () => {
 test("accepts repeatable head-only configs", () => {
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --base main --config distributed.collect_dynamic_filters=false --config distributed.max_tasks_per_stage=8",
+      `benchmarks run ${TPCH_SF1} --base main --config distributed.collect_dynamic_filters=false --config distributed.max_tasks_per_stage=8`,
     ),
     {
       kind: "request",
       request: {
-        datasets: ["tpch/sf1"],
+        datasets: [TPCH_SF1],
         instanceType: "c5n.4xlarge",
         nodeCount: 12,
         iterations: 5,
@@ -147,12 +199,15 @@ test("accepts repeatable head-only configs", () => {
 });
 
 test("rejects unsafe or duplicate configs", () => {
-  assert.deepEqual(parseComment("benchmarks run tpch/sf1 --config x=1;DROP"), {
-    kind: "invalid",
-    message: "Invalid config `x=1;DROP`; expected a safe `key=value` token.",
-  });
   assert.deepEqual(
-    parseComment("benchmarks run tpch/sf1 --config x=1 --config x=2"),
+    parseComment(`benchmarks run ${TPCH_SF1} --config x=1;DROP`),
+    {
+      kind: "invalid",
+      message: "Invalid config `x=1;DROP`; expected a safe `key=value` token.",
+    },
+  );
+  assert.deepEqual(
+    parseComment(`benchmarks run ${TPCH_SF1} --config x=1 --config x=2`),
     {
       kind: "invalid",
       message: "Config `x` may be specified only once.",
@@ -163,12 +218,12 @@ test("rejects unsafe or duplicate configs", () => {
 test("sanitizes benchmark capacity", () => {
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 60",
+      `benchmarks run ${TPCH_SF1} --instance-type m5.2xlarge --nodes 60`,
     ),
     {
       kind: "request",
       request: {
-        datasets: ["tpch/sf1"],
+        datasets: [TPCH_SF1],
         instanceType: "m5.2xlarge",
         nodeCount: 60,
         iterations: 5,
@@ -177,7 +232,7 @@ test("sanitizes benchmark capacity", () => {
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 61",
+      `benchmarks run ${TPCH_SF1} --instance-type m5.2xlarge --nodes 61`,
     ),
     {
       kind: "invalid",
@@ -186,7 +241,7 @@ test("sanitizes benchmark capacity", () => {
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type $(whoami) --nodes 12",
+      `benchmarks run ${TPCH_SF1} --instance-type $(whoami) --nodes 12`,
     ),
     {
       kind: "invalid",
@@ -194,7 +249,7 @@ test("sanitizes benchmark capacity", () => {
     },
   );
   assert.deepEqual(
-    parseComment("benchmarks run tpch/sf1 --instance-type c7i.2xlarge"),
+    parseComment(`benchmarks run ${TPCH_SF1} --instance-type c7i.2xlarge`),
     {
       kind: "invalid",
       message:
@@ -203,7 +258,7 @@ test("sanitizes benchmark capacity", () => {
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 1.5",
+      `benchmarks run ${TPCH_SF1} --instance-type m5.2xlarge --nodes 1.5`,
     ),
     {
       kind: "invalid",
@@ -213,20 +268,23 @@ test("sanitizes benchmark capacity", () => {
 });
 
 test("accepts only main as an explicit comparison base", () => {
-  assert.deepEqual(parseComment("benchmarks run tpch/sf100 --base main"), {
+  assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF100} --base main`), {
     kind: "request",
     request: {
-      datasets: ["tpch/sf100"],
+      datasets: [TPCH_SF100],
       instanceType: "c5n.4xlarge",
       nodeCount: 12,
       iterations: 5,
       base: "main",
     },
   });
-  assert.deepEqual(parseComment("benchmarks run tpch/sf100 --base release-3"), {
-    kind: "invalid",
-    message: "Invalid base `release-3`; only `main` is supported.",
-  });
+  assert.deepEqual(
+    parseComment(`benchmarks run ${TPCH_SF100} --base release-3`),
+    {
+      kind: "invalid",
+      message: "Invalid base `release-3`; only `main` is supported.",
+    },
+  );
 });
 
 test("ignores unrelated comments", () => {
@@ -241,20 +299,20 @@ test("rejects aliases and extra arguments", () => {
     {
       kind: "invalid",
       message:
-        "Invalid dataset `tpch_sf1`; expected a path such as `tpch/sf1`.",
+        "Invalid dataset `tpch_sf1`; expected a path such as `tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false`.",
     },
   );
   assert.deepEqual(
     parseComment(
-      "benchmarks run tpch/sf1 --instance-type m5.2xlarge --nodes 12 now",
+      `benchmarks run ${TPCH_SF1} --instance-type m5.2xlarge --nodes 12 now`,
     ),
     {
       kind: "invalid",
       message:
-        "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...`.",
+        "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...`.",
     },
   );
-  assert.deepEqual(parseComment("benchmarks run tpch/sf1 tpch/sf1"), {
+  assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF1} ${TPCH_SF1}`), {
     kind: "invalid",
     message: "Each dataset may be requested only once.",
   });

@@ -18,7 +18,7 @@
     "bot-session": "npm --prefix benchmark-bot run bot-session --",
     "foundation-deploy": "npm --prefix benchmarks-remote run foundation-deploy --",
     "foundation-destroy": "npm --prefix benchmarks-remote run foundation-destroy --",
-    "dataset-destroy": "npm --prefix benchmarks-remote run dataset-destroy --",
+    "list-datasets": "npm --prefix benchmarks-remote run list-datasets --",
     "compare": "npm --prefix benchmarks-remote run compare --",
     "datafusion-deploy": "npm --prefix benchmarks-remote run datafusion-deploy --",
     "datafusion-destroy": "npm --prefix benchmarks-remote run datafusion-destroy --",

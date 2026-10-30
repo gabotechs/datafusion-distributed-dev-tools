@@ -7,8 +7,8 @@ benchmark automation for
 It has two independently operated components:
 
 - [`benchmarks-remote/`](benchmarks-remote/README.md) provisions the shared EKS
-  foundation, manages datasets and engine deployments, and runs benchmarks
-  from a developer machine.
+  foundation, manages engine deployments, consumes datasets generated
+  elsewhere, and runs benchmarks from a developer machine.
 - [`benchmark-bot/`](benchmark-bot/README.md) provisions a persistent EC2 controller that
   accepts trusted GitHub PR comments, builds immutable base and head revisions,
   runs isolated benchmark deployments on the existing EKS foundation, and
@@ -61,11 +61,11 @@ and command-specific `--help`. For example:
 npm run foundation-deploy
 npm run datafusion-deploy
 npm run datafusion-destroy -- --help
-npm run datafusion-bench -- tpch/sf1 --iterations 1
+npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
 npm run bot-deploy
 npm run bot-session
 ```
 
-Foundation, dataset, engine, benchmark, and controller teardown remain
-explicit operations. See each component's README before operating live
-infrastructure.
+Foundation, engine, benchmark, and controller teardown remain explicit
+operations. Dataset generation and removal happen outside this repository. See
+each component's README before operating live infrastructure.

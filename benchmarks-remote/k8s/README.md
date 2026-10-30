@@ -14,7 +14,7 @@ release, and wait for it to become ready. For example:
 
 ```bash
 npm run datafusion-deploy
-npm run datafusion-bench -- tpch/sf1 --iterations 1
+npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
 npm run datafusion-destroy
 ```
 
@@ -68,7 +68,7 @@ run any command with `--help` for its options.
 
 ```bash
 npm run datafusion-deploy -- --deployment-name my-worker --nodes 12
-npm run datafusion-bench -- tpch/sf1 --k8s-service my-worker
+npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --k8s-service my-worker
 npm run datafusion-destroy -- --deployment-name my-worker
 npm run command -- --region us-east-1 datafusion -- df -h
 npm run test-render

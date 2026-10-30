@@ -18,7 +18,44 @@ export type ParseResult =
   | { kind: "invalid"; message: string }
   | { kind: "request"; request: BenchmarkRequest };
 
-const DATASET = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
+const DATASET_SEGMENT = "[a-zA-Z0-9._=-]+";
+const DATASET = new RegExp(`^${DATASET_SEGMENT}(?:/${DATASET_SEGMENT})+$`);
+const DATASET_EXAMPLE =
+  "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false";
+
+// Short names used before datasets moved to the parameter-encoded path layout, mapped to
+// their current equivalent so pre-existing comments and habits keep working.
+const DATASET_ALIASES: ReadonlyMap<string, string> = new Map([
+  [
+    "tpch/sf1",
+    "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false",
+  ],
+  [
+    "tpch/sf10",
+    "tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false",
+  ],
+  [
+    "tpch/sf100",
+    "tpch_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false",
+  ],
+  [
+    "tpcds/sf1",
+    "tpcds_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false",
+  ],
+  [
+    "tpcds/sf10",
+    "tpcds_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false",
+  ],
+  [
+    "tpcds/sf100",
+    "tpcds_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false",
+  ],
+  [
+    "clickbench/0-100",
+    "clickbench_parquet/partition_start=0/partition_end=100",
+  ],
+]);
+
 const INSTANCE_TYPE = /^[a-z][a-z0-9-]{0,19}\.[a-z0-9-]{1,20}$/;
 const CONFIG = /^([a-zA-Z][a-zA-Z0-9_.]*)=([a-zA-Z0-9._-]+)$/;
 export const MAX_BENCHMARK_NODES = 60;
@@ -28,8 +65,10 @@ export const DEFAULT_BENCHMARK_NODE_COUNT = 12;
 export const DEFAULT_BENCHMARK_ITERATIONS = 5;
 
 const USAGE =
-  "Expected `benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...`.";
+  "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...`.";
 
+// Only checks dataset path syntax and resolves legacy aliases; the caller checks each
+// resolved dataset against the foundation's dataset bucket (see dataset-availability.ts).
 export function parseComment(body: string): ParseResult {
   const line = body
     .split("\n")
@@ -47,7 +86,9 @@ export function parseComment(body: string): ParseResult {
     (word, index) => index >= 2 && word.startsWith("--"),
   );
   const datasetEnd = firstOption === -1 ? words.length : firstOption;
-  const datasets = words.slice(2, datasetEnd);
+  const datasets = words
+    .slice(2, datasetEnd)
+    .map((dataset) => DATASET_ALIASES.get(dataset) ?? dataset);
   const optionWords = words.slice(datasetEnd);
   if (datasets.length === 0 || optionWords.length % 2 !== 0) {
     return { kind: "invalid", message: USAGE };
@@ -56,7 +97,7 @@ export function parseComment(body: string): ParseResult {
     if (!DATASET.test(dataset)) {
       return {
         kind: "invalid",
-        message: `Invalid dataset \`${dataset}\`; expected a path such as \`tpch/sf1\`.`,
+        message: `Invalid dataset \`${dataset}\`; expected a path such as \`${DATASET_EXAMPLE}\`.`,
       };
     }
   }

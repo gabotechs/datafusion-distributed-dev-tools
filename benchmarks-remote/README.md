@@ -32,7 +32,7 @@ For a source worktree elsewhere, pass `--source-root` when deploying and
 
 ```bash
 npm run datafusion-deploy -- --source-root ../datafusion-distributed-pr
-npm run datafusion-bench -- tpch/sf1 --testdata-root ../datafusion-distributed-pr/testdata
+npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --testdata-root ../datafusion-distributed-pr/testdata
 ```
 
 The foundation, engine workloads, datasets, and benchmark runs have independent
@@ -79,46 +79,64 @@ results, and published engine artifacts.
 ## Dataset lifecycle
 
 Generate datasets directly at their final S3 locations using the DataFusion
-Distributed checkout. Use a source revision whose preparation commands support
-S3 `--output`, and the foundation's `datasetBucketName` output as `<dataset-bucket>`.
-From that source checkout:
+Distributed checkout's `dfbench prepare-*` commands, with `--root` set to the
+foundation's `datasetBucketName` output as `s3://<dataset-bucket>`. From that
+source checkout:
 
 ```bash
-SCALE_FACTOR=1 PARTITIONS=16 ./benchmarks/gen-tpch.sh --output "s3://<dataset-bucket>/tpch/sf1"
+cargo run -p datafusion-distributed-benchmarks --release -- \
+  prepare-tpch --scale-factor 1 --root "s3://<dataset-bucket>"
 ```
 
-To create an Iceberg dataset from an existing local Parquet dataset:
+`prepare-tpch`, `prepare-tpcds`, and `prepare-clickbench` write to a path under
+`--root` that encodes every generation parameter and print it to stdout, e.g.
+`s3://<dataset-bucket>/tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false`.
+This repository's commands take the suffix after the bucket as the dataset
+name, e.g. `tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false`.
+
+To create an Iceberg dataset from an existing Parquet dataset:
 
 ```bash
 cargo run -p datafusion-distributed-iceberg-benchmarks --release -- prepare \
-  --input testdata/tpch/sf1 --output "s3://<dataset-bucket>/tpch/sf1_iceberg"
+  --input "testdata/tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false" \
+  --output "s3://<dataset-bucket>/tpch_iceberg/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false/target_file_size=67108864"
 ```
 
-Use an empty destination and wait for generation to finish before benchmarking.
-The upstream generator writes Iceberg metadata and manifests with their final S3
-paths. This repository consumes those files without parsing or rewriting them.
+Regenerating an existing, complete dataset path is a no-op; any other non-empty
+destination is rejected. The upstream generator writes Iceberg metadata and
+manifests with their final S3 paths. This repository consumes those files
+without parsing or rewriting them.
 
-Dataset names are literal S3 prefixes such as `tpch/sf10` or `clickbench/0-100`.
-Table formats are detected automatically from S3 directory listings. The
-DataFusion client registers Iceberg tables through each table's `metadata.json`;
-other engine clients currently support only Parquet datasets. SQL queries remain
-in the source checkout's suite `queries/` directory. Results are saved locally
-under the selected dataset path, which is created as needed.
+Dataset names are literal S3 prefixes such as
+`tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false`
+or `clickbench_parquet/partition_start=0/partition_end=100`. Table formats are
+detected automatically from S3 directory listings. The DataFusion client
+registers Iceberg tables through each table's `metadata.json`; other engine
+clients currently support only Parquet datasets. SQL queries remain in the
+source checkout's suite `queries/` directory (e.g. `testdata/tpch/queries`).
+Results are saved locally under the selected dataset path, which is created as
+needed.
+
+Benchmark commands also accept short names predating this layout (e.g.
+`tpch/sf10`, `tpcds/sf1`, `clickbench/0-100`) and resolve them to their current
+equivalent; see `resolveDatasetAlias` in `src/lib/paths.ts`.
+
+List the dataset paths that have finished generating in the bucket (their
+`_SUCCESS` marker) with:
+
+```bash
+npm run list-datasets
+```
 
 From this development-tools checkout:
 
 ```bash
-npm run datafusion-bench -- tpch/sf1_iceberg --queries q6 --iterations 1
+npm run datafusion-bench -- tpch_iceberg/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false/target_file_size=67108864 --queries q6 --iterations 1
 ```
 
-Delete selected S3 datasets explicitly with:
-
-```bash
-npm run dataset-destroy -- tpch/sf1 --yes
-```
-
-Dataset deletion leaves local query files, benchmark results, and deployments
-unchanged. Stop benchmark readers before removing or replacing a dataset.
+This repository does not manage dataset lifecycle beyond listing and consuming
+what already exists; generate or remove datasets from the source checkout or
+directly in S3.
 
 ## Engine lifecycle
 
@@ -170,12 +188,12 @@ matching the default deployment name.
 Pass `--k8s-service` to override that selection.
 
 ```bash
-npm run datafusion-bench -- tpch/sf1 --iterations 1
-npm run datafusion-bench -- tpch/sf1 --config distributed.collect_dynamic_filters=false
-npm run trino-bench -- tpch/sf1 --iterations 1
-npm run spark-bench -- tpch/sf1 --iterations 1
-npm run ballista-bench -- tpch/sf1 --iterations 1
-npm run clickhouse-bench -- tpch/sf1 --iterations 1
+npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
+npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --config distributed.collect_dynamic_filters=false
+npm run trino-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
+npm run spark-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
+npm run ballista-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
+npm run clickhouse-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
 ```
 
 `--bucket` and `--k8s-cluster` default to the values in
