@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.js";
 import { JobDatabase } from "./database.js";
+import { listAvailableDatasets } from "./dataset-availability.js";
 import { BenchmarkExecutor } from "./executor.js";
 import { GitHubClient } from "./github.js";
 import { waitForNextPoll } from "./poll-wait.js";
@@ -17,6 +18,7 @@ const poller = new CommentPoller(
   config.authorizedGithubLogins,
   database,
   github,
+  () => listAvailableDatasets(processes, config.executor),
 );
 const executor = new BenchmarkExecutor(
   {

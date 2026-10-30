@@ -8,12 +8,15 @@ const INITIAL_LOOKBACK_MS = 60 * 60 * 1_000;
 const SCAN_OVERLAP_MS = 2 * 60 * 1_000;
 const MAX_COMMENT_ATTEMPTS = 3;
 
+export type ListAvailableDatasets = () => Promise<readonly string[]>;
+
 export class CommentPoller {
   constructor(
     readonly repository: string,
     readonly authorizedGithubLogins: ReadonlySet<string>,
     readonly database: JobDatabase,
     readonly github: GitHubApi,
+    readonly listAvailableDatasets: ListAvailableDatasets,
   ) {}
 
   async poll(now = new Date()): Promise<void> {
@@ -110,6 +113,26 @@ export class CommentPoller {
         this.repository,
         pullRequestNumber,
         appendUsage(`@${comment.user.login} ${parsed.message}`),
+      );
+      this.database.markCommentSeen(comment.id);
+      return;
+    }
+
+    const available = await this.listAvailableDatasets();
+    const unsupported = parsed.request.datasets.find(
+      (dataset) => !available.includes(dataset),
+    );
+    if (unsupported !== undefined) {
+      const expected =
+        available.length === 0
+          ? "none; no dataset has finished generating"
+          : `one of ${available.map((value) => `\`${value}\``).join(", ")}`;
+      await this.github.postComment(
+        this.repository,
+        pullRequestNumber,
+        appendUsage(
+          `@${comment.user.login} Unsupported dataset \`${unsupported}\`; expected ${expected}.`,
+        ),
       );
       this.database.markCommentSeen(comment.id);
       return;

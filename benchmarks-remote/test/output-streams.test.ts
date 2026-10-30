@@ -14,6 +14,9 @@ import {
 } from "../src/lib/engine-cli";
 import type { BenchmarkRunner, ExecuteQueryResult } from "../src/lib/runner";
 
+const TPCH_SF1 =
+  "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false";
+
 class FakeRunner implements BenchmarkRunner {
   readonly deployment = "test";
 
@@ -43,6 +46,19 @@ function parseOptions(argv: readonly string[]): CommonOptionValues {
   });
 }
 
+test("resolves a pre-parameter-encoded dataset alias from the command line", () => {
+  const options = parseOptions([
+    "node",
+    "benchmark",
+    "--bucket",
+    "s3://bucket",
+    "--k8s-cluster",
+    "cluster",
+    "tpch/sf1",
+  ]);
+  assert.equal(options.dataset, TPCH_SF1);
+});
+
 test("rejects explicitly empty query selections", async () => {
   const stderr: string[] = [];
   const previousError = console.error;
@@ -59,7 +75,7 @@ test("rejects explicitly empty query selections", async () => {
           "s3://bucket",
           "--k8s-cluster",
           "cluster",
-          "tpch/sf1",
+          TPCH_SF1,
           "--queries",
           " , ",
         ]),
@@ -85,9 +101,9 @@ test("writes progress to stderr and only explicit comparisons to stdout", async 
     S3Client.prototype,
     "send",
     async (command: { input: { Prefix: string } }) =>
-      command.input.Prefix === "tpch/sf1/"
-        ? { CommonPrefixes: [{ Prefix: "tpch/sf1/table/" }] }
-        : { Contents: [{ Key: "tpch/sf1/table/1.parquet" }] },
+      command.input.Prefix === `${TPCH_SF1}/`
+        ? { CommonPrefixes: [{ Prefix: `${TPCH_SF1}/table/` }] }
+        : { Contents: [{ Key: `${TPCH_SF1}/table/1.parquet` }] },
   );
   const kubeconfig = path.join(root, "kubeconfig");
   const kubectl = path.join(root, "kubectl");
@@ -122,7 +138,7 @@ setInterval(() => {}, 1_000);
       "s3://bucket",
       "--k8s-cluster",
       "cluster",
-      "tpch/sf1",
+      TPCH_SF1,
       "--kubeconfig",
       kubeconfig,
       "--testdata-root",
@@ -144,7 +160,10 @@ setInterval(() => {}, 1_000);
       new FakeRunner("head", parseOptions(commonArguments)),
     );
     assert.match(stderr.join("\n"), /Query q1 iteration 0 took 10 ms/);
-    assert.match(stdout.join("\n"), /^=== Comparing tpch\/sf1/);
+    assert.match(
+      stdout.join("\n"),
+      /^=== Comparing tpch_parquet\/scale_factor=1/,
+    );
     assert.match(stdout.join("\n"), /TOTAL:/);
     assert.doesNotMatch(
       stdout.join("\n"),

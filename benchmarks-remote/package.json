@@ -13,7 +13,7 @@
     "format:check": "prettier --check src test package.json tsconfig.json README.md AGENTS.md .agents \"k8s/**/*.md\" && npm --workspace pulumi run format:check",
     "foundation-deploy": "tsx src/bin/deploy-foundation.ts",
     "foundation-destroy": "tsx src/bin/destroy-foundation.ts",
-    "dataset-destroy": "tsx src/bin/destroy-dataset.ts",
+    "list-datasets": "tsx src/bin/list-datasets.ts",
     "compare": "tsx src/bin/compare.ts",
     "datafusion-bench": "tsx src/bin/datafusion-bench.ts",
     "trino-bench": "tsx src/bin/trino-bench.ts",

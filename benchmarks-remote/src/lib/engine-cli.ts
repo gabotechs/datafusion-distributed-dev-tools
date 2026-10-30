@@ -26,10 +26,10 @@ import { getLocalFoundationConfiguration } from "./pulumi-output";
 import { errorMessage } from "./filesystem";
 import { discoverDatasetTables, type ReadDirectory } from "./dataset-formats";
 import {
-  datasetParts,
-  datasetPath,
+  datasetSuite,
   DEFAULT_DATAFUSION_DISTRIBUTED_ROOT,
   DEV_TOOLS_ROOT,
+  resolveDatasetAlias,
 } from "./paths";
 import { withKubectlPortForward } from "./port-forward";
 import { compareQueryIds } from "./query-order";
@@ -46,21 +46,30 @@ export const booleanValue: ValueParser<"sync", boolean> = transform(
   },
 );
 
+export const bucketOption = withDefault(
+  option("--bucket", string({ metavar: "URI" }), {
+    description: message`S3 bucket containing benchmark data`,
+  }),
+  () => {
+    const bucket = getLocalFoundationConfiguration()?.bucket;
+    if (bucket === undefined) {
+      throw new WithDefaultError(
+        message`Could not resolve --bucket. Run npm run foundation-deploy to generate the local Pulumi outputs, or pass --bucket manually.`,
+      );
+    }
+    return bucket;
+  },
+);
+
+export const regionOption = withDefault(
+  option("--region", string({ metavar: "REGION" }), {
+    description: message`AWS region containing the cluster`,
+  }),
+  "us-east-1",
+);
+
 export const CommonOptions = object({
-  bucket: withDefault(
-    option("--bucket", string({ metavar: "URI" }), {
-      description: message`S3 bucket containing benchmark data`,
-    }),
-    () => {
-      const bucket = getLocalFoundationConfiguration()?.bucket;
-      if (bucket === undefined) {
-        throw new WithDefaultError(
-          message`Could not resolve --bucket. Run npm run foundation-deploy to generate the local Pulumi outputs, or pass --bucket manually.`,
-        );
-      }
-      return bucket;
-    },
-  ),
+  bucket: bucketOption,
   clusterName: withDefault(
     option("--k8s-cluster", string({ metavar: "NAME" }), {
       description: message`Benchmark Kubernetes cluster`,
@@ -75,9 +84,12 @@ export const CommonOptions = object({
       return clusterName;
     },
   ),
-  dataset: argument(string({ metavar: "DATASET" }), {
-    description: message`Dataset to run queries on`,
-  }),
+  dataset: map(
+    argument(string({ metavar: "DATASET" }), {
+      description: message`Dataset to run queries on`,
+    }),
+    resolveDatasetAlias,
+  ),
   iterations: withDefault(
     option("-i", "--iterations", integerValue, {
       description: message`Number of iterations`,
@@ -90,12 +102,7 @@ export const CommonOptions = object({
     }),
     path.join(DEV_TOOLS_ROOT, "benchmarks-remote", "k8s", ".kubeconfig"),
   ),
-  region: withDefault(
-    option("--region", string({ metavar: "REGION" }), {
-      description: message`AWS region containing the cluster`,
-    }),
-    "us-east-1",
-  ),
+  region: regionOption,
   service: optional(
     option("--k8s-service", string({ metavar: "NAME" }), {
       description: message`Kubernetes service to port-forward`,
@@ -146,7 +153,7 @@ export const CommonOptions = object({
 
 export type CommonOptions = InferValue<typeof CommonOptions>;
 
-function s3BucketAndPrefix(bucket: string): {
+export function s3BucketAndPrefix(bucket: string): {
   bucketName: string;
   prefix: string;
 } {
@@ -199,8 +206,8 @@ export async function tablePathsForDataset(
   region: string,
 ): Promise<TableSpec[]> {
   const bucketUri = `s3://${bucket.replace(/^s3:\/\//, "").replace(/\/+$/, "")}`;
-  const [suite] = datasetParts(dataset);
-  const schema = dataset.replaceAll("/", "_");
+  const suite = datasetSuite(dataset);
+  const schema = dataset.replace(/[^a-zA-Z0-9_]+/g, "_");
   const { bucketName, prefix } = s3BucketAndPrefix(bucket);
   const client = new S3Client({ region });
   let tables;
@@ -235,11 +242,8 @@ export async function queriesForDataset(
   dataset: string,
   testdataRoot: string,
 ): Promise<QuerySpec[]> {
-  const [suite] = datasetParts(dataset);
-  const queriesPath = path.join(
-    path.dirname(datasetPath(dataset, testdataRoot)),
-    "queries",
-  );
+  const suite = datasetSuite(dataset);
+  const queriesPath = path.join(testdataRoot, suite, "queries");
 
   let entries: string[];
   try {

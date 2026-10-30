@@ -8,6 +8,8 @@ import {
   DEV_TOOLS_ROOT,
   datasetParts,
   datasetPath,
+  datasetSuite,
+  resolveDatasetAlias,
 } from "../src/lib/paths";
 
 test("uses the sibling DataFusion Distributed checkout for testdata", () => {
@@ -21,6 +23,51 @@ test("rejects dataset path dot components", () => {
   for (const dataset of ["../..", "./sf1", "tpch/.."]) {
     assert.throws(() => datasetParts(dataset), /Invalid dataset/);
   }
+});
+
+test("rejects dataset paths with fewer than two components", () => {
+  assert.throws(() => datasetParts("tpch"), /Invalid dataset/);
+});
+
+test("derives the query suite from a parameter-encoded dataset path", () => {
+  assert.equal(
+    datasetSuite(
+      "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false",
+    ),
+    "tpch",
+  );
+  assert.equal(
+    datasetSuite(
+      "tpch_iceberg/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false/target_file_size=67108864",
+    ),
+    "tpch",
+  );
+  assert.equal(
+    datasetSuite("clickbench_parquet/partition_start=0/partition_end=100"),
+    "clickbench",
+  );
+});
+
+test("resolves pre-parameter-encoded dataset aliases", () => {
+  assert.equal(
+    resolveDatasetAlias("tpch/sf100"),
+    "tpch_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false",
+  );
+  assert.equal(
+    resolveDatasetAlias("tpcds/sf1"),
+    "tpcds_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false",
+  );
+  assert.equal(
+    resolveDatasetAlias("clickbench/0-100"),
+    "clickbench_parquet/partition_start=0/partition_end=100",
+  );
+  assert.equal(
+    resolveDatasetAlias(
+      "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false",
+    ),
+    "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false",
+  );
+  assert.equal(resolveDatasetAlias("unknown/dataset"), "unknown/dataset");
 });
 
 test("allows a source worktree to override the sibling checkout", () => {

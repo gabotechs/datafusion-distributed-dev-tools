@@ -371,8 +371,14 @@ test("rejects dataset paths that could escape testdata", () => {
     safeDatasetPath("/testdata", "tpch/sf1"),
     path.resolve("/testdata/tpch/sf1"),
   );
+  const parameterized =
+    "tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false";
+  assert.equal(
+    safeDatasetPath("/testdata", parameterized),
+    path.resolve(`/testdata/${parameterized}`),
+  );
   assert.throws(() => safeDatasetPath("/testdata", "../secret"));
-  assert.throws(() => safeDatasetPath("/testdata", "tpch/sf1/extra"));
+  assert.throws(() => safeDatasetPath("/testdata", "tpch"));
 });
 
 test("validates remote tables and leaves discovery to the harness", async () => {

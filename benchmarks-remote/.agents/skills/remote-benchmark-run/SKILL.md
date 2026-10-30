@@ -11,18 +11,18 @@ Operate from `benchmarks-remote`. Benchmark execution is local and connects to t
 
 1. Use the caller-selected `AWS_PROFILE`. Pass `--region <region>` to project commands when operating outside their `us-east-1` default; use `AWS_REGION` or `--region` for direct AWS CLI calls. Never hardcode an account, profile, or `aws-vault` wrapper.
 2. Require an existing foundation, deployed engine, and completed dataset in S3. Do not deploy infrastructure, install an engine, or generate or upload data as part of a benchmark command.
-3. Use literal dataset paths such as `tpch/sf10` or `clickbench/0-100`; never translate them to underscore aliases.
+3. Use literal dataset paths such as `tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false` or `clickbench_parquet/partition_start=0/partition_end=100`; never translate them to underscore aliases.
 
 ## Run
 
 Select one supported engine:
 
 ```bash
-npm run datafusion-bench -- tpch/sf10
-npm run trino-bench -- tpch/sf10
-npm run spark-bench -- tpch/sf10
-npm run ballista-bench -- tpch/sf10
-npm run clickhouse-bench -- tpch/sf10
+npm run datafusion-bench -- tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false
+npm run trino-bench -- tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false
+npm run spark-bench -- tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false
+npm run ballista-bench -- tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false
+npm run clickhouse-bench -- tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false
 ```
 
 Common options are:

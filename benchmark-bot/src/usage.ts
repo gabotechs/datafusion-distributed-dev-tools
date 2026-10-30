@@ -12,19 +12,8 @@ import {
 } from "./instance-types.js";
 import { MAX_ACTIVE_JOBS_PER_REQUESTER, MAX_QUEUE_DEPTH } from "./limits.js";
 
-const AVAILABLE_DATASETS = [
-  "clickbench/0-100",
-  "tpcds/sf1",
-  "tpch/sf1",
-  "tpch/sf10",
-  "tpch/sf100",
-] as const;
-
 export function renderUsage(): string {
   const workload = `${BENCHMARK_WARMUP ? "1 warmup and " : ""}${DEFAULT_BENCHMARK_ITERATIONS} measured iterations`;
-  const datasets = AVAILABLE_DATASETS.map((dataset) => `\`${dataset}\``).join(
-    ", ",
-  );
   const instances = SUPPORTED_BENCHMARK_INSTANCE_TYPES.map((instanceType) => {
     const capacity = SUPPORTED_BENCHMARK_INSTANCES[instanceType];
     const resources = benchmarkWorkerResources(instanceType)!;
@@ -36,13 +25,13 @@ export function renderUsage(): string {
 
 Post a comment whose first non-empty line is:
 
-\`benchmarks run <suite>/<variant>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...\`
+\`benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...\`
 
 For example:
 
-\`benchmarks run tpch/sf10 tpch/sf100 --instance-type m5.2xlarge --nodes 24 --iterations 20 --base main --config distributed.collect_dynamic_filters=false\`
+\`benchmarks run tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false tpch_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false --instance-type m5.2xlarge --nodes 24 --iterations 20 --base main --config distributed.collect_dynamic_filters=false\`
 
-**Currently available datasets:** ${datasets}. Request one or more, without duplicates. The bot validates availability before provisioning and runs every query in each dataset.
+Request one or more datasets, without duplicates. The bot checks each one against the dataset bucket before provisioning anything and runs every query in each dataset. Short names predating the parameter-encoded layout, such as \`tpch/sf10\`, \`tpcds/sf1\`, and \`clickbench/0-100\`, are also accepted and resolve to their current equivalent.
 
 | Option | Default | Supported values and behavior |
 | --- | --- | --- |
