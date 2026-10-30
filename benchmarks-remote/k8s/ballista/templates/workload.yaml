@@ -51,8 +51,8 @@ spec:
           ports:
             - {name: scheduler, containerPort: 50050}
           resources:
-            requests: {cpu: "250m", memory: 1Gi}
-            limits: {cpu: "1", memory: 2Gi}
+            requests: {cpu: "250m", memory: "{{ .Values.coordinatorContainerRequestGi }}Gi"}
+            limits: {cpu: "1", memory: "{{ .Values.coordinatorContainerLimitGi }}Gi"}
           volumeMounts:
             - {name: binaries, mountPath: /opt/benchmark}
         - name: http
@@ -68,8 +68,8 @@ spec:
             periodSeconds: 5
             failureThreshold: 60
           resources:
-            requests: {cpu: "250m", memory: 1Gi}
-            limits: {cpu: "1", memory: 2Gi}
+            requests: {cpu: "250m", memory: "{{ .Values.coordinatorContainerRequestGi }}Gi"}
+            limits: {cpu: "1", memory: "{{ .Values.coordinatorContainerLimitGi }}Gi"}
           volumeMounts:
             - {name: binaries, mountPath: /opt/benchmark}
       volumes:
@@ -83,6 +83,10 @@ metadata:
   namespace: benchmark-ballista
 spec:
   replicas: {{ .Values.workerReplicas }}
+  # EKS Auto Mode provisioning 60 new nodes under concurrent load from other
+  # persistent engine deployments can exceed the default 10-minute progress
+  # deadline well before Helm's own --timeout is reached.
+  progressDeadlineSeconds: 2880
   selector:
     matchLabels:
       app.kubernetes.io/name: ballista

@@ -79,7 +79,11 @@ export class Deployment extends Environment {
       "--cleanup-on-fail",
       "--wait",
       "--timeout",
-      "25m",
+      // EKS Auto Mode provisioning many new nodes at once for a persistent
+      // engine deployment, especially under concurrent capacity pressure from
+      // other persistent engine deployments, can take well over 25 minutes
+      // even when every node ultimately comes up healthy.
+      "45m",
       ...Object.entries(settings).flatMap(([key, value]) => [
         "--set-string",
         `${key}=${value}`,
