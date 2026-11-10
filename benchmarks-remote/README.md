@@ -19,7 +19,8 @@ queries are read from the DataFusion Distributed checkout's `testdata/` director
 and dataset tables are discovered in S3. No local dataset copy is required.
 
 DataFusion deployments build the `worker` binary from that checkout's
-`benchmarks/remote-worker` crate (`datafusion-distributed-remote-worker`).
+`datafusion/distributed-remote-worker` crate (`datafusion-distributed-remote-worker`),
+falling back to `benchmarks/remote-worker` when the first path is absent.
 Iceberg is enabled by the worker itself. This keeps the
 worker on the same DataFusion and DataFusion Distributed APIs as the revision
 being benchmarked.

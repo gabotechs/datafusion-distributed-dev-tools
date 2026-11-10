@@ -131,52 +131,106 @@ test("invalid deployment options fail before invoking external tools", () => {
     }
   }
 });
-test("publishing honors source and target paths and keeps stdout machine-readable", () => {
+for (const manifests of [
+  ["datafusion/distributed-remote-worker/Cargo.toml"],
+  ["benchmarks/remote-worker/Cargo.toml"],
+  [
+    "datafusion/distributed-remote-worker/Cargo.toml",
+    "benchmarks/remote-worker/Cargo.toml",
+  ],
+])
+  test(`publishing selects ${manifests[0]} from ${manifests.length} manifest(s) and honors source and target paths`, () => {
+    const f = fixture();
+    try {
+      const source = path.join(f.directory, "source with spaces");
+      const target = path.join(f.directory, "target with spaces");
+      for (const manifest of manifests) {
+        const file = path.join(source, manifest);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, "[package]\n");
+      }
+      fs.mkdirSync(path.join(target, "x86_64-unknown-linux-gnu/release"), {
+        recursive: true,
+      });
+      fs.writeFileSync(
+        path.join(target, "x86_64-unknown-linux-gnu/release/worker"),
+        "binary",
+      );
+      const result = f.run("publish-datafusion", [
+        "--source-root",
+        source,
+        "--target-dir",
+        target,
+        "--artifact-bucket",
+        "test-artifacts",
+        "--artifact-prefix",
+        "workers/datafusion",
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(
+        result.stdout,
+        /^s3:\/\/test-artifacts\/workers\/datafusion\/[a-f0-9]{64}\/worker\n$/,
+      );
+      const cargo = f.calls().find((call) => call.program === "cargo")!;
+      assert.deepEqual(cargo.args, [
+        "zigbuild",
+        "--manifest-path",
+        path.join(source, manifests[0]!),
+        "--package",
+        "datafusion-distributed-remote-worker",
+        "--release",
+        "--bin",
+        "worker",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+      ]);
+      const upload = f
+        .calls()
+        .find((call) => call.program === "aws" && call.args.includes("cp"))!;
+      assert.ok(
+        upload.args.includes(
+          path.join(target, "x86_64-unknown-linux-gnu/release/worker"),
+        ),
+      );
+    } finally {
+      f.close();
+    }
+  });
+test("publishing fails before invoking tools when neither worker manifest exists", () => {
   const f = fixture();
   try {
-    const source = path.join(f.directory, "source with spaces");
-    const target = path.join(f.directory, "target with spaces");
-    fs.mkdirSync(path.join(target, "x86_64-unknown-linux-gnu/release"), {
-      recursive: true,
-    });
-    fs.writeFileSync(
-      path.join(target, "x86_64-unknown-linux-gnu/release/worker"),
-      "binary",
-    );
+    const result = f.run("publish-datafusion", ["--source-root", f.directory]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Missing DataFusion remote worker manifest/);
+    for (const manifest of [
+      "datafusion/distributed-remote-worker/Cargo.toml",
+      "benchmarks/remote-worker/Cargo.toml",
+    ])
+      assert.ok(result.stderr.includes(path.join(f.directory, manifest)));
+    assert.deepEqual(f.calls(), []);
+  } finally {
+    f.close();
+  }
+});
+test("publishing delegates manifest selection to the isolated build wrapper", () => {
+  const f = fixture();
+  try {
+    const target = path.join(f.directory, "target");
+    const binary = path.join(target, "x86_64-unknown-linux-gnu/release/worker");
+    fs.mkdirSync(path.dirname(binary), { recursive: true });
+    fs.writeFileSync(binary, "binary");
     const result = f.run("publish-datafusion", [
       "--source-root",
-      source,
+      path.join(f.directory, "no source"),
       "--target-dir",
       target,
-      "--artifact-bucket",
-      "test-artifacts",
-      "--artifact-prefix",
-      "workers/datafusion",
+      "--build-wrapper",
+      "/trusted/build-wrapper",
     ]);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(
-      result.stdout,
-      /^s3:\/\/test-artifacts\/workers\/datafusion\/[a-f0-9]{64}\/worker\n$/,
-    );
-    const cargo = f.calls().find((call) => call.program === "cargo")!;
-    assert.ok(
-      cargo.args.includes(
-        path.join(source, "benchmarks/remote-worker/Cargo.toml"),
-      ),
-    );
-    assert.deepEqual(cargo.args.slice(-4), [
-      "--bin",
-      "worker",
-      "--target",
-      "x86_64-unknown-linux-gnu",
-    ]);
-    const upload = f
-      .calls()
-      .find((call) => call.program === "aws" && call.args.includes("cp"))!;
-    assert.ok(
-      upload.args.includes(
-        path.join(target, "x86_64-unknown-linux-gnu/release/worker"),
-      ),
+    assert.deepEqual(
+      f.calls().filter((call) => ["sudo", "cargo"].includes(call.program)),
+      [{ program: "sudo", args: ["/trusted/build-wrapper"] }],
     );
   } finally {
     f.close();

@@ -36,13 +36,24 @@ export function publishDatafusion(env: Environment): string {
   );
   const wrapper = env.flags["build-wrapper"];
   if (typeof wrapper === "string") command("sudo", [wrapper], { stderr: true });
-  else
+  else {
+    const manifests = [
+      "datafusion/distributed-remote-worker/Cargo.toml",
+      "benchmarks/remote-worker/Cargo.toml",
+    ].map((manifest) => path.join(source, manifest));
+    const manifest = manifests.find((candidate) =>
+      fs.statSync(candidate, { throwIfNoEntry: false })?.isFile(),
+    );
+    if (!manifest)
+      throw new Error(
+        `Missing DataFusion remote worker manifest; checked: ${manifests.join(", ")}`,
+      );
     command(
       "cargo",
       [
         "zigbuild",
         "--manifest-path",
-        path.join(source, "benchmarks/remote-worker/Cargo.toml"),
+        manifest,
         "--package",
         "datafusion-distributed-remote-worker",
         "--release",
@@ -64,6 +75,7 @@ export function publishDatafusion(env: Environment): string {
         },
       },
     );
+  }
   return publishBinary(
     env,
     path.join(target, "x86_64-unknown-linux-gnu/release/worker"),
