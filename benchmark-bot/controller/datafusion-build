@@ -11,6 +11,14 @@ lockfile=/var/cache/datafusion-pr-build/Cargo.lock
 dns_server=$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)
 
 [[ -f ${manifest} ]] || { echo "Missing ${manifest}" >&2; exit 2; }
+worker_manifest=${source_root}/datafusion/distributed-remote-worker/Cargo.toml
+if [[ ! -f ${worker_manifest} ]]; then
+  worker_manifest=${source_root}/benchmarks/remote-worker/Cargo.toml
+  [[ -f ${worker_manifest} ]] || {
+    echo "Missing DataFusion remote worker manifest; checked: ${source_root}/datafusion/distributed-remote-worker/Cargo.toml, ${worker_manifest}" >&2
+    exit 2
+  }
+fi
 [[ -f ${toolchain_file} ]] || { echo "Missing ${toolchain_file}" >&2; exit 2; }
 [[ -f ${source_lockfile} ]] || { echo "Missing ${source_lockfile}" >&2; exit 2; }
 [[ -d ${source_root}/.git ]] || { echo "Missing ${source_root}" >&2; exit 2; }
@@ -92,7 +100,7 @@ systemd-run --quiet --wait --pipe --collect \
   --setenv=AWS_EC2_METADATA_DISABLED=true \
   /var/lib/datafusion-pr-build/.cargo/bin/cargo zigbuild \
   --offline \
-  --manifest-path "${source_root}/benchmarks/remote-worker/Cargo.toml" \
+  --manifest-path "${worker_manifest}" \
   --package datafusion-distributed-remote-worker \
   --release \
   --bin worker \

@@ -199,7 +199,9 @@ npm test
 ## Iceberg benchmarks
 
 The bot builds `datafusion-distributed-remote-worker --bin worker`
-from each selected revision. Both revisions must contain that target. It supports
+from each selected revision, using `datafusion/distributed-remote-worker/Cargo.toml`
+or falling back to `benchmarks/remote-worker/Cargo.toml`. Both revisions must
+contain that target. It supports
 Parquet datasets and immutable Iceberg datasets, for example
 `tpch_iceberg/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false/target_file_size=67108864`,
 using the same dataset arguments. Generate datasets directly at their final S3
