@@ -34,7 +34,7 @@ Common options are:
 --debug true|false
 ```
 
-Pass engine-specific DataFusion options only to `datafusion-bench`; inspect `npm run datafusion-bench -- --help` and `src/bin/datafusion-bench.ts` before changing defaults.
+Pass DataFusion config options only to `datafusion-bench`: they come from a local, gitignored `.df-bench.yaml` in the directory `npm run` is invoked from (or `--config-path <file>`), overridden by repeated `-c key=value` flags, e.g. `-c distributed.dynamic_task_count=true`. Inspect `npm run datafusion-bench -- --help` and `src/bin/datafusion-bench.ts` before changing defaults.
 
 The TypeScript engine CLI opens `localhost:9000`, runs the local client, and
 cleans up the tunnel on exit. It does not upload results. Abrupt interruption

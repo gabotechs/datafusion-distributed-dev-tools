@@ -1,85 +1,115 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test, { type TestContext } from "node:test";
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 
-import { dataFusionSettingStatements } from "../src/bin/datafusion-bench";
+import {
+  configEntries,
+  dataFusionSettingStatements,
+} from "../src/bin/datafusion-bench";
 
-test("does not override DataFusion defaults when flags are omitted", () => {
-  assert.equal(dataFusionSettingStatements({}), "");
+function tempDirectory(t: TestContext): string {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "df-bench-config-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  return directory;
+}
+
+test("collects metrics by default, overridable by any config", () => {
+  assert.equal(
+    dataFusionSettingStatements([]),
+    "SET distributed.collect_metrics=true;",
+  );
+  assert.deepEqual(
+    dataFusionSettingStatements([
+      ["distributed.collect_metrics", "false"],
+      ["datafusion.execution.target_partitions", "8"],
+    ]).split("\n"),
+    [
+      "SET distributed.collect_metrics=true;",
+      "SET distributed.collect_metrics=false;",
+      "SET datafusion.execution.target_partitions=8;",
+    ],
+  );
 });
 
-test("sets only explicitly provided DataFusion options", () => {
-  assert.equal(
-    dataFusionSettingStatements({
-      dynamic: false,
-      maxTasksPerStage: 0,
-      compression: "zstd",
-    }),
+test("rejects unsafe config keys and values", () => {
+  assert.throws(
+    () => dataFusionSettingStatements([["x", "1;DROP TABLE y"]]),
+    /expected a safe token/,
+  );
+  assert.throws(
+    () => dataFusionSettingStatements([["x;DROP", "1"]]),
+    /Invalid config key/,
+  );
+  assert.throws(
+    () => configEntries({ configs: ["distributed.broadcast_joins"] }, "/"),
+    /expected KEY=VALUE/,
+  );
+});
+
+test("reads .df-bench.yaml from the current directory before -c flags", (t) => {
+  const directory = tempDirectory(t);
+  assert.deepEqual(configEntries({ configs: [] }, directory), []);
+  fs.writeFileSync(
+    path.join(directory, ".df-bench.yaml"),
     [
-      "SET distributed.compression=zstd;",
-      "SET distributed.dynamic_task_count=false;",
-      "SET distributed.max_tasks_per_stage=0;",
+      "# Local benchmark config",
+      "distributed.broadcast_joins: true",
+      "datafusion.execution.target_partitions: 10",
+      "distributed.dynamic_bytes_ready_sample_percentage: 0.5",
+      "distributed.compression: zstd",
     ].join("\n"),
   );
-});
-
-test("rejects unsafe or duplicate generic configs", () => {
-  assert.throws(
-    () => dataFusionSettingStatements({ configs: ["x=1;DROP TABLE y"] }),
-    /expected a safe KEY=VALUE token/,
-  );
-  assert.throws(
-    () => dataFusionSettingStatements({ configs: ["x=1", "x=2"] }),
-    /Duplicate config 'x'/,
-  );
-});
-
-test("maps every DataFusion override to its session setting", () => {
   assert.deepEqual(
-    dataFusionSettingStatements({
-      fileScanConfigBytesPerPartition: 1,
-      cardinalityTaskSf: 2,
-      batchSize: 3,
-      shuffleBatchSize: 4,
-      configs: ["distributed.collect_dynamic_filters=false"],
-      collectMetrics: true,
-      compression: "lz4",
-      childrenIsolatorUnions: false,
-      broadcastJoins: true,
-      partialReduce: false,
-      dynamic: true,
-      dynamicBytesPerPartition: 5,
-      maxTasksPerStage: 6,
-      repartitionFileMinSize: 7,
-      targetPartitions: 8,
-    }).split("\n"),
+    configEntries(
+      { configs: ["datafusion.execution.target_partitions = 4"] },
+      directory,
+    ),
     [
-      "SET distributed.file_scan_config_bytes_per_partition=1;",
-      "SET distributed.cardinality_task_count_factor=2;",
-      "SET datafusion.execution.batch_size=3;",
-      "SET distributed.shuffle_batch_size=4;",
-      "SET distributed.collect_metrics=true;",
-      "SET distributed.compression=lz4;",
-      "SET distributed.children_isolator_unions=false;",
-      "SET distributed.broadcast_joins=true;",
-      "SET distributed.partial_reduce=false;",
-      "SET distributed.dynamic_task_count=true;",
-      "SET distributed.dynamic_bytes_per_partition=5;",
-      "SET distributed.max_tasks_per_stage=6;",
-      "SET datafusion.optimizer.repartition_file_min_size=7;",
-      "SET datafusion.execution.target_partitions=8;",
-      "SET distributed.collect_dynamic_filters=false;",
+      ["distributed.broadcast_joins", "true"],
+      ["datafusion.execution.target_partitions", "10"],
+      ["distributed.dynamic_bytes_ready_sample_percentage", "0.5"],
+      ["distributed.compression", "zstd"],
+      ["datafusion.execution.target_partitions", "4"],
     ],
+  );
+});
+
+test("reads --config-path instead of the default file", (t) => {
+  const directory = tempDirectory(t);
+  fs.writeFileSync(path.join(directory, ".df-bench.yaml"), "a.b: 1");
+  fs.writeFileSync(path.join(directory, "other.yaml"), "# only comments\n");
+  assert.deepEqual(
+    configEntries({ configPath: "other.yaml", configs: [] }, directory),
+    [],
+  );
+  assert.throws(
+    () => configEntries({ configPath: "missing.yaml", configs: [] }, directory),
+    /Cannot read/,
+  );
+  fs.writeFileSync(path.join(directory, "nested.yaml"), "a:\n  b: 1\n");
+  assert.throws(
+    () => configEntries({ configPath: "nested.yaml", configs: [] }, directory),
+    /must be a scalar/,
+  );
+  fs.writeFileSync(path.join(directory, "list.yaml"), "- a\n");
+  assert.throws(
+    () => configEntries({ configPath: "list.yaml", configs: [] }, directory),
+    /flat key: value pairs/,
   );
 });
 
 test("registers Iceberg metadata and Parquet directories with the worker", async (t) => {
   const { createServer } = await import("node:http");
   const { DataFusionRunner } = await import("../src/bin/datafusion-bench");
-  let sql = "";
+  const statements: string[] = [];
   const server = createServer((request, response) => {
-    sql = new URL(request.url!, "http://localhost").searchParams.get("sql")!;
+    statements.push(
+      new URL(request.url!, "http://localhost").searchParams.get("sql")!,
+    );
     response.setHeader("content-type", "application/json");
     response.end(
       JSON.stringify({
@@ -96,9 +126,12 @@ test("registers Iceberg metadata and Parquet directories with the worker", async
   await once(server, "listening");
   t.after(() => server.close());
   const address = server.address() as AddressInfo;
+  const configPath = path.join(tempDirectory(t), "config.yaml");
+  fs.writeFileSync(configPath, "distributed.broadcast_joins: true\n");
   const runner = new DataFusionRunner({
     url: `http://127.0.0.1:${address.port}`,
-    configs: [],
+    configPath,
+    configs: ["distributed.dynamic_task_count=true"],
   } as unknown as ConstructorParameters<typeof DataFusionRunner>[0]);
   await runner.createTables([
     {
@@ -116,20 +149,23 @@ test("registers Iceberg metadata and Parquet directories with the worker", async
       s3Path: "s3://bucket/tpch/sf1_iceberg/lineitem/metadata.json",
     },
   ]);
+  const [sql, settings] = statements;
   assert.match(
-    sql,
+    sql!,
     /orders STORED AS PARQUET LOCATION 's3:\/\/bucket\/tpch\/sf1\/orders\/'/,
   );
   assert.match(
-    sql,
+    sql!,
     /lineitem STORED AS ICEBERG LOCATION 's3:\/\/bucket\/tpch\/sf1_iceberg\/lineitem\/metadata.json'/,
   );
+  assert.deepEqual(settings!.split("\n"), [
+    "SET distributed.collect_metrics=true;",
+    "SET distributed.broadcast_joins=true;",
+    "SET distributed.dynamic_task_count=true;",
+  ]);
 });
 
 test("discovers Iceberg table metadata in S3 and reuses the suite queries", async (t) => {
-  const fs = await import("node:fs");
-  const os = await import("node:os");
-  const path = await import("node:path");
   const { tablePathsForDataset, queriesForDataset } =
     await import("../src/lib/engine-cli");
   const dataset =

@@ -1,5 +1,9 @@
-import { z } from "zod";
+import fs from "node:fs";
 import { userInfo } from "node:os";
+import path from "node:path";
+
+import { parse as parseYaml } from "yaml";
+import { z } from "zod";
 
 import {
   merge,
@@ -13,16 +17,16 @@ import {
 } from "@optique/core";
 import { runSync } from "@optique/run";
 
-import {
-  booleanValue,
-  CommonOptions,
-  integerValue,
-  numberValue,
-  runEngineBenchmark,
-} from "../lib/engine-cli";
+import { CommonOptions, runEngineBenchmark } from "../lib/engine-cli";
+import { errorMessage } from "../lib/filesystem";
 import { datafusionDistributedGitReference } from "../lib/git-reference";
 import type { ExecuteQueryResult, TableSpec } from "../lib/runner";
 import { splitViewQuery, type BenchmarkRunner } from "../lib/runner";
+
+/** The default `--config-path`, relative to the current directory. */
+const DEFAULT_CONFIG_PATH = ".df-bench.yaml";
+
+type ConfigEntry = [name: string, value: string];
 
 const Options = object({
   resultName: withDefault(
@@ -31,79 +35,14 @@ const Options = object({
     }),
     () => `datafusion-distributed-${datafusionDistributedGitReference()}`,
   ),
-  fileScanConfigBytesPerPartition: optional(
-    option("--file-scan-config-bytes-per-partition", integerValue, {
-      description: message`Bytes each partition scans`,
+  configPath: optional(
+    option("--config-path", string({ metavar: "FILE" }), {
+      description: message`YAML file with flat DataFusion and distributed config options as key: value pairs. Defaults to ${DEFAULT_CONFIG_PATH} in the current directory, which is skipped if it doesn't exist`,
     }),
   ),
-  cardinalityTaskSf: optional(
-    option("--cardinality-task-sf", numberValue, {
-      description: message`Cardinality task scale factor`,
-    }),
-  ),
-  batchSize: optional(
-    option("--batch-size", integerValue, {
-      description: message`Standard batch coalescing size`,
-    }),
-  ),
-  shuffleBatchSize: optional(
-    option("--shuffle-batch-size", integerValue, {
-      description: message`Worker RepartitionExec batch size`,
-    }),
-  ),
-  configs: option("--config", string({ metavar: "KEY=VALUE" }), {
-    description: message`Set a DataFusion session config; repeat for multiple settings`,
+  configs: option("-c", "--config", string({ metavar: "KEY=VALUE" }), {
+    description: message`A DataFusion or distributed config option, such as distributed.dynamic_task_count=true. Can be repeated, and takes precedence over the config file`,
   }).multiple(),
-  childrenIsolatorUnions: optional(
-    option("--children-isolator-unions", booleanValue, {
-      description: message`Use children isolator unions`,
-    }),
-  ),
-  broadcastJoins: optional(
-    option("--broadcast-joins", booleanValue, {
-      description: message`Use broadcast joins`,
-    }),
-  ),
-  partialReduce: optional(
-    option("--partial-reduce", booleanValue, {
-      description: message`Enable PartialReduce optimization`,
-    }),
-  ),
-  collectMetrics: optional(
-    option("--collect-metrics", booleanValue, {
-      description: message`Propagate metric collection`,
-    }),
-  ),
-  compression: optional(
-    option("--compression", string({ metavar: "CODEC" }), {
-      description: message`Worker compression codec`,
-    }),
-  ),
-  maxTasksPerStage: optional(
-    option("--max-tasks-per-stage", integerValue, {
-      description: message`Maximum tasks per stage`,
-    }),
-  ),
-  repartitionFileMinSize: optional(
-    option("--repartition-file-min-size", integerValue, {
-      description: message`DataFusion repartition file minimum size`,
-    }),
-  ),
-  targetPartitions: optional(
-    option("--target-partitions", integerValue, {
-      description: message`DataFusion target partition count`,
-    }),
-  ),
-  dynamic: optional(
-    option("--dynamic", booleanValue, {
-      description: message`Use dynamic task count assignment`,
-    }),
-  ),
-  dynamicBytesPerPartition: optional(
-    option("--dynamic-bytes-per-partition", integerValue, {
-      description: message`Dynamic allocation bytes per partition`,
-    }),
-  ),
 });
 
 const DataFusionOptions = merge(CommonOptions, Options);
@@ -119,24 +58,6 @@ const queryResponseSchema = z.object({
   stats_q_error_p95: z.number().nullable(),
 });
 type QueryResponse = z.infer<typeof queryResponseSchema>;
-
-export interface DataFusionSettingOptions {
-  fileScanConfigBytesPerPartition?: number | undefined;
-  cardinalityTaskSf?: number | undefined;
-  batchSize?: number | undefined;
-  shuffleBatchSize?: number | undefined;
-  configs?: readonly string[] | undefined;
-  collectMetrics?: boolean | undefined;
-  compression?: string | undefined;
-  childrenIsolatorUnions?: boolean | undefined;
-  broadcastJoins?: boolean | undefined;
-  partialReduce?: boolean | undefined;
-  dynamic?: boolean | undefined;
-  dynamicBytesPerPartition?: number | undefined;
-  maxTasksPerStage?: number | undefined;
-  repartitionFileMinSize?: number | undefined;
-  targetPartitions?: number | undefined;
-}
 
 export function dataFusionServiceName(
   environment: NodeJS.ProcessEnv = process.env,
@@ -202,58 +123,90 @@ export class DataFusionRunner implements BenchmarkRunner {
  `;
     }
     await this.query(statement);
-    const settings = dataFusionSettingStatements(this.options);
-    if (settings) {
-      await this.query(settings);
-    }
+    const entries = configEntries(this.options);
+    console.log(`Config: ${JSON.stringify(entries)}`);
+    await this.query(dataFusionSettingStatements(entries));
   }
 }
 
-export function dataFusionSettingStatements(
-  options: DataFusionSettingOptions,
-): string {
-  const settings: [string, string | number | boolean | undefined][] = [
-    [
-      "distributed.file_scan_config_bytes_per_partition",
-      options.fileScanConfigBytesPerPartition,
-    ],
-    ["distributed.cardinality_task_count_factor", options.cardinalityTaskSf],
-    ["datafusion.execution.batch_size", options.batchSize],
-    ["distributed.shuffle_batch_size", options.shuffleBatchSize],
-    ["distributed.collect_metrics", options.collectMetrics],
-    ["distributed.compression", options.compression],
-    ["distributed.children_isolator_unions", options.childrenIsolatorUnions],
-    ["distributed.broadcast_joins", options.broadcastJoins],
-    ["distributed.partial_reduce", options.partialReduce],
-    ["distributed.dynamic_task_count", options.dynamic],
-    [
-      "distributed.dynamic_bytes_per_partition",
-      options.dynamicBytesPerPartition,
-    ],
-    ["distributed.max_tasks_per_stage", options.maxTasksPerStage],
-    [
-      "datafusion.optimizer.repartition_file_min_size",
-      options.repartitionFileMinSize,
-    ],
-    ["datafusion.execution.target_partitions", options.targetPartitions],
-  ];
-  const statements = settings.flatMap(([name, value]) =>
-    value === undefined ? [] : [`SET ${name}=${value};`],
-  );
-  const names = new Set<string>();
-  for (const config of options.configs ?? []) {
-    const match = /^([a-zA-Z][a-zA-Z0-9_.]*)=([a-zA-Z0-9._-]+)$/.exec(config);
-    if (!match) {
-      throw new Error(
-        `Invalid config '${config}'; expected a safe KEY=VALUE token`,
-      );
-    }
-    const [, name, value] = match;
-    if (names.has(name!)) throw new Error(`Duplicate config '${name}'`);
-    names.add(name!);
-    statements.push(`SET ${name}=${value};`);
+/** Applied before any user config, so a config file or `-c` can override it. */
+const DEFAULT_CONFIG_ENTRIES: readonly ConfigEntry[] = [
+  // Task counts and statistics estimation errors are read from the metrics.
+  ["distributed.collect_metrics", "true"],
+];
+
+/** Parses a `-c key=value` entry. */
+export function parseConfigEntry(entry: string): ConfigEntry {
+  const separator = entry.indexOf("=");
+  if (separator === -1) {
+    throw new Error(`Invalid config '${entry}'; expected KEY=VALUE`);
   }
-  return statements.join("\n");
+  return [entry.slice(0, separator).trim(), entry.slice(separator + 1).trim()];
+}
+
+/** Reads the flat `key: value` config entries of a YAML file, in file order. */
+export function readConfigFile(file: string): ConfigEntry[] {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch (error) {
+    throw new Error(`Cannot read ${file}: ${errorMessage(error)}`);
+  }
+  let document: unknown;
+  try {
+    document = parseYaml(text);
+  } catch (error) {
+    throw new Error(`Invalid YAML in ${file}: ${errorMessage(error)}`);
+  }
+  // A file with only comments is a null document.
+  if (document === null || document === undefined) return [];
+  if (typeof document !== "object" || Array.isArray(document)) {
+    throw new Error(`${file} must contain flat key: value pairs`);
+  }
+  return Object.entries(document).map(([key, value]) => {
+    if (!["string", "number", "boolean"].includes(typeof value)) {
+      throw new Error(`Config value of ${key} in ${file} must be a scalar`);
+    }
+    return [key, String(value)];
+  });
+}
+
+/**
+ * The config file entries followed by the `-c` ones, so that applying them in
+ * order makes the `-c` ones take precedence. Paths resolve against the
+ * directory npm was invoked from.
+ */
+export function configEntries(
+  options: { configPath?: string | undefined; configs: readonly string[] },
+  cwd: string = process.env.INIT_CWD ?? process.cwd(),
+): ConfigEntry[] {
+  const defaultPath = path.resolve(cwd, DEFAULT_CONFIG_PATH);
+  const entries =
+    options.configPath !== undefined
+      ? readConfigFile(path.resolve(cwd, options.configPath))
+      : fs.existsSync(defaultPath)
+        ? readConfigFile(defaultPath)
+        : [];
+  return [...entries, ...options.configs.map(parseConfigEntry)];
+}
+
+/** SET statements applying the default config entries and then `entries`. */
+export function dataFusionSettingStatements(
+  entries: readonly ConfigEntry[],
+): string {
+  return [...DEFAULT_CONFIG_ENTRIES, ...entries]
+    .map(([name, value]) => {
+      if (!/^[a-zA-Z][a-zA-Z0-9_.]*$/.test(name)) {
+        throw new Error(`Invalid config key '${name}'`);
+      }
+      if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
+        throw new Error(
+          `Invalid config value '${value}' for ${name}; expected a safe token`,
+        );
+      }
+      return `SET ${name}=${value};`;
+    })
+    .join("\n");
 }
 
 if (require.main === module) {
