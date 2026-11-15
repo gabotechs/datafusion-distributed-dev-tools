@@ -1,3 +1,5 @@
+import http from "node:http";
+
 import { z } from "zod";
 import { runSync } from "@optique/run";
 
@@ -13,16 +15,18 @@ import { replaceTableReferences } from "../lib/table-references";
 // Matches the remote_servers entry in k8s/clickhouse/templates/config.yaml.
 const CLUSTER = "benchmark";
 
-export const clickhouseQueryResponseSchema = z
+// ClickHouse reports 64-bit counters in X-ClickHouse-Summary as strings.
+export const clickhouseSummarySchema = z
   .object({
-    rows: z.number(),
-    statistics: z
-      .object({
-        elapsed: z.number(),
-      })
-      .loose(),
+    result_rows: z.coerce.number().int().nonnegative(),
+    elapsed_ns: z.coerce.number().nonnegative(),
   })
   .loose();
+
+interface ClickHouseResponse {
+  body: string;
+  summary: string | undefined;
+}
 
 const describeResponseSchema = z.object({
   data: z.array(z.tuple([z.string(), z.string()]).rest(z.unknown())),
@@ -91,7 +95,7 @@ export class ClickHouseRunner implements BenchmarkRunner {
   async executeQuery(sql: string): Promise<ExecuteQueryResult> {
     sql = clickhouseDialect(sql);
 
-    let response: string;
+    let response: ClickHouseResponse;
     if (this.correlatedQueries.has(sql)) {
       response = await this.execute(sql, this.viewSources);
     } else {
@@ -104,44 +108,67 @@ export class ClickHouseRunner implements BenchmarkRunner {
       }
     }
 
-    const result = clickhouseQueryResponseSchema.parse(JSON.parse(response));
+    if (response.summary === undefined) {
+      throw new Error("ClickHouse response has no X-ClickHouse-Summary header");
+    }
+    const summary = clickhouseSummarySchema.parse(JSON.parse(response.summary));
     return {
-      rowCount: result.rows,
+      rowCount: summary.result_rows,
       plan: "",
-      elapsed: result.statistics.elapsed * 1000,
+      elapsed: summary.elapsed_ns / 1e6,
       tasks: 0,
     };
   }
 
+  // Measured queries discard their result on the server, as the DataFusion
+  // worker does, so result transfer to this client is not timed.
   private async execute(
     sql: string,
     sources: ReadonlyMap<string, string>,
-  ): Promise<string> {
+  ): Promise<ClickHouseResponse> {
     const viewQuery = splitViewQuery(sql);
     if (!viewQuery) {
-      return this.query(replaceTableReferences(sql, sources));
+      return this.query(replaceTableReferences(sql, sources), "Null");
     }
     const [createView, query, dropView] = viewQuery;
     await this.query(replaceTableReferences(createView, sources));
     try {
-      return await this.query(replaceTableReferences(query, sources));
+      return await this.query(replaceTableReferences(query, sources), "Null");
     } finally {
       await this.query(dropView);
     }
   }
 
-  private async query(sql: string): Promise<string> {
+  // Uses node:http rather than fetch: ClickHouse sends response headers only
+  // when the query finishes, and fetch aborts after five minutes without them.
+  private query(
+    sql: string,
+    format = "JSONCompact",
+  ): Promise<ClickHouseResponse> {
     const url = new URL(this.options.url);
-    url.searchParams.set("default_format", "JSONCompact");
-    const response = await fetch(url, {
-      method: "POST",
-      body: sql.trim().replace(/;+$/, ""),
+    url.searchParams.set("default_format", format);
+    url.searchParams.set("wait_end_of_query", "1");
+    return new Promise((resolve, reject) => {
+      const request = http.request(url, { method: "POST" }, (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => (body += chunk));
+        response.once("error", reject);
+        response.once("end", () => {
+          if (response.statusCode !== 200) {
+            reject(new Error(`Query failed: ${response.statusCode} ${body}`));
+            return;
+          }
+          const summary = response.headers["x-clickhouse-summary"];
+          resolve({
+            body,
+            summary: typeof summary === "string" ? summary : undefined,
+          });
+        });
+      });
+      request.once("error", reject);
+      request.end(sql.trim().replace(/;+$/, ""));
     });
-    const body = await response.text();
-    if (!response.ok) {
-      throw new Error(`Query failed: ${response.status} ${body}`);
-    }
-    return body;
   }
 
   async createTables(tables: TableSpec[]): Promise<void> {
@@ -157,9 +184,11 @@ export class ClickHouseRunner implements BenchmarkRunner {
       const url = clickhouseTableUrl(table, this.options.region);
       const description = describeResponseSchema.parse(
         JSON.parse(
-          await this.query(
-            `DESCRIBE TABLE s3Cluster('${CLUSTER}', '${url}', 'Parquet')`,
-          ),
+          (
+            await this.query(
+              `DESCRIBE TABLE s3Cluster('${CLUSTER}', '${url}', 'Parquet')`,
+            )
+          ).body,
         ),
       );
       const source = clickhouseTableSource(
