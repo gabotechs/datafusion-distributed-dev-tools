@@ -10,3 +10,4 @@ target/
 *.db-wal
 SECURITY_AUDIT.md
 Pulumi.*.yaml
+.df-bench*

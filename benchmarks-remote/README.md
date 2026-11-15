@@ -190,12 +190,27 @@ Pass `--k8s-service` to override that selection.
 
 ```bash
 npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
-npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --config distributed.collect_dynamic_filters=false
+npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false -c distributed.collect_dynamic_filters=false
 npm run trino-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
 npm run spark-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
 npm run ballista-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
 npm run clickhouse-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --iterations 1
 ```
+
+DataFusion config options (`datafusion.*`, `distributed.*`) are read from the
+`.df-bench.yaml` file in the directory `npm run` is invoked from when present,
+or from the file given with `--config-path`. It holds flat `key: value` pairs,
+applied in file order, and repeated `-c key=value` flags are applied last:
+
+```yaml
+datafusion.execution.target_partitions: 8
+distributed.broadcast_joins: true
+```
+
+`distributed.dynamic_plan_remainder_replanning` only takes effect together with
+`distributed.dynamic_task_count: true`. Metrics are collected by default; set
+`distributed.collect_metrics: false` to turn them off. Unknown keys fail the
+run.
 
 `--bucket` and `--k8s-cluster` default to the values in
 `pulumi/.pulumi-outputs.json`. If that file is absent, run
