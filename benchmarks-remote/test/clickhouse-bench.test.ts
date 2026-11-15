@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   clickhouseDialect,
-  clickhouseQueryResponseSchema,
+  clickhouseSummarySchema,
   clickhouseTableSource,
   clickhouseTableUrl,
 } from "../src/bin/clickhouse-bench";
@@ -65,17 +65,14 @@ test("translates shared benchmark SQL to the ClickHouse dialect", () => {
   );
 });
 
-test("validates ClickHouse JSONCompact responses", () => {
-  assert.equal(
-    clickhouseQueryResponseSchema.parse({
-      meta: [{ name: "count()", type: "UInt64" }],
-      data: [[42]],
-      rows: 1,
-      statistics: { elapsed: 0.25, rows_read: 42, bytes_read: 336 },
-    }).statistics.elapsed,
-    0.25,
+test("reads row counts and elapsed time from the ClickHouse summary", () => {
+  assert.deepEqual(
+    clickhouseSummarySchema.parse(
+      JSON.parse(
+        '{"read_rows":"1234567","result_rows":"1234567","elapsed_ns":"11926545"}',
+      ),
+    ),
+    { read_rows: "1234567", result_rows: 1234567, elapsed_ns: 11926545 },
   );
-  assert.throws(() =>
-    clickhouseQueryResponseSchema.parse({ rows: 1, statistics: {} }),
-  );
+  assert.throws(() => clickhouseSummarySchema.parse({ result_rows: "1" }));
 });
