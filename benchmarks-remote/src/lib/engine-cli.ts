@@ -7,6 +7,7 @@ import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import {
   argument,
   choice,
+  flag,
   float,
   integer,
   map,
@@ -68,6 +69,9 @@ export const regionOption = withDefault(
   "us-east-1",
 );
 
+const DEFAULT_ITERATIONS = 5;
+const DEFAULT_DEBUG_ITERATIONS = 1;
+
 export const CommonOptions = object({
   bucket: bucketOption,
   clusterName: withDefault(
@@ -90,11 +94,10 @@ export const CommonOptions = object({
     }),
     resolveDatasetAlias,
   ),
-  iterations: withDefault(
+  iterations: optional(
     option("-i", "--iterations", integerValue, {
-      description: message`Number of iterations`,
+      description: message`Number of measured iterations. Defaults to ${String(DEFAULT_ITERATIONS)}, or ${String(DEFAULT_DEBUG_ITERATIONS)} with --debug`,
     }),
-    5,
   ),
   kubeconfig: withDefault(
     option("--kubeconfig", string({ metavar: "PATH" }), {
@@ -130,8 +133,8 @@ export const CommonOptions = object({
     description: message`Query ID to run, such as q1. Can be repeated or comma-separated. Runs all queries if omitted`,
   }).multiple(),
   debug: withDefault(
-    option("--debug", booleanValue, {
-      description: message`Print generated plans to stderr`,
+    flag("-d", "--debug", {
+      description: message`Print each measured iteration's plan to stderr and its plan dump, a single line for dfd plan, to stdout. Runs ${String(DEFAULT_DEBUG_ITERATIONS)} iteration unless --iterations is given`,
     }),
     false,
   ),
@@ -306,7 +309,11 @@ export async function runEngineBenchmark(
   runner: BenchmarkRunner,
 ): Promise<void> {
   const options = runner.options;
-  const { dataset, iterations, timeSecs, warmup, debug } = options;
+  const { dataset, timeSecs, warmup, debug } = options;
+  const iterations =
+    options.iterations ??
+    (debug ? DEFAULT_DEBUG_ITERATIONS : DEFAULT_ITERATIONS);
+  let missingPlanDumpReported = false;
   try {
     const selectedQueries = queryArguments(options.queries);
     if (!Number.isSafeInteger(iterations) || iterations <= 0) {
@@ -404,6 +411,15 @@ export async function runEngineBenchmark(
 
           if (debug) {
             console.error(response.plan);
+            if (response.planDump !== undefined) {
+              // The only stdout output, so it can be piped into `dfd plan`.
+              console.log(response.planDump.replace(/\s+/g, ""));
+            } else if (!missingPlanDumpReported) {
+              missingPlanDumpReported = true;
+              console.error(
+                `${runner.deployment} did not return a plan dump; only the plan above is available`,
+              );
+            }
           }
           const recorded: QueryIter = {
             elapsed: response.elapsed,
@@ -439,7 +455,7 @@ export async function runEngineBenchmark(
       }
 
       const previous = options.compare ? benchmarkRun.loadPrevious() : null;
-      if (previous) console.log(benchmarkRun.comparison(previous));
+      if (previous) console.error(benchmarkRun.comparison(previous));
       benchmarkRun.store();
     });
     console.error("Benchmark run completed");
