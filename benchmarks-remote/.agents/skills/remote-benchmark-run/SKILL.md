@@ -37,7 +37,7 @@ Common options are:
 All progress, plans and comparisons go to stderr. With `-d`, each measured iteration (never the warmup) also prints its plan dump as one line on stdout, so it can be piped into `dfd plan` (see the `plan-dump` skill in DataFusion Distributed):
 
 ```bash
-npm run --silent datafusion-bench -- <dataset> -q q3 -d | dfd plan
+npm run datafusion-bench -- <dataset> -q q3 -d | dfd plan
 ```
 
 Pass DataFusion config options only to `datafusion-bench`: they come from a local, gitignored `.df-bench.yaml` in the directory `npm run` is invoked from (or `--config-path <file>`), overridden by repeated `-c key=value` flags, e.g. `-c distributed.dynamic_task_count=true`. Inspect `npm run datafusion-bench -- --help` and `src/bin/datafusion-bench.ts` before changing defaults.

@@ -10,6 +10,10 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      # The repository .npmrc silences npm to keep benchmark stdout clean; CI
+      # keeps npm's own warnings and errors.
+      npm_config_loglevel: warn
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
