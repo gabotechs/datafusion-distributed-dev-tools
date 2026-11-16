@@ -179,7 +179,7 @@ test("rejects invalid, missing, and duplicate iteration counts", () => {
 test("accepts repeatable head-only configs", () => {
   assert.deepEqual(
     parseComment(
-      `benchmarks run ${TPCH_SF1} --base main --config distributed.collect_dynamic_filters=false --config distributed.max_tasks_per_stage=8`,
+      `benchmarks run ${TPCH_SF1} --base main -c distributed.collect_dynamic_filters=false --config distributed.max_tasks_per_stage=8`,
     ),
     {
       kind: "request",
@@ -207,7 +207,7 @@ test("rejects unsafe or duplicate configs", () => {
     },
   );
   assert.deepEqual(
-    parseComment(`benchmarks run ${TPCH_SF1} --config x=1 --config x=2`),
+    parseComment(`benchmarks run ${TPCH_SF1} -c x=1 --config x=2`),
     {
       kind: "invalid",
       message: "Config `x` may be specified only once.",
@@ -309,7 +309,7 @@ test("rejects aliases and extra arguments", () => {
     {
       kind: "invalid",
       message:
-        "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...`.",
+        "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [-c/--config <key=value>]...`.",
     },
   );
   assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF1} ${TPCH_SF1}`), {

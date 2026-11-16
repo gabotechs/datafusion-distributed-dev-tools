@@ -53,11 +53,11 @@ controller restarts.
 benchmarks run clickbench_parquet/partition_start=0/partition_end=100 --base main --iterations 20
 ```
 
-Repeat `--config <key=value>` to apply DataFusion session settings to the PR
+Repeat `-c <key=value>` (or `--config <key=value>`) to apply DataFusion session settings to the PR
 head only; the comparison base keeps its defaults:
 
 ```text
-benchmarks run tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --base main --config distributed.collect_dynamic_filters=false
+benchmarks run tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --base main -c distributed.collect_dynamic_filters=false
 ```
 
 ## Architecture
