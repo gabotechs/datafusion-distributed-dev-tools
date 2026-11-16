@@ -52,6 +52,7 @@ type DataFusionOptions = InferValue<typeof DataFusionOptions>;
 const queryResponseSchema = z.object({
   count: z.number(),
   plan: z.string(),
+  plan_dump: z.string().optional(),
   elapsed_ms: z.number(),
   tasks: z.number(),
   stats_q_error_p50: z.number().nullable(),
@@ -93,6 +94,9 @@ export class DataFusionRunner implements BenchmarkRunner {
       elapsed: response.elapsed_ms,
       tasks: response.tasks,
     };
+    if (response.plan_dump !== undefined) {
+      result.planDump = response.plan_dump;
+    }
     if (response.stats_q_error_p50 !== null) {
       result.statsQErrorP50 = response.stats_q_error_p50;
     }
@@ -124,7 +128,7 @@ export class DataFusionRunner implements BenchmarkRunner {
     }
     await this.query(statement);
     const entries = configEntries(this.options);
-    console.log(`Config: ${JSON.stringify(entries)}`);
+    console.error(`Config: ${JSON.stringify(entries)}`);
     await this.query(dataFusionSettingStatements(entries));
   }
 }

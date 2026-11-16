@@ -212,6 +212,14 @@ distributed.broadcast_joins: true
 `distributed.collect_metrics: false` to turn them off. Unknown keys fail the
 run.
 
+Progress, plans and comparisons go to stderr. `-d`/`--debug` runs the warmup
+and then a single measured iteration (unless `--iterations` is given), printing
+each measured iteration's plan dump as one line on stdout for `dfd plan`:
+
+```bash
+npm run --silent datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false -q q3 -d | dfd plan
+```
+
 `--bucket` and `--k8s-cluster` default to the values in
 `pulumi/.pulumi-outputs.json`. If that file is absent, run
 `npm run foundation-deploy` to generate it or pass both options explicitly.

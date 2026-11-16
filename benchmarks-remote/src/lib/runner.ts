@@ -11,6 +11,8 @@ export interface TableSpec {
 export interface ExecuteQueryResult {
   rowCount: number;
   plan: string;
+  /** A single-line plan dump for `dfd plan`, when the engine provides one. */
+  planDump?: string;
   elapsed: number;
   tasks: number;
   statsQErrorP50?: number;
