@@ -162,6 +162,9 @@ export class CommentPoller {
         ...(parsed.request.configs
           ? { headConfigs: parsed.request.configs }
           : {}),
+        ...(parsed.request.queries
+          ? { benchmarkQueries: parsed.request.queries }
+          : {}),
         baseKind,
         baseSha,
         headSha: pullRequest.head.sha,

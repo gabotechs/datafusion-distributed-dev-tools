@@ -121,6 +121,7 @@ test("reports a completed comparison and consumes the job", async () => {
       /datafusion-distributed-remote-worker --bin worker/,
     );
     assert.match(comments[2]!, /1 warmup \+ 5 measured iterations per query/);
+    assert.match(comments[2]!, /· all queries ·/);
     assert.match(
       comments[2]!,
       /\*\*PR-head configs:\*\* `distributed\.collect_dynamic_filters=false`/,
@@ -128,7 +129,7 @@ test("reports a completed comparison and consumes the job", async () => {
     assert.match(comments[2]!, /Build and deployment \| 2m 2s \| 2m 5s/);
     assert.match(comments[2]!, /Benchmark `tpch\/sf100` \| 30s \| 31s/);
     assert.match(comments[2]!, /Total 7m 0s/);
-    assert.match(comments[2]!, /Query selection is not supported/);
+    assert.match(comments[2]!, /-q\/--query <id>/);
     assert.doesNotMatch(comments[2]!, /iteration overrides are not supported/);
     assert.deepEqual(commentIds, [77, 77, 77]);
   } finally {
@@ -149,6 +150,7 @@ test("reports the selected main baseline and iteration count", async () => {
       ...JOB,
       baseKind: "main",
       benchmarkIterations: 20,
+      benchmarkQueries: ["q1", "q8"],
     })!;
     database.setStatusCommentId(jobId, 77);
     const worker = new JobWorker(database, github, {
@@ -167,6 +169,8 @@ test("reports the selected main baseline and iteration count", async () => {
     );
     assert.match(comments[1]!, /Main `aaaaaaaaaaaa`.*PR head `bbbbbbbbbbbb`/s);
     assert.match(comments[1]!, /\| Identity \| Main \| PR head \|/);
+    assert.match(comments[0]!, /Queries: `q1`, `q8`\./);
+    assert.match(comments[1]!, /· queries `q1`, `q8` ·/);
   } finally {
     database.close();
   }

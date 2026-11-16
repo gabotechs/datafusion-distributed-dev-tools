@@ -25,13 +25,13 @@ export function renderUsage(): string {
 
 Post a comment whose first non-empty line is:
 
-\`benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...\`
+\`benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [-q/--query <id>]... [-c/--config <key=value>]...\`
 
 For example:
 
-\`benchmarks run tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false tpch_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false --instance-type m5.2xlarge --nodes 24 --iterations 20 --base main --config distributed.collect_dynamic_filters=false\`
+\`benchmarks run tpch_parquet/scale_factor=10/max_file_size=134217728/dictionary=pages/sorted=false tpch_parquet/scale_factor=100/max_file_size=134217728/dictionary=pages/sorted=false --instance-type m5.2xlarge --nodes 24 --iterations 20 --base main -q q1 -q q8 -c distributed.collect_dynamic_filters=false\`
 
-Request one or more datasets, without duplicates. The bot checks each one against the dataset bucket before provisioning anything and runs every query in each dataset. Short names predating the parameter-encoded layout, such as \`tpch/sf10\`, \`tpcds/sf1\`, and \`clickbench/0-100\`, are also accepted and resolve to their current equivalent.
+Request one or more datasets, without duplicates. The bot checks each one against the dataset bucket before provisioning anything and runs every query in each dataset unless queries are selected. Short names predating the parameter-encoded layout, such as \`tpch/sf10\`, \`tpcds/sf1\`, and \`clickbench/0-100\`, are also accepted and resolve to their current equivalent.
 
 | Option | Default | Supported values and behavior |
 | --- | --- | --- |
@@ -39,7 +39,8 @@ Request one or more datasets, without duplicates. The bot checks each one agains
 | \`--nodes <count>\` | \`${DEFAULT_BENCHMARK_NODE_COUNT}\` | An integer from 1 to ${MAX_BENCHMARK_NODES}. The deployment uses one benchmark worker per node. |
 | \`--iterations <count>\` | \`${DEFAULT_BENCHMARK_ITERATIONS}\` | A positive safe integer. Measured iterations per query for both revisions; warmup is excluded. |
 | \`--base main\` | PR base | Compare against a snapshot of \`main\`; no other explicit base is supported. |
-| \`--config <key=value>\` | none | Apply a safe DataFusion session setting to the PR head only. Repeat for distinct keys; spaces and shell syntax are not supported. |
+| \`-q/--query <id>\` | all queries | Run only this query ID, such as \`q1\`, for both revisions. Repeat or comma-separate to select several; every requested dataset must contain each one. |
+| \`-c/--config <key=value>\` | none | Apply a safe DataFusion session setting to the PR head only. Repeat for distinct keys; spaces and shell syntax are not supported. |
 
 **Supported instances and per-worker limits:**
 
@@ -49,7 +50,7 @@ ${instances}
 
 Each node runs one worker. The worker allocation reserves 1 vCPU and 4 GiB for Kubernetes and system processes, then makes the rest of the selected instance available to the benchmark.
 
-**Limits:** Only authorized users can enqueue jobs. Jobs run serially, the queue holds ${MAX_QUEUE_DEPTH} active jobs, and each requester may have ${MAX_ACTIVE_JOBS_PER_REQUESTER}. Query selection is not supported. By default, every query uses ${workload} for both revisions.
+**Limits:** Only authorized users can enqueue jobs. Jobs run serially, the queue holds ${MAX_QUEUE_DEPTH} active jobs, and each requester may have ${MAX_ACTIVE_JOBS_PER_REQUESTER}. By default, every query uses ${workload} for both revisions.
 
 </details>`;
 }

@@ -269,7 +269,7 @@ test("migrates an unversioned database away from the legacy dataset column", () 
           .prepare("SELECT version FROM schema_version ORDER BY version")
           .all() as { version: number }[]
       ).map(({ version }) => version),
-      [1, 2, 3, 4, 5],
+      [1, 2, 3, 4, 5, 6],
     );
     assert.throws(() =>
       migrated
@@ -315,9 +315,34 @@ test("does not reapply completed database migrations", () => {
             .get() as { count: number }
         ).count,
       ),
-      5,
+      6,
     );
   } finally {
     database.close();
+  }
+});
+
+test("retains selected queries across database reopen", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "job-database-queries-"));
+  const databasePath = path.join(root, "jobs.db");
+  const database = new JobDatabase(databasePath);
+  try {
+    database.enqueue({ ...JOB, benchmarkQueries: ["q1", "q8"] });
+    database.enqueue({ ...JOB, commentId: JOB.commentId + 1 });
+  } finally {
+    database.close();
+  }
+  const reopened = new JobDatabase(databasePath);
+  try {
+    assert.deepEqual(
+      reopened.getJobForComment(JOB.commentId)?.benchmarkQueries,
+      ["q1", "q8"],
+    );
+    assert.equal(
+      reopened.getJobForComment(JOB.commentId + 1)?.benchmarkQueries,
+      undefined,
+    );
+  } finally {
+    reopened.close();
   }
 });

@@ -132,7 +132,7 @@ npm run list-datasets
 From this development-tools checkout:
 
 ```bash
-npm run datafusion-bench -- tpch_iceberg/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false/target_file_size=67108864 --queries q6 --iterations 1
+npm run datafusion-bench -- tpch_iceberg/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false/target_file_size=67108864 -q q6 --iterations 1
 ```
 
 This repository does not manage dataset lifecycle beyond listing and consuming

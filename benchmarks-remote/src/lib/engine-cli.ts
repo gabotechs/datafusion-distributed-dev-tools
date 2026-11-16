@@ -126,11 +126,9 @@ export const CommonOptions = object({
     }),
     "http://localhost:9000",
   ),
-  queries: optional(
-    option("--queries", string({ metavar: "QUERIES" }), {
-      description: message`Comma-separated query IDs to run`,
-    }),
-  ),
+  queries: option("-q", "--query", "--queries", string({ metavar: "QUERY" }), {
+    description: message`Query ID to run, such as q1. Can be repeated or comma-separated. Runs all queries if omitted`,
+  }).multiple(),
   debug: withDefault(
     option("--debug", booleanValue, {
       description: message`Print generated plans to stderr`,
@@ -289,18 +287,19 @@ function failedIteration(error: unknown): QueryIter {
   };
 }
 
-function queryArguments(value: string | undefined): string[] {
-  if (value === undefined) {
-    return [];
-  }
-  const queries = value
-    .split(",")
-    .map((query) => query.trim())
-    .filter(Boolean);
-  if (queries.length === 0) {
-    throw new Error("--queries must contain at least one query ID");
-  }
-  return queries;
+export function queryArguments(values: readonly string[]): string[] {
+  return values
+    .map((value) => {
+      const queries = value
+        .split(",")
+        .map((query) => query.trim())
+        .filter(Boolean);
+      if (queries.length === 0) {
+        throw new Error("--query must contain at least one query ID");
+      }
+      return queries;
+    })
+    .flat();
 }
 
 export async function runEngineBenchmark(

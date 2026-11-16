@@ -121,6 +121,7 @@ export class BenchmarkExecutor {
         reportProgress,
         "datafusion-benchmark-base",
         job.benchmarkIterations,
+        job.benchmarkQueries,
       );
 
       await reportProgress(progressPlan.headCheckout);
@@ -183,12 +184,13 @@ export class BenchmarkExecutor {
     reportProgress: (message: string) => Promise<void>,
     resultName: string,
     iterations: number,
+    queries: readonly string[] = [],
   ): Promise<BenchmarkTiming[]> {
     const timings: BenchmarkTiming[] = [];
     for (const [index, dataset] of datasets.entries()) {
       await reportProgress(progressMessages[index]!);
       const started = performance.now();
-      await this.runBenchmark(dataset, resultName, iterations);
+      await this.runBenchmark(dataset, resultName, iterations, [], queries);
       timings.push({ dataset, durationMs: performance.now() - started });
     }
     return timings;
@@ -209,6 +211,7 @@ export class BenchmarkExecutor {
         "datafusion-benchmark-head",
         job.benchmarkIterations,
         job.headConfigs,
+        job.benchmarkQueries,
       );
       timings.push({ dataset, durationMs: performance.now() - started });
       comparisons.push(
@@ -330,6 +333,7 @@ export class BenchmarkExecutor {
     resultName: string,
     iterations: number,
     configs: readonly string[] = [],
+    queries: readonly string[] = [],
   ): Promise<void> {
     const outputs = loadOutputs(this.config.foundationOutputsFile);
     const arguments_ = [
@@ -356,6 +360,7 @@ export class BenchmarkExecutor {
       this.testdataRoot(),
     ];
     for (const config of configs) arguments_.push("--config", config);
+    for (const query of queries) arguments_.push("--query", query);
     await this.processes.run("node", arguments_, {
       cwd: this.config.harnessRoot,
     });

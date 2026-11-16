@@ -309,11 +309,41 @@ test("rejects aliases and extra arguments", () => {
     {
       kind: "invalid",
       message:
-        "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [-c/--config <key=value>]...`.",
+        "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [-q/--query <id>]... [-c/--config <key=value>]...`.",
     },
   );
   assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF1} ${TPCH_SF1}`), {
     kind: "invalid",
     message: "Each dataset may be requested only once.",
+  });
+});
+
+test("accepts repeatable and comma-separated query selections", () => {
+  const parsed = parseComment(
+    `benchmarks run ${TPCH_SF1} -q q1 --query q8 --queries q6,q21 -c distributed.broadcast_joins=true`,
+  );
+  assert.equal(parsed.kind, "request");
+  assert.deepEqual(parsed.kind === "request" && parsed.request.queries, [
+    "q1",
+    "q8",
+    "q6",
+    "q21",
+  ]);
+  const all = parseComment(`benchmarks run ${TPCH_SF1}`);
+  assert.equal(all.kind === "request" && all.request.queries, undefined);
+});
+
+test("rejects unsafe, empty or duplicate queries", () => {
+  assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF1} -q q1;ls`), {
+    kind: "invalid",
+    message: "Invalid query `q1;ls`; expected a query ID such as `q1`.",
+  });
+  assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF1} -q q1,`), {
+    kind: "invalid",
+    message: "Invalid query ``; expected a query ID such as `q1`.",
+  });
+  assert.deepEqual(parseComment(`benchmarks run ${TPCH_SF1} -q q1 -q q1`), {
+    kind: "invalid",
+    message: "Query `q1` may be specified only once.",
   });
 });

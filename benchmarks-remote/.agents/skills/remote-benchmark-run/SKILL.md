@@ -29,7 +29,7 @@ Common options are:
 
 ```text
 --iterations <number>
---queries q1,q6,q21
+-q q1 -q q6 -q q21   # also --query/--queries, or comma-separated
 --warmup true|false
 --debug true|false
 ```
