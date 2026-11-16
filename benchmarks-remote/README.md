@@ -217,8 +217,12 @@ and then a single measured iteration (unless `--iterations` is given), printing
 each measured iteration's plan dump as one line on stdout for `dfd plan`:
 
 ```bash
-npm run --silent datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false -q q3 -d | dfd plan
+npm run datafusion-bench -- tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false -q q3 -d | dfd plan
 ```
+
+The repository `.npmrc` sets `loglevel=silent`, as npm otherwise prints its
+`> script` banners to stdout. Pass `--loglevel=warn` to see npm's own warnings
+and errors.
 
 `--bucket` and `--k8s-cluster` default to the values in
 `pulumi/.pulumi-outputs.json`. If that file is absent, run
