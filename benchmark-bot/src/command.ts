@@ -65,7 +65,7 @@ export const DEFAULT_BENCHMARK_NODE_COUNT = 12;
 export const DEFAULT_BENCHMARK_ITERATIONS = 5;
 
 const USAGE =
-  "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [--config <key=value>]...`.";
+  "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [-c/--config <key=value>]...`.";
 
 // Only checks dataset path syntax and resolves legacy aliases; the caller checks each
 // resolved dataset against the foundation's dataset bucket (see dataset-availability.ts).
@@ -83,7 +83,7 @@ export function parseComment(body: string): ParseResult {
     return { kind: "none" };
   }
   const firstOption = words.findIndex(
-    (word, index) => index >= 2 && word.startsWith("--"),
+    (word, index) => index >= 2 && word.startsWith("-"),
   );
   const datasetEnd = firstOption === -1 ? words.length : firstOption;
   const datasets = words
@@ -113,7 +113,7 @@ export function parseComment(body: string): ParseResult {
   for (let index = 0; index < optionWords.length; index += 2) {
     const option = optionWords[index]!;
     const value = optionWords[index + 1]!;
-    if (option === "--config") {
+    if (option === "-c" || option === "--config") {
       const match = CONFIG.exec(value);
       if (!match) {
         return {
