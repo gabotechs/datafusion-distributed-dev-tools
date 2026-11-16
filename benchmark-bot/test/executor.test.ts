@@ -101,9 +101,10 @@ test("checks out and deploys base then head through the shared harness", async (
       resultName: string,
       iterations: number,
       configs: readonly string[] = [],
+      queries: readonly string[] = [],
     ): Promise<void> {
       events.push(
-        `run:${dataset}:${resultName}:${iterations}:${configs.join(",")}`,
+        `run:${dataset}:${resultName}:${iterations}:${configs.join(",")}:${queries.join(",")}`,
       );
     }
     override async compareResults(dataset: string): Promise<string> {
@@ -123,6 +124,7 @@ test("checks out and deploys base then head through the shared harness", async (
       datasets,
       benchmarkIterations: 20,
       headConfigs: ["distributed.collect_dynamic_filters=false"],
+      benchmarkQueries: ["q1", "q8"],
     },
     async ({ step, totalSteps, message }) => {
       progress.push(`${step}/${totalSteps}:${message}`);
@@ -158,13 +160,13 @@ test("checks out and deploys base then head through the shared harness", async (
     "prepare-dataset:tpch/sf1",
     "prepare-dataset:tpch/sf10",
     "deploy:m5.2xlarge:12",
-    "run:tpch/sf1:datafusion-benchmark-base:20:",
-    "run:tpch/sf10:datafusion-benchmark-base:20:",
+    "run:tpch/sf1:datafusion-benchmark-base:20::q1,q8",
+    "run:tpch/sf10:datafusion-benchmark-base:20::q1,q8",
     "checkout:b",
     "deploy:m5.2xlarge:12",
-    "run:tpch/sf1:datafusion-benchmark-head:20:distributed.collect_dynamic_filters=false",
+    "run:tpch/sf1:datafusion-benchmark-head:20:distributed.collect_dynamic_filters=false:q1,q8",
     "compare:tpch/sf1",
-    "run:tpch/sf10:datafusion-benchmark-head:20:distributed.collect_dynamic_filters=false",
+    "run:tpch/sf10:datafusion-benchmark-head:20:distributed.collect_dynamic_filters=false:q1,q8",
     "compare:tpch/sf10",
     "cleanup-deployment",
   ]);
@@ -325,6 +327,7 @@ test("runs benchmarks against the shared deployment and adjacent testdata", asyn
     "datafusion-benchmark-head",
     20,
     ["distributed.collect_dynamic_filters=false"],
+    ["q1", "q8"],
   );
 
   const argument = (name: string): string | undefined =>
@@ -340,6 +343,12 @@ test("runs benchmarks against the shared deployment and adjacent testdata", asyn
   assert.equal(
     argument("--config"),
     "distributed.collect_dynamic_filters=false",
+  );
+  assert.deepEqual(
+    arguments_.flatMap((value, index) =>
+      arguments_[index - 1] === "--query" ? [value] : [],
+    ),
+    ["q1", "q8"],
   );
 });
 

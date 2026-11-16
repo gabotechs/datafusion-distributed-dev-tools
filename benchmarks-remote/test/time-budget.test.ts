@@ -21,7 +21,7 @@ function options(
     iterations: 1,
     kubeconfig: path.join(root, "kubeconfig"),
     region: "us-east-1",
-    queries: undefined,
+    queries: [],
     service: "service",
     testdataRoot: root,
     timeSecs: 0,

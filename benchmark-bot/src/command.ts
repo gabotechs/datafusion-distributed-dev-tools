@@ -11,6 +11,7 @@ export interface BenchmarkRequest {
   iterations: number;
   base?: "main";
   configs?: string[];
+  queries?: string[];
 }
 
 export type ParseResult =
@@ -58,6 +59,7 @@ const DATASET_ALIASES: ReadonlyMap<string, string> = new Map([
 
 const INSTANCE_TYPE = /^[a-z][a-z0-9-]{0,19}\.[a-z0-9-]{1,20}$/;
 const CONFIG = /^([a-zA-Z][a-zA-Z0-9_.]*)=([a-zA-Z0-9._-]+)$/;
+const QUERY = /^[a-zA-Z0-9_-]+$/;
 export const MAX_BENCHMARK_NODES = 60;
 export const DEFAULT_BENCHMARK_INSTANCE_TYPE: SupportedBenchmarkInstanceType =
   "c5n.4xlarge";
@@ -65,7 +67,7 @@ export const DEFAULT_BENCHMARK_NODE_COUNT = 12;
 export const DEFAULT_BENCHMARK_ITERATIONS = 5;
 
 const USAGE =
-  "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [-c/--config <key=value>]...`.";
+  "Expected `benchmarks run <dataset>... [--instance-type <type>] [--nodes <count>] [--iterations <count>] [--base main] [-q/--query <id>]... [-c/--config <key=value>]...`.";
 
 // Only checks dataset path syntax and resolves legacy aliases; the caller checks each
 // resolved dataset against the foundation's dataset bucket (see dataset-availability.ts).
@@ -110,6 +112,7 @@ export function parseComment(body: string): ParseResult {
   const options = new Map<string, string>();
   const configs: string[] = [];
   const configNames = new Set<string>();
+  const queries: string[] = [];
   for (let index = 0; index < optionWords.length; index += 2) {
     const option = optionWords[index]!;
     const value = optionWords[index + 1]!;
@@ -130,6 +133,24 @@ export function parseComment(body: string): ParseResult {
       }
       configNames.add(name);
       configs.push(value);
+      continue;
+    }
+    if (option === "-q" || option === "--query" || option === "--queries") {
+      for (const query of value.split(",")) {
+        if (!QUERY.test(query)) {
+          return {
+            kind: "invalid",
+            message: `Invalid query \`${query}\`; expected a query ID such as \`q1\`.`,
+          };
+        }
+        if (queries.includes(query)) {
+          return {
+            kind: "invalid",
+            message: `Query \`${query}\` may be specified only once.`,
+          };
+        }
+        queries.push(query);
+      }
       continue;
     }
     if (
@@ -197,6 +218,7 @@ export function parseComment(body: string): ParseResult {
       iterations,
       ...(base === "main" ? { base } : {}),
       ...(configs.length === 0 ? {} : { configs }),
+      ...(queries.length === 0 ? {} : { queries }),
     },
   };
 }

@@ -53,6 +53,14 @@ controller restarts.
 benchmarks run clickbench_parquet/partition_start=0/partition_end=100 --base main --iterations 20
 ```
 
+Use `-q <id>` (or `--query`/`--queries`) to run only some queries, on both the
+base and PR head. Repeat it or comma-separate IDs; every requested dataset must
+contain each query:
+
+```text
+benchmarks run tpch_parquet/scale_factor=1/max_file_size=134217728/dictionary=pages/sorted=false --base main -q q1 -q q8
+```
+
 Repeat `-c <key=value>` (or `--config <key=value>`) to apply DataFusion session settings to the PR
 head only; the comparison base keeps its defaults:
 

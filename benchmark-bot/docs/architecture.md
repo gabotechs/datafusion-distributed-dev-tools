@@ -37,7 +37,8 @@ provisioned `GH_TOKEN`. It deduplicates comment IDs, checks the commenter's
 entry in `authorized-github-logins.txt`, and accepts
 `benchmarks run <suite>/<variant>...`
 commands with optional `--instance-type`, `--nodes`, `--iterations`,
-`--base main`, and repeatable `-c`/`--config` arguments. Measured iterations default
+`--base main`, and repeatable `-q`/`--query` and `-c`/`--config` arguments. Selected
+queries run on both revisions. Measured iterations default
 to 5 per query, with one excluded warmup iteration. Omitted capacity uses
 `c5n.4xlarge` and 12 nodes. It validates every dataset, accepts only cataloged instance types,
 derives node-filling worker CPU and memory resources from that catalog, rejects

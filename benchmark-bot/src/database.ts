@@ -19,6 +19,7 @@ export interface NewJob {
   benchmarkNodeCount: number;
   benchmarkIterations: number;
   headConfigs?: string[];
+  benchmarkQueries?: string[];
   baseKind: BaseKind;
   baseSha: string;
   headSha: string;
@@ -170,9 +171,9 @@ export class JobDatabase {
              comment_id, repository, pull_request_number, pull_request_url,
              requested_by, datasets_json,
              benchmark_instance_type, benchmark_node_count, benchmark_iterations,
-             head_configs_json,
+             head_configs_json, benchmark_queries_json,
              base_kind, base_sha, head_sha, status, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
         )
         .run(
           job.commentId,
@@ -185,6 +186,7 @@ export class JobDatabase {
           job.benchmarkNodeCount,
           job.benchmarkIterations,
           JSON.stringify(job.headConfigs ?? []),
+          JSON.stringify(job.benchmarkQueries ?? []),
           job.baseKind,
           job.baseSha,
           job.headSha,
@@ -450,6 +452,7 @@ function jobFromRow(row: Record<string, unknown>): Job {
     benchmarkNodeCount: Number(row.benchmark_node_count),
     benchmarkIterations: Number(row.benchmark_iterations),
     ...parseHeadConfigs(row.head_configs_json),
+    ...parseBenchmarkQueries(row.benchmark_queries_json),
     baseKind: String(row.base_kind) as BaseKind,
     baseSha: String(row.base_sha),
     headSha: String(row.head_sha),
@@ -462,19 +465,31 @@ function jobFromRow(row: Record<string, unknown>): Job {
 }
 
 function parseHeadConfigs(value: unknown): { headConfigs?: string[] } {
-  if (typeof value !== "string") return {};
+  const headConfigs = parseStringArray(value, "head configs");
+  return headConfigs.length === 0 ? {} : { headConfigs };
+}
+
+function parseBenchmarkQueries(value: unknown): {
+  benchmarkQueries?: string[];
+} {
+  const benchmarkQueries = parseStringArray(value, "queries");
+  return benchmarkQueries.length === 0 ? {} : { benchmarkQueries };
+}
+
+function parseStringArray(value: unknown, description: string): string[] {
+  if (typeof value !== "string") return [];
   try {
     const parsed = JSON.parse(value) as unknown;
     if (
       Array.isArray(parsed) &&
-      parsed.every((config) => typeof config === "string")
+      parsed.every((entry) => typeof entry === "string")
     ) {
-      return parsed.length === 0 ? {} : { headConfigs: parsed };
+      return parsed;
     }
   } catch {
     // Fall through to the corruption error below.
   }
-  throw new Error("Benchmark job has invalid head configs");
+  throw new Error(`Benchmark job has invalid ${description}`);
 }
 
 function parseDatasets(value: unknown): string[] {

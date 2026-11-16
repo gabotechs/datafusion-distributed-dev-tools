@@ -75,7 +75,7 @@ Job \`${job.id}\` captured both immutable revisions when the request was queued.
 | All benchmarks | ${formatDuration(baseBenchmarkMs)} | ${formatDuration(headBenchmarkMs)} |
 ${benchmarkRows}
 
-**Workload:** ${formatDatasets(job.datasets)} · all queries · ${workload(job)} for both revisions
+**Workload:** ${formatDatasets(job.datasets)} · ${querySelection(job)} · ${workload(job)} for both revisions
 
 **Capacity:** ${capacity(job)} for both revisions${configDetails(job)}
 
@@ -229,10 +229,21 @@ function capacity(job: Job): string {
   return `${job.benchmarkNodeCount} \`${job.benchmarkInstanceType}\` nodes`;
 }
 
+function querySelection(job: Job): string {
+  return job.benchmarkQueries?.length
+    ? `queries ${formatConfigs(job.benchmarkQueries)}`
+    : "all queries";
+}
+
 function configSummary(job: Job): string {
-  return job.headConfigs?.length
-    ? ` PR-head configs: ${formatConfigs(job.headConfigs)}.`
-    : "";
+  return (
+    (job.benchmarkQueries?.length
+      ? ` Queries: ${formatConfigs(job.benchmarkQueries)}.`
+      : "") +
+    (job.headConfigs?.length
+      ? ` PR-head configs: ${formatConfigs(job.headConfigs)}.`
+      : "")
+  );
 }
 
 function configDetails(job: Job): string {

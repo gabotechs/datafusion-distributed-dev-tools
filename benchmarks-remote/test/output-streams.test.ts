@@ -83,7 +83,7 @@ test("rejects explicitly empty query selections", async () => {
     );
     assert.match(
       stderr.join("\n"),
-      /--queries must contain at least one query ID/,
+      /--query must contain at least one query ID/,
     );
     assert.equal(process.exitCode, 1);
   } finally {
